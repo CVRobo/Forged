@@ -19,6 +19,32 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  * world tells us when it was delivered or when the boss walks behind us. */
 const EMBED = window.parent !== window;
 const post = (type, data = {}) => { if (EMBED) parent.postMessage({ src: "forged-os", type, ...data }, "*"); };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ======================= Backend API =======================
+ * Point the game at a server with ?api=http://localhost:8000 on os.html or on
+ * index.html (the office passes it through). With no API set, or if a call
+ * fails or times out, every feature falls back to the offline mocks below.
+ * The adapters (adaptVerdict, the clerk and round handlers) accept a few
+ * field-name variants until docs/contracts.md is final. */
+const API = (() => {
+  const from = loc => { try { return new URLSearchParams(loc.search).get("api") || ""; } catch (e) { return ""; } };
+  return (from(location) || (EMBED ? from(parent.location) : "") || window.FORGED_API || "").replace(/\/$/, "");
+})();
+async function api(method, path, body, ms = 6000) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(API + path, { method, signal: ctl.signal,
+      headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    if (!r.ok) throw new Error(`${method} ${path} → HTTP ${r.status}`);
+    return await r.json();
+  } finally { clearTimeout(timer); }
+}
+let offlineWarned = false;
+function offline(err) {
+  console.warn("[forged] API call failed, using the offline mock:", err && err.message || err);
+  if (!offlineWarned) { offlineWarned = true; toast("Inspector server unreachable — playing offline", "bad"); }
+}
 
 /* ======================= Content ======================= */
 
@@ -80,6 +106,7 @@ const LEVELS = {
       { name: "Dr. Sleepwell Linens", domain: "sleepwell-linens.com", bank: "4470", usual: 3100, icon: "🛏️", items: [["Bed sheets (100)", 8, 260], ["Pillowcases (100)", 6, 110], ["Laundry fee", 1, 360]] },
     ],
     approvers: [["Head Nurse Okafor", "supplies up to $8,000"], ["CFO Dr. Ledger", "everything else, PO required"]],
+    bossOffice: "Office of the CFO", bossDomain: "cfo-office.net",
     notes: ["Every invoice needs a PO number starting with SM-.", "APPROVED stamp required on anything over $5,000.", "Recent invoice: St. Scalpel #SS-7741, $9,630."],
     memo: [
       { text: "Reject invoices without a valid SM- PO.", tell: "bad_po", real: true },
@@ -139,6 +166,15 @@ const INSPECTOR_STAGES = [
   { upTo: 99, emoji: "🤖", prop: "🧿", title: "Cyborg with a Monocle" },
 ];
 
+/* which invoice region to highlight in the forensic replay, per tell or feature name */
+const TELL_REGION = {
+  bank_changed: "bank", bank_account: "bank", domain_mismatch: "header", sender_domain: "header", unknown_vendor: "header",
+  vendor: "header", letterhead: "header", letterhead_match: "header", copy_gen: "header", copy_generation: "header", scan_quality: "header",
+  amount_unusual: "items", amount: "items", total_mismatch: "items", line_items: "items", low_legibility: "items", legibility: "items",
+  altered: "meta", field_altered: "meta", bad_po: "meta", po_number: "meta", dup_number: "meta", invoice_no: "meta", date: "meta",
+  stamp_wrong: "footer", stamp_missing: "footer", stamp_type: "footer", stamp_position: "footer",
+};
+
 const TELL_LABELS = {
   bank_changed: "bank account doesn't match the vendor on file",
   domain_mismatch: "sender domain doesn't match the vendor",
@@ -149,6 +185,7 @@ const TELL_LABELS = {
   copy_gen: "copy-of-a-copy scan quality",
   low_legibility: "suspiciously stained region",
   stamp_wrong: "stamp doesn't fit this company",
+  stamp_missing: "big invoice without an APPROVED stamp",
   bad_po: "PO number doesn't follow the company format",
   dup_number: "invoice number already paid before",
   letterhead: "letterhead doesn't match the vendor",
@@ -166,6 +203,8 @@ const S = {
   scheme: null, vendorRef: null, inv: null, uses: {}, edits: 0, maxEdits: 4,
   stains: [], stamps: [], copyGen: 0, altered: new Set(), legibility: {}, persuasion: 0,
   memo: [], tool: null, pendingStamp: null, submitted: false, bossTimer: null, bossWindow: false,
+  roundId: null, // from POST /round/start; null when offline
+  patches: 0, shame: [], // retrains this run caused, and what each one learned
 };
 
 /* ======================= Sound (tiny WebAudio synth) ======================= */
@@ -220,8 +259,23 @@ function fit() {
 }
 addEventListener("resize", fit); fit();
 if (EMBED) {
+  // inside the 3D office: the outbox is a printer and the inspector is down the hall
   document.body.classList.add("embedded");
   $(".outbox-label").textContent = "PRINT — drop the envelope here, then deliver it";
+  $("#insp-win-title").textContent = "Printer · Inspector down the hall";
+  $(".env-label").textContent = "DRAG TO PRINT";
+  $("#envelope").title = "Drag me onto PRINT";
+  $("#btn-quit").textContent = "Quit to title";
+  $("#howto-title").textContent = "One round, about 90 seconds";
+  $("#howto-steps").innerHTML = `
+    <li><b>Briefing.</b> At your desk, read the leaked memo and the case file. One memo rule is fake: click a rule to mark it real or fake.</li>
+    <li><b>Pick a scheme.</b> Changed bank details, duplicate bill, phantom supplier, boss request. Repeating one raises heat.</li>
+    <li><b>Forge.</b> Click a tool, then click the invoice. Use at least 2 edits (4 max), and make sure the money goes to your account.</li>
+    <li><b>Pitch.</b> Sweet-talk the clerk in the cover email.</li>
+    <li><b>Print.</b> Drag the envelope onto PRINT. You stand up automatically.</li>
+    <li><b>Deliver.</b> Grab it at the printer (<kbd>E</kbd>) and drop it in the inspector's IN tray (<kbd>E</kbd>). If the boss walks behind your chair while you forge, press <kbd>Space</kbd>.</li>
+    <li><b>Verdict.</b> PAID or FLAGGED, either way the inspector learns. Sit back down for the corkboard, patch notes and shop.</li>`;
+  $("#howto-keys").textContent = "On the computer: 1–6 tools · Esc drop tool / stand up · D detector view · Space hide invoice";
 }
 function toStage(cx, cy, el = stage) {
   const r = el.getBoundingClientRect();
@@ -247,6 +301,8 @@ document.addEventListener("click", e => {
   if (go) { sfx("click"); if (go.dataset.go === "levels") renderLevels(); show(go.dataset.go); }
   const op = e.target.closest("[data-open]");
   if (op) { sfx("click"); overlay(op.dataset.open); }
+  const bd = e.target.closest("[data-board]");
+  if (bd) { sfx("click"); openBoard(); }
   const cl = e.target.closest("[data-close]");
   if (cl) { sfx("click"); cl.closest(".overlay").classList.remove("show"); }
 });
@@ -277,7 +333,7 @@ function renderLevels() {
 
 function startRun(level) {
   Object.assign(S, { level, round: 0, money: 0, heat: 0, version: 1, perks: [], unlocks: [], dossier: false,
-    shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0 });
+    shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [] });
   stage.dataset.level = level;
   $("#desk-mess").innerHTML = "";
   const L = LEVELS[level];
@@ -298,7 +354,7 @@ function nextRound() {
   S.heat = Math.round(S.heat * 0.6);
   Object.assign(S, { scheme: null, inv: null, uses: {}, edits: 0, stains: [], stamps: [], copyGen: 0,
     altered: new Set(), legibility: {}, persuasion: 0, tool: null, pendingStamp: null, submitted: false,
-    printed: false, delivered: false });
+    printed: false, delivered: false, lastResult: null });
   post("phase", { phase: "briefing" });
   S.maxEdits = 4 + (S.unlocks.includes("budget") ? 1 : 0);
   TOOLS.forEach(t => S.uses[t.id] = 0);
@@ -311,6 +367,29 @@ function nextRound() {
   renderInspector();
   renderTools(); updateHud();
   showBriefing();
+  startRoundOnServer();
+}
+
+/* POST /round/start: real memo (decoy hidden) and inspector version. The mock
+ * memo stays on screen until (and unless) the server answers. */
+async function startRoundOnServer() {
+  S.roundId = null;
+  if (!API) return;
+  const round = S.round;
+  try {
+    const r = await api("POST", "/round/start", { level: S.level, player: playerName() });
+    if (S.round !== round) return; // the player already moved on
+    S.roundId = r.round_id ?? r.roundId ?? null;
+    if (Array.isArray(r.memo) && r.memo.length) {
+      // the server never says which rule is the decoy, so `real` stays unknown
+      S.memo = r.memo.map(m => typeof m === "string" ? { text: m } : { text: m.text ?? m.rule, tell: m.tell ?? m.feature })
+        .map(m => ({ ...m, real: undefined, mark: null }));
+      renderMemo();
+    }
+    const v = +(r.inspector_version ?? r.version);
+    if (Number.isFinite(v) && v > 0) { S.version = v; renderInspector(); updateHud(); }
+    if (r.case_file) S.serverCaseFile = r.case_file; // TODO: render once the case file shape is in docs/contracts.md
+  } catch (e) { offline(e); }
 }
 
 function dealMemo() {
@@ -324,7 +403,7 @@ function dealMemo() {
 function renderMemo() {
   const reveal = S.dossier;
   $("#memo-rules").innerHTML = S.memo.map((m, i) => `
-    <li data-i="${i}" class="${m.mark || ""} ${reveal && !m.real ? "revealed-decoy" : ""}">${m.text}${m.mark ? `<span class="mark">${m.mark.toUpperCase()}</span>` : ""}</li>`).join("");
+    <li data-i="${i}" class="${m.mark || ""} ${reveal && m.real === false ? "revealed-decoy" : ""}">${m.text}${m.mark ? `<span class="mark">${m.mark.toUpperCase()}</span>` : ""}</li>`).join("");
   $$("#memo-rules li").forEach(li => li.onclick = () => {
     const m = S.memo[li.dataset.i];
     m.mark = m.mark === null ? "real" : m.mark === "real" ? "fake" : null;
@@ -369,20 +448,21 @@ function showBriefing() {
 function beginForge(schemeId) {
   const L = LEVELS[S.level];
   S.scheme = schemeId;
-  const v = pick(L.vendors);
+  const recent = L.notes.map(n => n.match(/Recent invoice: (.+?) #(\S+),/)).find(Boolean);
+  const v = (schemeId === "duplicate" && recent && L.vendors.find(x => x.name.startsWith(recent[1]))) || pick(L.vendors);
   S.vendorRef = v;
   const prefix = S.level === 2 ? "SM-" : "PO-";
   const items = v.items.map(i => ({ desc: i[0], qty: i[1], price: i[2] }));
   const sum = items.reduce((a, i) => a + i.qty * i.price, 0);
   const inv = {
     vendor: v.name, domain: v.domain, letterhead: "match", icon: v.icon,
-    invoiceNo: v.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() + "-0" + Math.floor(rand(200, 999)),
+    invoiceNo: v.name.split(" ").map(w => w[0]).filter(c => /[a-z]/i.test(c)).join("").slice(0, 2).toUpperCase() + "-0" + Math.floor(rand(200, 999)),
     date: "Fri, Oct " + Math.floor(rand(3, 28)), po: prefix + Math.floor(rand(1000, 9999)),
     items, amount: sum, bank: v.bank, approver: L.approvers[0][0].split(" ")[0],
   };
-  if (schemeId === "duplicate") { inv.invoiceNo = L.notes[2].match(/#(\S+),/)?.[1] || inv.invoiceNo; inv.dupOf = inv.invoiceNo; }
+  if (schemeId === "duplicate") { inv.invoiceNo = recent?.[2] || inv.invoiceNo; inv.dupOf = inv.invoiceNo; }
   if (schemeId === "phantom") { inv.vendor = pick(PHANTOMS); inv.icon = "❓"; inv.domain = inv.vendor.toLowerCase().replace(/[^a-z]/g, "").slice(0, 14) + ".biz"; inv.bank = pick(ATTACKER_ACCOUNTS).id; }
-  if (schemeId === "boss_request") { inv.vendor = "Office of the Owner"; inv.icon = "👔"; inv.domain = "owner-office.net"; inv.bank = pick(ATTACKER_ACCOUNTS).id; inv.approver = L.approvers[1][0].split(" (")[0]; inv.items = [{ desc: "Urgent confidential payment", qty: 1, price: Math.round(v.usual * 1.8) }]; inv.amount = inv.items[0].price; }
+  if (schemeId === "boss_request") { inv.vendor = L.bossOffice || "Office of the Owner"; inv.icon = "👔"; inv.domain = L.bossDomain || "owner-office.net"; inv.bank = pick(ATTACKER_ACCOUNTS).id; inv.approver = L.approvers[1][0].split(" (")[0]; inv.items = [{ desc: "Urgent confidential payment", qty: 1, price: Math.round(v.usual * 1.8) }]; inv.amount = inv.items[0].price; }
   S.inv = inv;
   ["header", "meta", "items", "bank", "footer"].forEach(r => S.legibility[r] = 1);
   $("#scheme-banner").textContent = `${SCHEMES[schemeId].icon} ${SCHEMES[schemeId].name}`;
@@ -641,6 +721,7 @@ function updateHud() {
     inspector: LEVELS[S.level].inspector.name, emoji: st.emoji, clerk: LEVELS[S.level].clerk });
 }
 
+const tellLabel = name => TELL_LABELS[name] || String(name).replace(/_/g, " ");
 function stageFor(v) { return INSPECTOR_STAGES.find(s => v <= s.upTo); }
 function renderInspector() {
   const L = LEVELS[S.level], st = stageFor(S.version);
@@ -661,25 +742,40 @@ function addMsg(who, text) {
 }
 function clerkSay(text) { addMsg("them", text); sfx("msg"); }
 
-$("#chat-form").addEventListener("submit", e => {
+// MOCK: short + matches the clerk's quirk = convincing. The server scores this with an LLM.
+function mockClerk(text) {
+  const L = LEVELS[S.level];
+  const hits = L.clerk.keywords.filter(k => text.toLowerCase().includes(k)).length;
+  const score = clamp(30 + hits * 25 - Math.max(0, text.length - 90) * .5 + rand(-10, 10), 0, 100);
+  return { score, reply: pick(L.clerk.replies[score > 60 ? "good" : score > 35 ? "meh" : "bad"]) };
+}
+
+$("#chat-form").addEventListener("submit", async e => {
   e.preventDefault();
   const input = $("#chat-text"), text = input.value.trim();
   if (!text || !S.inv || S.submitted) return;
   input.value = ""; addMsg("me", text); sfx("click");
   S.inv.coverEmail = ((S.inv.coverEmail || "") + " " + text).trim();
-  // MOCK: short + matches the clerk's quirk = convincing. The real game scores this with an LLM.
-  const L = LEVELS[S.level];
-  const hits = L.clerk.keywords.filter(k => text.toLowerCase().includes(k)).length;
-  let score = 30 + hits * 25 - Math.max(0, text.length - 90) * .5 + (S.perks.includes("smooth") ? 20 : 0);
-  score = clamp(score + rand(-10, 10), 0, 100);
-  S.persuasion = clamp(Math.max(S.persuasion, score), 0, 100);
+  const round = S.round, av = $("#clerk-avatar"); av.classList.add("typing");
+  let res = null;
+  if (API && S.roundId) {
+    try {
+      const r = await api("POST", "/clerk", { round_id: S.roundId, text });
+      const score = +(r.persuasion ?? r.persuasion_score ?? r.score);
+      const reply = r.reply ?? r.text;
+      if (Number.isFinite(score) && reply) res = { score, reply, fromServer: true };
+      else throw new Error("unexpected /clerk response");
+    } catch (err) { offline(err); }
+  }
+  res = res || mockClerk(text);
+  await sleep(res.fromServer ? 0 : 700 + rand(0, 600));
+  av.classList.remove("typing");
+  if (S.round !== round) return;
+  const score = clamp(res.score + (S.perks.includes("smooth") ? 20 : 0), 0, 100);
+  S.persuasion = Math.max(S.persuasion, score);
   $("#persuade-fill").style.width = S.persuasion + "%";
-  const av = $("#clerk-avatar"); av.classList.add("typing");
-  setTimeout(() => {
-    av.classList.remove("typing");
-    clerkSay(pick(L.clerk.replies[score > 60 ? "good" : score > 35 ? "meh" : "bad"]));
-    updateDebug();
-  }, 700 + rand(0, 600));
+  clerkSay(res.reply);
+  updateDebug();
 });
 
 /* ======================= Draggable windows ======================= */
@@ -767,6 +863,7 @@ function computeTells() {
   if (worst < .4) t.push(["low_legibility", 10, Object.keys(S.legibility).find(k => S.legibility[k] === worst)]);
   if (S.stamps.some(s => s.type === "URGENT") && S.level === 1) t.push(["stamp_wrong", 12, "footer"]);
   if (S.level === 2 && !/^SM-\d+/.test(inv.po)) t.push(["bad_po", 18, "meta"]);
+  if (S.level === 2 && inv.amount > 5000 && !S.stamps.some(s => s.type === "APPROVED")) t.push(["stamp_missing", 14, "footer"]);
   if (inv.dupOf && inv.invoiceNo === inv.dupOf) t.push(["dup_number", 25, "meta"]);
   if (S.heat > 40) t.push(["heat", (S.heat - 40) * .5, null]);
   // the memo's real rules are what the inspector actually watches
@@ -775,10 +872,8 @@ function computeTells() {
   return t.filter(x => x[1] > 0.5).sort((a, b) => b[1] - a[1]);
 }
 
-function submit() {
-  S.submitted = true; clearTimeout(S.bossTimer);
-  sfx("chunk");
-  const ob = $("#outbox"); ob.classList.add("scanning");
+// MOCK verdict: rule-based stand-in for the detector
+function mockJudge() {
   const tells = computeTells();
   const skill = .55 + .12 * (S.version - 1);
   let suspicion = tells.reduce((a, t) => a + t[1], 0) * skill;
@@ -786,45 +881,81 @@ function submit() {
   if (S.stamps.some(s => s.type === "APPROVED")) suspicion -= 6;
   suspicion += rand(-12, 12);
   const caught = suspicion > 38;
-  const sc = SCHEMES[S.scheme];
-  const payout = Math.round(S.inv.amount * sc.pay * (S.perks.includes("night") ? 2 : 1));
-  S.lastResult = { caught, tells, payout, suspicion };
-  updateDebug();
+  const payout = Math.round(S.inv.amount * SCHEMES[S.scheme].pay * (S.perks.includes("night") ? 2 : 1));
+  return { caught, tells, payout, suspicion, line: null, newVersion: null, source: "mock" };
+}
 
-  setTimeout(() => {
-    ob.classList.remove("scanning");
-    const st = $(".inspect-stage");
-    st.classList.remove("done");
-    $("#big-stamp").className = "big-stamp"; $("#inspect-line").classList.remove("show"); $("#cash-pop").classList.remove("show");
-    overlay("inspect"); sfx("scan");
-    setTimeout(() => {
-      const bs = $("#big-stamp");
-      bs.textContent = caught ? "FLAGGED" : "PAID";
-      bs.classList.add("show", caught ? "flagged" : "paid");
-      sfx("stamp");
-      st.classList.add("done");
-      const L = LEVELS[S.level];
-      const said = pick(L.lines[caught ? "catch" : "pass"]);
-      $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
-      post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor, tells: tells.slice(0, 3).map(t => t[0]) });
-      $("#inspect-line").classList.add("show");
-      if (caught) {
-        sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
-        S.streak = 0; S.caughtCount++; addHeat(12);
-      } else {
-        S.money += payout; S.streak++;
-        $("#cash-pop").textContent = "+" + money(payout); $("#cash-pop").classList.add("show");
-        setTimeout(() => sfx("cash"), 250);
-        $("#tb-money").classList.remove("bump"); void $("#tb-money").offsetWidth; $("#tb-money").classList.add("bump");
-        S.cards.push({ scheme: S.scheme, payout, round: S.round, isNew: true });
-      }
-      S.history.push({ round: S.round, scheme: S.scheme, caught, payout: caught ? 0 : payout, version: S.version, tells: tells.map(t => t[0]) });
-      // forensic replay: show what tipped them off on the desk invoice
-      tells.slice(0, 2).forEach(t => t[2] && $(`#invoice [data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
-      $("#invoice").classList.toggle("forensic", caught);
-      updateHud();
-    }, 1500);
-  }, 900);
+/* turn a POST /submit response into the shape the UI uses; tells are [name, weight, region] */
+function adaptVerdict(r, mock) {
+  const verdict = String(r.verdict ?? "").toUpperCase();
+  const caught = verdict ? verdict === "FLAGGED" : !!r.caught;
+  const raw = r.top_tells ?? r.tells ?? [];
+  const tells = raw.map(t => {
+    const name = typeof t === "string" ? t : t.feature ?? t.name ?? t.tell;
+    const weight = typeof t === "string" ? 1 : +(t.weight ?? t.score ?? t.contribution ?? 1);
+    return [name, weight, TELL_REGION[name] ?? null];
+  }).filter(t => t[0]);
+  const v = +(r.new_version ?? r.version);
+  return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)),
+    line: r.inspector_line ?? r.line ?? null, newVersion: Number.isFinite(v) && v > 0 ? v : null, source: "api" };
+}
+
+async function judge() {
+  const mock = mockJudge();
+  if (!API || !S.roundId) return mock;
+  try {
+    const { verdict, ...rec } = record(); // the verdict is what we're asking for
+    const r = await api("POST", "/submit", { round_id: S.roundId, player: playerName(), record: rec, perks: S.perks }, 10000);
+    return adaptVerdict(r, mock);
+  } catch (e) { offline(e); return mock; }
+}
+
+async function submit() {
+  S.submitted = true; clearTimeout(S.bossTimer);
+  sfx("chunk");
+  const L = LEVELS[S.level];
+  const ob = $("#outbox"); ob.classList.add("scanning");
+  inspectorSay(`Reading your invoice…`);
+  const pending = judge(); // start the request now, the animation covers the wait
+
+  await sleep(900);
+  ob.classList.remove("scanning");
+  const st = $(".inspect-stage");
+  st.classList.remove("done");
+  $("#big-stamp").className = "big-stamp"; $("#cash-pop").classList.remove("show");
+  $("#inspect-line").textContent = `${L.inspector.name} v${S.version} is reading it…`;
+  $("#inspect-line").classList.add("show", "reading");
+  overlay("inspect"); sfx("scan");
+
+  const [res] = await Promise.all([pending, sleep(1500)]);
+  S.lastResult = res; updateDebug();
+  const { caught, tells, payout } = res;
+  const bs = $("#big-stamp");
+  bs.textContent = caught ? "FLAGGED" : "PAID";
+  bs.classList.add("show", caught ? "flagged" : "paid");
+  sfx("stamp");
+  st.classList.add("done");
+  const said = res.line || pick(L.lines[caught ? "catch" : "pass"]);
+  $("#inspect-line").classList.remove("reading");
+  $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
+  inspectorSay(said);
+  post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor, tells: tells.slice(0, 3).map(t => t[0]) });
+  $("#inspect-line").classList.add("show");
+  if (caught) {
+    sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
+    S.streak = 0; S.caughtCount++; addHeat(12);
+  } else {
+    S.money += payout; S.streak++;
+    $("#cash-pop").textContent = "+" + money(payout); $("#cash-pop").classList.add("show");
+    setTimeout(() => sfx("cash"), 250);
+    $("#tb-money").classList.remove("bump"); void $("#tb-money").offsetWidth; $("#tb-money").classList.add("bump");
+    S.cards.push({ scheme: S.scheme, payout, round: S.round, isNew: true });
+  }
+  S.history.push({ round: S.round, scheme: S.scheme, caught, payout: caught ? 0 : payout, version: S.version, tells: tells.map(t => t[0]) });
+  // forensic replay: show what tipped them off on the desk invoice
+  tells.slice(0, 2).forEach(t => t[2] && $(`#invoice [data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
+  $("#invoice").classList.toggle("forensic", caught);
+  updateHud();
 }
 
 $("#btn-after-inspect").onclick = () => { sfx("click"); overlay("inspect", false); showCorkboard(); };
@@ -836,7 +967,15 @@ function showCorkboard() {
   const shredded = r.caught && S.perks.includes("shred") && !S.shredUsed;
   if (shredded) S.shredUsed = true;
   const oldV = S.version;
-  if (!shredded) S.version++;
+  S.prevVersion = oldV;
+  if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
+  else if (!shredded) S.version++;
+  renderInspector(); updateHud();
+  if (S.version > oldV) {
+    S.patches++;
+    if (r.tells.length) S.shame.push({ player: playerName(), version: S.version, trick: SCHEMES[S.scheme].name,
+      learned: r.tells[0][0], amount: S.inv.amount, round: S.round });
+  }
   const top = r.tells.slice(0, 3);
   const pos = [[120, 60], [80, 330], [430, 300]];
   $("#cork-pins").innerHTML = `
@@ -847,7 +986,7 @@ function showCorkboard() {
     </div>` +
     (top.length ? top : [["heat", 0, null]]).map((t, i) => `
     <div class="cork-card" style="left:${pos[i][0]}px;top:${pos[i][1]}px;transform:rotate(${rand(-5, 5)}deg)">
-      <b>Clue #${i + 1}</b>${TELL_LABELS[t[0]] || t[0]}</div>`).join("");
+      <b>Clue #${i + 1}</b>${tellLabel(t[0])}</div>`).join("");
   const cx = 510, cy = 130;
   $("#cork-string").innerHTML = (top.length ? top : [0]).map((_, i) =>
     `<path d="M${cx},${cy} Q${(cx + pos[i][0] + 100) / 2},${(cy + pos[i][1]) / 2 + 60} ${pos[i][0] + 105},${pos[i][1] + 10}"/>`).join("");
@@ -864,7 +1003,7 @@ $("#btn-after-cork").onclick = () => { sfx("click"); overlay("cork", false); sho
 
 function showBetween() {
   const r = S.lastResult;
-  const learned = r.tells.slice(0, 2).map(t => TELL_LABELS[t[0]]).filter(Boolean);
+  const learned = r.tells.slice(0, 2).map(t => tellLabel(t[0])).filter(Boolean);
   const n = 40 + S.round * 17 + Math.floor(rand(0, 30));
   $("#patch-title").textContent = `Inspector v${S.version}`;
   const items = learned.length
@@ -874,6 +1013,7 @@ function showBetween() {
   if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b> ${st.emoji}</li>`);
   if (S.streak >= 2) items.push(`<li>🔥 Streak ×${S.streak} — vary your schemes to keep it.</li>`);
   $("#patch-list").innerHTML = items.join("");
+  loadPatchNotes(S.prevVersion, items.slice(learned.length ? learned.length : 1));
   const caught = S.history.filter(h => h.caught).length;
   $("#round-stats").innerHTML = `
     <div class="stat"><div class="v">${money(S.money)}</div><div class="k">Siphoned</div></div>
@@ -885,6 +1025,29 @@ function showBetween() {
   renderShop();
   messUpDesk();
   overlay("between");
+}
+
+/* GET /patch-notes?since=v: what each new version learned. Replaces the mock
+ * "Now catches" lines; `extra` (promotion, streak) is kept underneath. */
+async function loadPatchNotes(since, extra) {
+  if (!API || since == null) return;
+  const round = S.round, list = $("#patch-list");
+  list.classList.add("loading");
+  try {
+    const r = await api("GET", `/patch-notes?since=${encodeURIComponent(since)}`);
+    if (S.round !== round) return;
+    const notes = Array.isArray(r) ? r : r.notes ?? r.versions ?? r.patch_notes ?? [];
+    const lines = notes.flatMap(n => {
+      if (typeof n === "string") return [n];
+      const v = n.version != null ? `v${n.version}` : "";
+      const n_ = n.learned_from ?? n.examples ?? n.n ?? n.count;
+      const from = n_ != null ? ` — learned from ${n_} invoices` : "";
+      const learned = [].concat(n.learned ?? n.catches ?? n.features ?? n.text ?? n.summary ?? []);
+      return learned.map(l => `${v ? v + " " : ""}now catches: <b>${tellLabel(l)}</b>${from}.`);
+    });
+    if (lines.length) list.innerHTML = lines.map(l => `<li>${l}</li>`).join("") + extra.join("");
+  } catch (e) { offline(e); }
+  finally { list.classList.remove("loading"); }
 }
 
 function renderShop() {
@@ -921,6 +1084,82 @@ $("#btn-next-round").onclick = () => {
   if (hadDossier) { renderMemo(); S.dossier = false; }
 };
 $("#btn-quit").onclick = () => { sfx("click"); overlay("between", false); clearTimeout(S.bossTimer); show("title"); };
+
+/* ======================= Leaderboard + Hall of Shame ======================= */
+
+const PLAYER_KEY = "forged-player";
+function playerName() {
+  try { return (localStorage.getItem(PLAYER_KEY) || "").trim() || "You"; } catch (e) { return "You"; }
+}
+// offline only: sample rivals so the board is never empty (B pre-seeds the real one)
+const SAMPLE_PLAYERS = [
+  { name: "Shredder Sally", money: 18400, patches: 9 },
+  { name: "Two-Copy Tony", money: 11250, patches: 7 },
+  { name: "Notary Nadia", money: 6900, patches: 4 },
+  { name: "Stamp Champ", money: 3150, patches: 2 },
+];
+const SAMPLE_SHAME = [
+  { player: "Two-Copy Tony", version: 7, trick: "Duplicate with tweaks", learned: "copy_gen", n: 340 },
+  { player: "Shredder Sally", version: 4, trick: "Phantom supplier", learned: "unknown_vendor", n: 212 },
+  { player: "Notary Nadia", version: 3, trick: "Boss request", learned: "amount_unusual", n: 96 },
+];
+
+let boardTab = "leaders";
+function openBoard() {
+  const input = $("#player-name");
+  input.value = playerName() === "You" ? "" : playerName();
+  input.placeholder = "You";
+  input.onchange = () => {
+    try { localStorage.setItem(PLAYER_KEY, input.value.trim()); } catch (e) { /* name just isn't remembered */ }
+    S.shame.forEach(x => x.player = playerName());
+    loadBoard();
+  };
+  overlay("board");
+  loadBoard();
+}
+$$(".board-tab").forEach(b => b.onclick = () => {
+  sfx("click"); boardTab = b.dataset.tab;
+  $$(".board-tab").forEach(x => x.classList.toggle("active", x === b));
+  $("#board-leaders").hidden = boardTab !== "leaders"; $("#board-shame").hidden = boardTab !== "shame";
+});
+
+function renderBoard(players, shame, live) {
+  const me = playerName();
+  $("#board-source").textContent = live ? "● Live from the server" : "Offline: sample players, plus your current run";
+  $("#board-foot").textContent = "Patches = times the inspector was retrained because of your tricks";
+  const rows = [...players].sort((a, b) => b.money - a.money);
+  $("#board-leaders").innerHTML = rows.length ? `<table class="board-table">
+    <tr><th>#</th><th>Forger</th><th class="num">Siphoned</th><th class="num">Patches caused</th></tr>
+    ${rows.map((p, i) => `<tr class="${p.name === me ? "me" : ""}"><td class="board-rank">${i + 1}</td><td>${esc(p.name)}</td>
+      <td class="num">${money(p.money)}</td><td class="num">${p.patches}</td></tr>`).join("")}</table>`
+    : `<div class="board-empty">No forgers yet. Be the first.</div>`;
+  $("#board-shame").innerHTML = shame.length ? shame.map(x => `
+    <div class="shame-item ${x.player === me ? "me" : ""}">
+      <div class="shame-ver">v${x.version}</div>
+      <div><b>${esc(x.player)}</b>'s ${esc(x.trick)} taught the inspector to catch: ${esc(tellLabel(x.learned))}
+        <small>${x.round ? "Your run, round " + x.round : ""}</small></div>
+      <div class="shame-n">${x.n != null ? x.n + " invoices<br>retrained on" : x.amount != null ? money(x.amount) : ""}</div>
+    </div>`).join("") : `<div class="board-empty">Nobody has forced a patch yet.</div>`;
+}
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// GET /leaderboard: { players: [{name, money, patches}], hall_of_shame: [{player, version, trick, learned, n}] }
+async function loadBoard() {
+  const me = { name: playerName(), money: S.money, patches: S.patches };
+  const localShame = [...S.shame].reverse();
+  renderBoard(S.round ? [...SAMPLE_PLAYERS, me] : SAMPLE_PLAYERS, [...localShame, ...SAMPLE_SHAME], false);
+  if (!API) return;
+  try {
+    const r = await api("GET", "/leaderboard");
+    const list = Array.isArray(r) ? r : r.players ?? r.leaderboard ?? [];
+    const players = list.map(p => ({ name: p.name ?? p.player ?? "?", money: +(p.money ?? p.siphoned ?? 0),
+      patches: +(p.patches ?? p.patches_caused ?? 0) }));
+    const shame = (r.hall_of_shame ?? r.shame ?? []).map(x => ({ player: x.player ?? x.name ?? "?",
+      version: x.version ?? "?", trick: x.trick ?? x.scheme ?? "a trick", learned: x.learned ?? x.feature ?? x.tell ?? "",
+      n: x.n ?? x.learned_from ?? x.examples ?? null }));
+    if ($("#overlay-board").classList.contains("show")) renderBoard(players, shame.length ? shame : localShame, true);
+  } catch (e) { offline(e); }
+}
 
 /* desk gets messier as the run goes on */
 function messUpDesk() {
@@ -974,10 +1213,13 @@ function record() {
     line_items: inv.items.map(i => `${i.desc} ×${i.qty} @ ${i.price}`),
     field_altered: [...S.altered],
     legibility: Object.fromEntries(Object.entries(S.legibility).map(([k, v]) => [k, +v.toFixed(2)])),
-    scan_quality: +scanQuality().toFixed(2), copy_generation: S.copyGen,
+    // Copy Machine Whisperer: copies don't count toward the generation penalty
+    scan_quality: +scanQuality().toFixed(2), copy_generation: S.perks.includes("copy") ? 0 : S.copyGen,
     stamp_type: S.stamps.map(s => s.type), stamp_position: S.stamps.map(s => [Math.round(s.x), Math.round(s.y)]),
     domain_mismatch: inv.domain !== S.vendorRef.domain, letterhead_match: inv.letterhead === "match",
-    cover_email: inv.coverEmail || "", detector_version: S.version, heat: Math.round(S.heat),
+    cover_email: inv.coverEmail || "", persuasion: Math.round(S.persuasion), // Smooth Talker raises this
+    after_hours: S.perks.includes("night"), // Night Shift: sent late, pays double
+    detector_version: S.version, heat: Math.round(S.heat),
     verdict: S.lastResult && S.submitted ? (S.lastResult.caught ? "FLAGGED" : "PAID") : null,
   };
 }

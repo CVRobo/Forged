@@ -636,6 +636,7 @@ function setPhase(ph) {
 addEventListener("message", e => {
   const m = e.data;
   if (!m || m.src !== "forged-os") return;
+  osLoaded = true; // any message means the computer is up
   if (m.type === "stand") stand();
   if (m.type === "phase") {
     if (m.phase === "briefing" && !["pickup", "carrying", "judging"].includes(P.phase)) setPhase("briefing");
@@ -754,7 +755,10 @@ function sit() {
         OS.focus(); OS.contentWindow && OS.contentWindow.focus();
       }, 450);
     };
-    if (osLoaded) ready(); else OS.addEventListener("load", ready, { once: true });
+    // the load event can fire before this script runs (or be unreadable on file://), so never wait more than 1.2s
+    if (osLoaded) ready();
+    else { let done = false; const go = () => { if (!done) { done = true; osLoaded = true; ready(); } };
+      OS.addEventListener("load", go, { once: true }); setTimeout(go, 1200); }
   }, 450);
 }
 function stand() {

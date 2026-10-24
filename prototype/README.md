@@ -51,6 +51,10 @@ Both pages use `postMessage`:
 | Office → computer | `deliver` | The envelope reached the IN tray; the computer runs the inspection |
 | Office → computer | `boss-near` | The boss is behind your chair; the computer starts the hide-the-invoice prompt |
 
+## Connecting to the backend
+
+Add `?api=<server url>` to either page, e.g. http://localhost:8765/?api=http://localhost:8000 (the office passes it on to the computer). The computer then calls `POST /round/start`, `POST /clerk` and `POST /submit`. With no `api`, or when a call fails or times out, it falls back to the mocks below and shows a "playing offline" toast once. The server needs CORS enabled for the frontend's origin.
+
 ## What is mocked (the backend team replaces these)
 
 - `computeTells()` / `submit()` in `game.js`: a rule-based verdict that stands in for the detector
