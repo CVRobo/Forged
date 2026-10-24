@@ -16,11 +16,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import joblib
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
 from ml.online import features as F
+from ml.online.lgbm import load_lightgbm
+
+lgb = load_lightgbm()  # also on Macs without Homebrew's libomp (see lgbm.py)
 
 MODEL_DIR = Path(__file__).resolve().parent / "models"
 TARGET_FPR = 0.03  # share of honest customers a version may block: the real-world standard, used in reports and the gate
@@ -30,16 +32,99 @@ RANK_CUTOFF = {1: 0.9, 2: 0.8, 3: 0.65, 4: 0.5, 5: 0.0}
 PARAMS = dict(n_estimators=500, learning_rate=0.04, num_leaves=63, min_child_samples=40, subsample=0.8, subsample_freq=1,
               colsample_bytree=0.8, reg_lambda=1.0, verbose=-1, random_state=0)
 
-# which game tell each feature speaks for (the game's TELL_LABELS turn them into Gus's words)
+# the tell family each feature belongs to, for the patch notes (retrain.learned groups the model's
+# attention by it); an order's own reasons go through tell_for, which reads the order's values
 TELL_OF = {
     "TransactionAmt": "amount_unusual", "hour": "night", "dist1": "far_ship", "dist2": "ip_far",
-    "C1": "velocity", "C6": "velocity", "C2": "new_address", "C14": "new_address", "D15": "new_address",
-    "C11": "device_reuse", "C13": "email_risky", "D4": "email_risky", "D1": "new_card", "D3": "velocity",
+    "C1": "new_card", "C6": "velocity", "C2": "new_address", "C14": "new_address", "D15": "new_address",
+    "C11": "device_reuse", "C13": "new_account", "D4": "new_account", "D1": "new_card", "D3": "velocity",
     "D10": "new_device", "ProductCD": "gift_card", "card4": "new_card", "card6": "new_card",
-    "P_email": "email_risky", "R_email": "email_risky", "M4": "foreign_card", "M5": "far_ship", "M6": "new_address",
+    "P_email": "email_risky", "R_email": "email_risky", "M4": "foreign_card", "M5": "new_address", "M6": "new_address",
     "id_12": "new_device", "id_16": "new_device", "proxy": "proxy", "os": "new_device", "browser": "new_device",
     "DeviceType": "new_device", "device": "new_device",
 }
+
+# the lines tell_for draws, in the game's terms
+FAR_SHIP_MILES = 100   # a drop farther than this was shipped far; a nearer one is a new address
+FAR_IP_MILES = 300     # shopping this far from the billing address (the scripted Gus's ip_far line)
+BIG_AMOUNT = 250       # more than people usually spend at the game's shops
+NEW_DAYS = 30          # a card, account, device or address younger than this is new
+NIGHT_END = 6          # midnight to 6 AM
+COMMON_EMAIL = {"gmail", "yahoo", "hotmail", "outlook", "aol", "icloud", "comcast", "live", "msn", "att",
+                "verizon.net", "sbcglobal.net", "me.com", "mac.com", "ymail.com", "bellsouth.net", "cox.net",
+                "optonline.net", "charter.net", "earthlink.net"}
+
+
+def _num(v) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def _str(v) -> str | None:
+    return None if v is None or pd.isna(v) else str(v)
+
+
+def _away(x: pd.Series) -> bool:
+    """Goods shipped somewhere other than the billing address (M5)."""
+    return _str(x.get("M5")) == "T"
+
+
+def _burst(x: pd.Series) -> bool:
+    """More than one order on this card today (C6)."""
+    return _num(x.get("C6")) >= 2
+
+
+def _email(v, x) -> str | None:
+    v = _str(v)
+    return None if v is None else "email_risky" if v == "anonymous" else None if v in COMMON_EMAIL else "odd_domain"
+
+
+def _device(v, x) -> str | None:
+    if bool(F.is_emulator(x.to_frame().T).iloc[0]):
+        return "emulator"
+    return "new_device" if _num(x.get("D10")) < NEW_DAYS else None
+
+
+_RULES = {
+    "TransactionAmt": lambda v, x: "amount_unusual" if _num(v) >= BIG_AMOUNT else None,
+    "hour": lambda v, x: "night" if _num(v) < NIGHT_END else None,
+    "dist1": lambda v, x: "far_ship" if _num(v) >= FAR_SHIP_MILES else "new_address" if _num(v) > 0 else None,
+    "dist2": lambda v, x: "ip_far" if _num(v) >= FAR_IP_MILES else None,
+    # C1 counts the card's orders ever: a burst today, a brand-new card, or an old card shipping somewhere new
+    "C1": lambda v, x: "velocity" if _burst(x) else "new_card" if _num(v) <= 2 else "new_address" if _away(x) else None,
+    "C2": lambda v, x: "new_address" if _away(x) else None,
+    "C6": lambda v, x: "velocity" if _burst(x) else None,
+    "C11": lambda v, x: "device_reuse" if _num(v) >= 2 else None,
+    "C13": lambda v, x: "new_account" if _num(v) <= 1 else None,
+    "C14": lambda v, x: "new_address" if _away(x) else None,
+    "D1": lambda v, x: "new_card" if _num(v) < NEW_DAYS else None,
+    "D3": lambda v, x: "velocity" if _num(v) < 1 else None,
+    "D4": lambda v, x: "new_account" if _num(v) < NEW_DAYS else None,
+    "D10": lambda v, x: "new_device" if _num(v) < NEW_DAYS else None,
+    "D15": lambda v, x: "new_address" if _away(x) and _num(v) < NEW_DAYS else None,
+    "ProductCD": lambda v, x: "gift_card" if _str(v) == "C" else None,
+    "P_email": _email,
+    "R_email": _email,
+    "M4": lambda v, x: {"M2": "foreign_card", "M1": "ip_far"}.get(_str(v)),
+    "M5": lambda v, x: "new_address" if _away(x) else None,
+    "M6": lambda v, x: "new_address" if _str(v) == "F" and _away(x) else None,
+    "id_12": lambda v, x: "new_device" if _str(v) == "NotFound" else None,
+    "id_16": lambda v, x: "new_device" if _str(v) in ("NotFound", "New") else None,
+    "proxy": lambda v, x: "proxy" if _str(v) else None,
+    "os": _device, "browser": _device, "DeviceType": _device, "device": _device,
+}
+TELLS = {"amount_unusual", "night", "far_ship", "new_address", "ip_far", "velocity", "new_card", "device_reuse",
+         "new_account", "new_device", "gift_card", "email_risky", "odd_domain", "foreign_card", "proxy", "emulator"}
+
+
+def tell_for(feature: str, x: pd.Series) -> str | None:
+    """The game tell a feature's contribution speaks for, given the order's values (one framed row).
+    None when the value shows nothing a player would recognize: a long card history, a common email,
+    the card's brand."""
+    rule = _RULES.get(feature)
+    return rule(x.get(feature), x) if rule else None
 
 
 @dataclass
@@ -57,20 +142,24 @@ class Version:
     def scores(self, rows: pd.DataFrame) -> np.ndarray:
         return self.model.predict_proba(F.encode(F.frame(rows), self.vocab))[:, 1]
 
+    def attention(self) -> pd.Series:
+        """Each tell family's share of the model's attention (split gain, grouped by TELL_OF), largest first."""
+        gain = pd.Series(self.model.booster_.feature_importance("gain"), index=F.FEATURES)
+        gain = gain.groupby(gain.index.map(lambda f: TELL_OF.get(f, f))).sum()
+        return (gain / gain.sum()).sort_values(ascending=False)
+
     def explain(self, rows: pd.DataFrame, k: int = 3) -> list[list[list]]:
-        """Each row's top tells: [[tell, weight], ...], weight in Gus's suspicion points (log-odds × 10)."""
+        """Each row's top tells: [[tell, weight], ...], weight in Gus's suspicion points (log-odds × 10).
+        A feature's push toward fraud counts for the tell its value shows (tell_for), or for none."""
         raw = F.frame(rows)
         x = F.encode(raw, self.vocab)
         contrib = self.model.predict(x, pred_contrib=True)[:, :-1]  # last column is the bias
-        emu = F.is_emulator(raw).to_numpy()  # one shared definition (features.is_emulator)
         out = []
         for i in range(len(x)):
-            per = {}
+            row, per = raw.iloc[i], {}
             for name, c in zip(F.FEATURES, contrib[i]):
-                if c > 0:
-                    tell = TELL_OF.get(name, name)
-                    if tell == "new_device" and emu[i]:
-                        tell = "emulator"
+                tell = tell_for(name, row) if c > 0 else None
+                if tell:
                     per[tell] = per.get(tell, 0.0) + float(c)
             out.append([[t, round(w * 10, 1)] for t, w in sorted(per.items(), key=lambda kv: -kv[1])[:k]])
         return out
