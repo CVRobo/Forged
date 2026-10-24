@@ -1632,7 +1632,7 @@ addEventListener("keydown", e => {
   if (K.is("playerList", e.code)) { ForgedMenu.showPlayerList(true); return; }
   P.keys.add(e.code);
   if (e.repeat) return;
-  if (K.is("interact", e.code) && current) current.act();
+  if (K.is("interact", e.code) && current) { swing("right"); current.act(); }
   if (K.is("camera", e.code)) setFirstPerson(!P.fp);
 });
 addEventListener("keyup", e => {
@@ -1647,7 +1647,7 @@ addEventListener("mousedown", e => {
   if (!P.started || P.paused || P.seated || e.button === 0) return;
   const code = "Mouse" + e.button;
   P.keys.add(code);
-  if (K.is("interact", code) && current) { e.preventDefault(); current.act(); }
+  if (K.is("interact", code) && current) { e.preventDefault(); swing("right"); current.act(); }
   if (K.is("camera", code)) setFirstPerson(!P.fp);
 });
 addEventListener("mouseup", e => P.keys.delete("Mouse" + e.button));
@@ -1945,11 +1945,122 @@ function drawMinimap(now) {
   g.strokeRect(0, 0, 200, 138);
 }
 
+/* ======================= Hands: holding, reaching, the first-person arm =======================
+ * Anything the player can carry is registered once (FW.hold.register). Showing it
+ * (visible = true) means "picked up" and hiding it means "put down", so code that only
+ * toggles visibility gets this for free: the item sits in the hand and moves with the arm,
+ * that arm stays bent forward while carrying, and the hand does a quick reach on every
+ * pick-up, put-down and interaction. In first person a Minecraft-style right arm (and the
+ * left one while it holds something) is drawn over the view, holding a copy of the item. */
+const CARRY = .6;       // a carrying arm is raised this far forward (radians): held at your side, visible from behind
+const REACH_MS = 320;   // one reach: out and back
+const ease = t => t * t * (3 - 2 * t);
+const lerp = (a, b, t) => a + (b - a) * t;
+const reachAt = { right: -1e9, left: -1e9 };
+function swing(side = "right") { reachAt[side] = performance.now(); }
+// 0 → 1 → 0 over a reach (0 when no reach is running)
+function reachK(side, now) { const k = (now - reachAt[side]) / REACH_MS; return k >= 0 && k < 1 ? Math.sin(Math.PI * ease(k)) : 0; }
+
+// sockets: a hand-held frame that's upright (body-aligned) when the arm is in the carry pose
+function addSocket(arm, pitch) { const s = new THREE.Group(); s.position.set(0, -.72, 0); s.rotation.x = pitch; arm.add(s); return s; }
+// makeChar's armL sits at -x, which is the character's own right hand (it shows on the right of the
+// screen from behind, matching the first-person right arm), so "right" here means armL
+const bodyHands = { right: { arm: player.armL, socket: addSocket(player.armL, CARRY) }, left: { arm: player.armR, socket: addSocket(player.armR, CARRY) } };
+
+/* --- first-person arms: their own little scene, drawn over the office so they never clip into walls --- */
+const vmScene = new THREE.Scene();
+vmScene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", .85));
+{ const l = new THREE.DirectionalLight("#ffecd0", .55); l.position.set(1, 2, 1.5); vmScene.add(l); }
+const vmCam = new THREE.PerspectiveCamera(60, 1, .01, 10);
+const VM_PITCH = 1.72; // the first-person arm points forward and a little up
+function buildViewArm(sx) {
+  const shirtM = M("#e0352b"), skinM = M("#f1c27d"), trimM = M(shade("#e0352b", .12));
+  const root = new THREE.Group(); root.visible = false; root.scale.setScalar(.8); vmScene.add(root);
+  const arm = new THREE.Group(); root.add(arm); // shoulder pivot
+  const part = (geom, mat, y) => { const m = new THREE.Mesh(geom, mat); m.position.y = y; arm.add(m); outline(m, .02); return m; };
+  part(RBOXG(.17, .6, .19, .06), shirtM, -.29);
+  part(RBOXG(.18, .08, .2, .03), trimM, -.58);
+  place(handGeo(sx), skinM, arm, 0, -.7, 0, 0, false);
+  const socket = addSocket(arm, -VM_PITCH); socket.scale.setScalar(.75); // held things look smaller up close
+  return { root, arm, sx, socket };
+}
+const viewHands = { right: buildViewArm(1), left: buildViewArm(-1) };
+
+const heldItems = [];
+const handOf = h => (typeof h.hand === "function" ? h.hand() : h.hand) || "right";
+// offset = [out to the side, up, forward] from the hand (mirrored for the left hand), rot = Euler angles
+function registerHeld(item, { hand = "right", offset = [.05, .05, .07], rot = [0, 0, 0] } = {}) {
+  const h = { item, hand, offset, rot, shown: !!item.visible, side: null, vm: null, vmNodes: 0 };
+  heldItems.push(h); return h;
+}
+const countNodes = o => { let n = 0; o.traverse(() => n++); return n; };
+// "out to the side" is -x for the right hand (armL sits at -x) and +x for the left
+const sideOffset = (h, side) => [(side === "right" ? -1 : 1) * h.offset[0], h.offset[1], h.offset[2]];
+function placeHeld(h, side) {
+  if (h.side === side) return;
+  h.side = side;
+  bodyHands[side].socket.add(h.item);
+  h.item.position.set(...sideOffset(h, side)); h.item.rotation.set(...h.rot);
+  if (h.vm) { viewHands[side].socket.add(h.vm); h.vm.position.set(...sideOffset(h, side)); h.vm.rotation.set(...h.rot); }
+}
+// the first-person copy mirrors the item (rebuilt if parts are added later, e.g. the boss's gold seal)
+function syncViewItem(h) {
+  const n = countNodes(h.item);
+  if (!h.vm || h.vmNodes !== n) {
+    if (h.vm) h.vm.parent && h.vm.parent.remove(h.vm);
+    h.vm = h.item.clone(true); h.vmNodes = n;
+    h.vm.traverse(o => { o.castShadow = false; });
+    viewHands[h.side].socket.add(h.vm); h.vm.position.set(...sideOffset(h, h.side)); h.vm.rotation.set(...h.rot);
+  }
+  const src = [], dst = [];
+  h.item.traverse(o => src.push(o)); h.vm.traverse(o => dst.push(o));
+  for (let i = 1; i < src.length; i++) { dst[i].visible = src[i].visible; dst[i].position.copy(src[i].position); dst[i].rotation.copy(src[i].rotation); dst[i].scale.copy(src[i].scale); }
+  h.vm.rotation.copy(h.item.rotation); h.vm.visible = h.item.visible;
+}
+
+let lastWalkT = 0;
+function updateHands(dt, now) {
+  const holding = { right: false, left: false };
+  for (const h of heldItems) {
+    const vis = !!h.item.visible;
+    if (vis) { placeHeld(h, handOf(h)); holding[h.side] = true; }
+    if (vis !== h.shown) { h.shown = vis; swing(h.side || handOf(h)); } // picked up or put down
+  }
+  const moving = Math.abs(player.walkT - lastWalkT) > 1e-4; lastWalkT = player.walkT;
+  // third person: a carrying arm stays bent forward (with a small bob); any arm can reach
+  if (!P.seated) for (const side of ["right", "left"]) {
+    const arm = bodyHands[side].arm, r = reachK(side, now);
+    let base = arm.rotation.x; // empty hands keep their walking swing
+    if (holding[side]) base = -CARRY + Math.sin(player.walkT * 2) * (moving ? .05 : 0) + Math.sin(now / 700) * .02;
+    arm.rotation.x = lerp(base, -1.75, r);
+  }
+  // first person: hide the body's own arms (the camera sits in your head) and show the view arms
+  const fpOn = P.fp && P.started && !P.seated && !CINE.active;
+  player.armR.visible = player.armL.visible = !fpOn;
+  for (const side of ["right", "left"]) {
+    const v = viewHands[side];
+    v.root.visible = fpOn && (side === "right" || holding[side]);
+    if (!v.root.visible) continue;
+    const r = reachK(side, now), bob = moving ? player.walkT : 0;
+    v.root.position.set(v.sx * (.5 + Math.cos(bob) * .012), -.4 + Math.abs(Math.sin(bob)) * -.022 + Math.sin(now / 900) * .006, -.22 - r * .14);
+    v.root.rotation.set(0, v.sx * .15, -v.sx * .1);
+    v.arm.rotation.x = VM_PITCH + r * .35 + (holding[side] ? -.08 : 0);
+  }
+  if (fpOn) for (const h of heldItems) if (h.item.visible && h.side) syncViewItem(h); else if (h.vm) h.vm.visible = false;
+}
+function renderViewArms() {
+  if (!viewHands.right.root.visible && !viewHands.left.root.visible) return;
+  if (vmCam.aspect !== camera.aspect) { vmCam.aspect = camera.aspect; vmCam.updateProjectionMatrix(); }
+  renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true;
+}
+// the envelope you carry from the printer to the IN tray
+registerHeld(carryEnv, { hand: "right", offset: [.06, .12, .08], rot: [Math.PI / 2, 0, -.12] });
+
 const UPDATERS = [], MSG_HOOKS = [];
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  if (P.paused) { renderer.render(scene, camera); requestAnimationFrame(loop); return; } // Game Menu open: freeze
+  if (P.paused) { renderer.render(scene, camera); renderViewArms(); requestAnimationFrame(loop); return; } // Game Menu open: freeze
   updatePlayer(dt, now);
   updateBoss(dt, now);
   // idle life: coworkers type, inspector bobs, printer blinks
@@ -1970,10 +2081,12 @@ function loop(now) {
   updateFaces(now, _look.set(player.g.position.x, 1.9, player.g.position.z));
   // name tags ignore depth, so hide them when the camera gets right on top of someone
   [kevin, dana, inspector, clerk, boss].forEach(c => { c.tag.visible = camera.position.distanceTo(c.g.position) > 3.2; });
+  updateHands(dt, now);
   updateCamera(dt);
   updatePrompt();
   updateBubbles(now);
   renderer.render(scene, camera);
+  renderViewArms();
   drawMinimap(now);
   requestAnimationFrame(loop);
 }
@@ -1999,6 +2112,8 @@ window.FW = {
   rand, pick, clamp, money,
   // hooks
   onUpdate: fn => UPDATERS.push(fn),
+  // held items: hold.register(group, { hand: "right" | "left" | () => side, offset, rot }); toggle .visible to pick up / put down
+  hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),
   addInteraction: it => INTERACTIONS.push(it),
   setSfx: (kind, fn) => { SFX_HOOKS[kind] = fn; },
