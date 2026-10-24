@@ -63,7 +63,7 @@ USE_STUBS=true ml/.venv/bin/python -m uvicorn server.main:app --port 8000
 
 **Check it's live:** `GET /health` reports `model`: the live version, the reason if the model is off (and the game is on the browser's scripted Gus), and whether this machine can retrain (`learning`, `why_not_learning`, `wins_waiting`).
 
-To **rebuild or retrain** the model, put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account), then `ml/.venv/bin/python -m ml.online.train`. Node is needed for the simulators (`simulate.js`). Without the files, the server still judges every order, but Gus can't learn: the wins wait, and the server says why once (and in `/health`).
+To **rebuild or retrain** the model, put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account), then `ml/.venv/bin/python -m ml.online.train`. Node is needed for the simulators (`simulate.js`). Without the files, the server still judges every order, but Gus can't learn: the wins wait, and the server says why once (and in `/health`). Kaggle's `test_transaction.csv` and `test_identity.csv` don't count: they have no `isFraud` labels.
 
 ## Tests
 
@@ -81,6 +81,7 @@ They cover feature framing and encoding (unknown categories → `other`, rare va
 - **The scripted Gus's nudges still count**, in the model's units (4 of his points per unit of log-odds). Heat over 40 adds `(heat - 40) × 0.5` points, and persuasion takes away `0.18` a point. Rank leniency is the model's rank thresholds (below).
 - **The cardholder can report the card** between orders placed days apart (4% a day; never with Patience). The rest of the campaign is then dead.
 - **The Paper Shredder** saves the run's first win after it's bought as `FORGOTTEN`: it pays and counts as got-through in the report, but retraining doesn't weigh it as a blind spot.
+- **The leaked memo tells the truth about the live version.** Its two true rules come from the four tell families the version weighs most (`Version.attention`, the same split gain the patch notes compare). The decoy is one of the scripted Gus's fake rules, about something the model never weighs: phones, Fridays, Yahoo.
 - **Learning.** Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background, on machines that have the data for it (`train.can_retrain`). Without a trained model the server answers with the browser's scripted Gus.
 - **Gus's reasons.** `Version.explain` turns each feature's push toward fraud into the tell the order's own value shows (`model.tell_for`). A drop 4 miles away is `new_address`; "shipped across the ocean" (`far_ship`) is for 100 miles or more. A card's long history isn't `velocity`; more than one order today is. A brand-new account is `new_account`. A push that shows nothing a player would recognize, like a common email or the card's brand, makes no tell.
 

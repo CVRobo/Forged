@@ -307,3 +307,48 @@ def test_an_unloadable_model_is_reported_once_and_the_browser_answers(monkeypatc
             r = submit("careful_local")
     assert r.new_version == 0 and r.results is None  # the browser's verdict
     assert caplog.text.count("OpenMP") == 1
+
+
+# ---------- the leaked memo ----------
+
+
+def test_the_memo_says_what_the_live_version_watches():
+    memo = online_data.model_memo()
+    real = [m for m in memo if m["real"]]
+    decoy = [m for m in memo if not m["real"]]
+    assert len(real) == 2 and len(decoy) == 1
+    watched = [t for t in M.load().attention().index if t in online_data.MEMO_RULES][:online_data.MEMO_FROM_TOP]
+    assert all(m["tell"] in watched and m["text"] == online_data.MEMO_RULES[m["tell"]] for m in real)
+    # the decoy is about something the model never weighs
+    assert decoy[0]["tell"] in online_data.MEMO_DECOYS and decoy[0]["tell"] not in M.TELLS
+
+
+def test_every_memo_rule_is_about_a_tell_the_game_knows():
+    from ml.online.tests.test_tells import PROTOTYPE, _js_keys
+
+    labels = _js_keys(PROTOTYPE / "orders.js", "TELL_LABELS")
+    assert set(online_data.MEMO_RULES) <= labels and set(online_data.MEMO_DECOYS) <= labels
+    assert set(online_data.MEMO_RULES) == set(M.TELL_OF.values())  # a sentence for every family the model can rank
+
+
+def test_round_start_leaks_the_models_memo(start_round, monkeypatch):
+    async def no_claude(level, tells):
+        raise AssertionError("the model's memo needs no Claude decoy")
+    monkeypatch.setattr(claude_service, "generate_memo_decoy", no_claude)
+    memo = asyncio.run(round_routes.round_start(RoundStartRequest(level=1))).memo
+    texts = set(online_data.MEMO_RULES.values()) | set(online_data.MEMO_DECOYS.values())
+    assert {m.text for m in memo} <= texts and sum(not m.real for m in memo) == 1
+    assert all(m.tell for m in memo)
+
+
+def test_the_stub_round_start_leaks_it_too():
+    memo = client(stubs.router).post("/round/start", json={"level": 1}).json()["memo"]
+    assert {m["tell"] for m in memo} <= set(online_data.MEMO_RULES) | set(online_data.MEMO_DECOYS)
+
+
+def test_without_a_model_the_old_memo_stays(start_round, monkeypatch):
+    def gone(version=None):
+        raise FileNotFoundError("no trained version yet")
+    monkeypatch.setattr(M, "load", gone)
+    memo = asyncio.run(round_routes.round_start(RoundStartRequest(level=1))).memo
+    assert "Friday orders are suspicious." in {m.text for m in memo}  # the start_round fixture's Claude decoy

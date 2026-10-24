@@ -33,6 +33,7 @@ class CaseFile(BaseModel):
 class MemoRule(BaseModel):
     text: str
     real: bool
+    tell: str | None = Field(default=None, description="the tell the rule is about (online: prototype/orders.js TELL_LABELS)")
 
 
 class Tell(BaseModel):

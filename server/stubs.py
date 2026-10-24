@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query
 
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
 from server.services.detector import TELL_DESCRIPTIONS
-from server.services.online_data import model_metrics, model_patch_notes, model_version, preview, submit_online
+from server.services.online_data import model_memo, model_metrics, model_patch_notes, model_version, preview, submit_online
 from server.models.schemas import (
     CaseFile,
     ClerkRequest,
@@ -96,11 +96,12 @@ async def stub_round_start(req: RoundStartRequest):
     level = req.level if req.level in STUB_LEVELS else 1
     data = STUB_LEVELS[level]
     session_id = req.session_id or str(uuid.uuid4())
+    model_rules = model_memo()  # the fraud model's own memo, while it's live
 
     return RoundStartResponse(
         round_id=f"stub-{uuid.uuid4().hex[:8]}",
         session_id=session_id,
-        memo=_pick_memo(level),
+        memo=[MemoRule(**m) for m in model_rules] if model_rules is not None else _pick_memo(level),
         inspector_version=model_version() or 1,  # the fraud model's, when it's live: the one judging
         case_file=CaseFile(
             company=data["company"],

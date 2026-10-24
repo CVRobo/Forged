@@ -46,6 +46,31 @@ HEAT_START, HEAT_WEIGHT = 40.0, 0.5  # heat over 40 adds (heat - 40) * 0.5
 REPORT_RISK_PER_DAY = 0.04           # each day between orders, the cardholder may report the card
 RETRY_SECONDS = 60                   # a model that failed to load is tried again after this long
 
+# The leaked memo while the model is live: two true rules, picked from the tell families the live
+# version weighs most, and a decoy about something it never weighs (the scripted Gus's fake rules).
+MEMO_RULES = {
+    "email_risky": "Watch anonymous email providers.",
+    "ip_far": "Flag orders placed far from the billing address.",
+    "velocity": "Several orders on one card in a day is a red flag.",
+    "new_card": "Brand-new cards on big orders need a second look.",
+    "new_device": "Old accounts on brand-new devices: check them.",
+    "gift_card": "Large gift cards go to review.",
+    "proxy": "Block orders through VPNs.",
+    "device_reuse": "Watch for one device paying with many cards.",
+    "amount_unusual": "Orders far above what people spend here go to review.",
+    "night": "Orders in the small hours get a closer look.",
+    "far_ship": "Goods shipped far away need a second look.",
+    "new_address": "A new shipping address on an old card is a red flag.",
+    "new_account": "Brand-new accounts get a second look.",
+    "foreign_card": "Cards from abroad need a second look.",
+}
+MEMO_DECOYS = {
+    "device_mobile": "Orders from phones are always fraud.",
+    "friday": "Friday orders are suspicious.",
+    "yahoo": "Yahoo addresses are high risk.",
+}
+MEMO_FROM_TOP = 4  # the two true rules come from this many of the families the version weighs most
+
 _unavailable = {"error": None, "at": 0.0}  # why the model last failed to load, and when
 _warned: set[str] = set()                  # problems already logged
 _shredded: set[str] = set()                # runs whose Paper Shredder already made Gus forget a win
@@ -117,6 +142,19 @@ def model_metrics() -> list[dict] | None:
         out.append({"version": r["version"], "catch_rate": t.get("recall", 0.0), "false_positive_rate": t.get("fpr", 0.0),
                     "held_out_catch_rate": t.get("player_catch", t.get("sim_catch", 0.0))})
     return out
+
+
+def model_memo() -> list[dict] | None:
+    """The leaked memo from the live version, shuffled: [{text, real, tell}] x 3. None without a model."""
+    v = _model()
+    if v is None:
+        return None
+    watched = [t for t in v.attention().index if t in MEMO_RULES][:MEMO_FROM_TOP]
+    memo = [{"text": MEMO_RULES[t], "real": True, "tell": t} for t in random.sample(watched, min(2, len(watched)))]
+    decoy = random.choice(sorted(MEMO_DECOYS))
+    memo.append({"text": MEMO_DECOYS[decoy], "real": False, "tell": decoy})
+    random.shuffle(memo)
+    return memo
 
 
 def model_status() -> dict:

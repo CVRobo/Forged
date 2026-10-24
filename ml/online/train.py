@@ -31,6 +31,9 @@ def can_retrain() -> tuple[bool, str]:
     real = (F.DATA_DIR / "real_identity.pkl").exists() or all(
         (F.DATA_DIR / f).exists() for f in ("train_transaction.csv", "train_identity.csv"))
     if not real:
+        if any((F.DATA_DIR / f).exists() for f in ("test_transaction.csv", "test_identity.csv")):
+            return False, ("ml/online/data/ has Kaggle's test files, which have no isFraud labels; training needs the "
+                           "labeled train files (train_transaction.csv, train_identity.csv)")
         return False, "the Kaggle files (train_transaction.csv, train_identity.csv) aren't in ml/online/data/"
     simulated = all((F.DATA_DIR / f"simulated_{kind}_{n}_{seed}.jsonl").exists() for kind, (n, seed) in SIM.items())
     if not simulated and shutil.which("node") is None:

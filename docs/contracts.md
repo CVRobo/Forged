@@ -187,6 +187,8 @@ The fraud model (`ml/online`) answers:
 
 `GET /health` includes `model`: `{ "available", "version", "error", "learning", "why_not_learning", "wins_waiting", "retrain_every" }`.
 
+While the model is live, `/round/start`'s memo describes it. The two real rules come from the tell families the live version weighs most, and the decoy (`real: false`) is a rule it never weighs. Each rule carries the tell it's about: `{ "text": "Brand-new accounts get a second look.", "real": true, "tell": "new_account" }`.
+
 While the model is live, `/patch-notes` and `/metrics` come from its version registry (`ml/online/models/versions.json`), promoted versions only. `catch_rate` and `false_positive_rate` are real fraud caught and real customers blocked on the held-out test days. `held_out_catch_rate` is the held-out player orders caught (v1, before any players: the simulated attackers).
 
 ### GET /patch-notes?since=v

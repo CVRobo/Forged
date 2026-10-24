@@ -142,6 +142,12 @@ class Version:
     def scores(self, rows: pd.DataFrame) -> np.ndarray:
         return self.model.predict_proba(F.encode(F.frame(rows), self.vocab))[:, 1]
 
+    def attention(self) -> pd.Series:
+        """Each tell family's share of the model's attention (split gain, grouped by TELL_OF), largest first."""
+        gain = pd.Series(self.model.booster_.feature_importance("gain"), index=F.FEATURES)
+        gain = gain.groupby(gain.index.map(lambda f: TELL_OF.get(f, f))).sum()
+        return (gain / gain.sum()).sort_values(ascending=False)
+
     def explain(self, rows: pd.DataFrame, k: int = 3) -> list[list[list]]:
         """Each row's top tells: [[tell, weight], ...], weight in Gus's suspicion points (log-odds × 10).
         A feature's push toward fraud counts for the tell its value shows (tell_for), or for none."""
