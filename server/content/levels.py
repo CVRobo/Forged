@@ -70,7 +70,14 @@ STUB_LEVELS = {
         "clerk": {
             "name": "Brenda",
             "quirk": "always on lunch break",
+            "voice": "761afc95-bef5-44dd-aa07-d3c678912e43",  # Samantha
             "keywords": ["lunch", "quick", "sandwich", "fast", "easy", "pie"],
+            "system_prompt": (
+                "You are Brenda, an accounts-payable clerk who is always on lunch break. "
+                "You talk with your mouth full, you're casual and warm, and you'll rubber-stamp "
+                "anything if the player keeps it short and mentions lunch. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "persuasion",
             "replies": {
                 "good": [
                     "Oh that's fine, sure, I'll push it through after lunch.",
@@ -83,6 +90,117 @@ STUB_LEVELS = {
                 "bad": [
                     "That's a LOT of words for a Tuesday.",
                     "Hon, I'm on break. Why is this so long?",
+                ],
+            },
+        },
+        "inspector": {
+            "name": "Gus",
+            "quirk": "cheerful, distracted by pie",
+            "voice": "db69127a-dbaf-4fa9-b425-2fe67680c348",  # Clint
+            "keywords": ["pie", "cake", "donut", "snack", "cookie"],
+            "system_prompt": (
+                "You are Gus the invoice inspector. You're cheerful and easily distracted by "
+                "mentions of pie or baked goods. You take your job seriously but get sidetracked. "
+                "If the player is chatting you up while carrying paperwork, be suspicious. "
+                "Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "suspicion",
+            "replies": {
+                "good": [
+                    "Pie? Where?!",
+                    "Don't tempt me. I'm on a pie-free diet. Since 10am.",
+                ],
+                "meh": [
+                    "Mmm... is it lunch yet?",
+                    "Interesting. I'll be watching. I'm always watching.",
+                ],
+                "bad": [
+                    "Why are you holding that envelope so... casually?",
+                    "You're being awfully friendly for someone holding paperwork.",
+                ],
+            },
+        },
+        "boss": {
+            "name": "The Boss",
+            "quirk": "micromanager who counts staplers",
+            "voice": "0b32066b-2bcc-44b9-89ab-0223a09d1606",  # Angry Carson
+            "keywords": ["report", "spreadsheet", "working", "busy", "numbers"],
+            "system_prompt": (
+                "You are The Boss, an intimidating micromanager who patrols the office counting "
+                "staplers and demanding productivity. You hate chitchat and loud noises. "
+                "If someone is being loud or not working, scold them. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "suspicion",
+            "replies": {
+                "good": [
+                    "Good. Keep working. I'll know if you don't.",
+                    "Spreadsheets. I love spreadsheets. Show me one later.",
+                ],
+                "meh": [
+                    "Is that a work conversation? It doesn't sound like one.",
+                    "Uh huh. Back to your desk.",
+                ],
+                "bad": [
+                    "Don't 'hi' me. Hi me with results.",
+                    "I'm going to pretend I didn't hear that. For now.",
+                ],
+            },
+        },
+        "kevin": {
+            "name": "Kevin",
+            "quirk": "clueless but lovable office buddy",
+            "voice": "ee8b13e7-98af-4b15-89d1-8d402be10c94",  # Carson
+            "keywords": ["help", "favor", "cover", "buddy", "friend"],
+            "system_prompt": (
+                "You are Kevin, a clueless but lovable office worker. You're enthusiastic about "
+                "everything, you know Ctrl+C and Ctrl+V, and you'll happily cover for anyone "
+                "without understanding what's going on. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "distraction",
+            "replies": {
+                "good": [
+                    "I can help! I know Ctrl+C AND Ctrl+V.",
+                    "Cover for you? Sure! What are we covering? Is it a surprise party?",
+                ],
+                "meh": [
+                    "Totally. Wait, what?",
+                    "Ha! Classic. ...I didn't hear any of that.",
+                ],
+                "bad": [
+                    "You should put that in a memo. I love memos.",
+                    "Brb, my screensaver needs me.",
+                ],
+            },
+        },
+        "dana": {
+            "name": "Dana",
+            "quirk": "cynical, knows everything, might help for a cut",
+            "voice": "5e10a334-7fa5-46d4-a64b-5ae6185da3fd",  # Sad Samantha
+            "keywords": ["cut", "split", "share", "money", "deal"],
+            "system_prompt": (
+                "You are Dana, a cynical coworker who knows everything about everyone in the office. "
+                "You might share intel about the inspector's weaknesses or the boss's patrol pattern, "
+                "but you want plausible deniability (and maybe a cut). Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "intel",
+            "intel_pool": [
+                "Gus doesn't check photocopies closely.",
+                "The boss walks clockwise. Every time.",
+                "Gus approves anything that smells like pie.",
+                "The boss counts staplers at 2pm sharp.",
+            ],
+            "replies": {
+                "good": [
+                    "Cut me in or keep me out. Pick fast.",
+                    "Twenty percent and I forget your face.",
+                ],
+                "meh": [
+                    "Fascinating. Truly.",
+                    "I have eleven tabs open and none of them are you.",
+                ],
+                "bad": [
+                    "Is this going to be a whole thing?",
+                    "Noted. Filed. Forgotten.",
                 ],
             },
         },
@@ -152,7 +270,14 @@ STUB_LEVELS = {
         "clerk": {
             "name": "Theo",
             "quirk": "terrified of the manager",
+            "voice": "6a176356-ada1-4b48-b2ae-3a3fdd485680",  # Elias
             "keywords": ["manager", "approved", "policy", "signed", "urgent", "compliance"],
+            "system_prompt": (
+                "You are Theo, a nervous accounts-payable clerk who is terrified of the manager. "
+                "You stammer, you worry about compliance, and you'll approve things quickly if "
+                "the player reassures you it's policy-compliant. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "persuasion",
             "replies": {
                 "good": [
                     "Oh thank goodness, if it's approved I won't get yelled at.",
@@ -165,6 +290,117 @@ STUB_LEVELS = {
                 "bad": [
                     "The manager is going to SEE this. I can't.",
                     "This doesn't feel like policy\u2026",
+                ],
+            },
+        },
+        "inspector": {
+            "name": "Gus",
+            "quirk": "cheerful, distracted by pie",
+            "voice": "db69127a-dbaf-4fa9-b425-2fe67680c348",  # Clint
+            "keywords": ["pie", "cake", "donut", "snack", "cookie"],
+            "system_prompt": (
+                "You are Gus the invoice inspector at St. Mercy Hospital. You're cheerful and "
+                "easily distracted by mentions of pie or baked goods. You take your job seriously "
+                "but get sidetracked. If the player is chatting you up while carrying paperwork, "
+                "be suspicious. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "suspicion",
+            "replies": {
+                "good": [
+                    "Pie? Where?!",
+                    "Don't tempt me. I'm on a pie-free diet. Since 10am.",
+                ],
+                "meh": [
+                    "Mmm... is it lunch yet?",
+                    "Interesting. I'll be watching. I'm always watching.",
+                ],
+                "bad": [
+                    "Why are you holding that envelope so... casually?",
+                    "You're being awfully friendly for someone holding paperwork.",
+                ],
+            },
+        },
+        "boss": {
+            "name": "The Boss",
+            "quirk": "micromanager who counts staplers",
+            "voice": "0b32066b-2bcc-44b9-89ab-0223a09d1606",  # Angry Carson
+            "keywords": ["report", "spreadsheet", "working", "busy", "numbers"],
+            "system_prompt": (
+                "You are The Boss at St. Mercy Hospital, an intimidating micromanager who patrols "
+                "the office counting staplers and demanding productivity. You hate chitchat and "
+                "loud noises. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "suspicion",
+            "replies": {
+                "good": [
+                    "Good. Keep working. I'll know if you don't.",
+                    "Spreadsheets. I love spreadsheets. Show me one later.",
+                ],
+                "meh": [
+                    "Is that a work conversation? It doesn't sound like one.",
+                    "Uh huh. Back to your desk.",
+                ],
+                "bad": [
+                    "Don't 'hi' me. Hi me with results.",
+                    "I'm going to pretend I didn't hear that. For now.",
+                ],
+            },
+        },
+        "kevin": {
+            "name": "Kevin",
+            "quirk": "clueless but lovable office buddy",
+            "voice": "ee8b13e7-98af-4b15-89d1-8d402be10c94",  # Carson
+            "keywords": ["help", "favor", "cover", "buddy", "friend"],
+            "system_prompt": (
+                "You are Kevin, a clueless but lovable office worker at St. Mercy Hospital. "
+                "You're enthusiastic about everything and you'll happily cover for anyone "
+                "without understanding what's going on. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "distraction",
+            "replies": {
+                "good": [
+                    "I can help! I know Ctrl+C AND Ctrl+V.",
+                    "Cover for you? Sure! What are we covering? Is it a surprise party?",
+                ],
+                "meh": [
+                    "Totally. Wait, what?",
+                    "Ha! Classic. ...I didn't hear any of that.",
+                ],
+                "bad": [
+                    "You should put that in a memo. I love memos.",
+                    "Brb, my screensaver needs me.",
+                ],
+            },
+        },
+        "dana": {
+            "name": "Dana",
+            "quirk": "cynical, knows everything, might help for a cut",
+            "voice": "5e10a334-7fa5-46d4-a64b-5ae6185da3fd",  # Sad Samantha
+            "keywords": ["cut", "split", "share", "money", "deal"],
+            "system_prompt": (
+                "You are Dana, a cynical coworker at St. Mercy Hospital who knows everything "
+                "about everyone. You might share intel about the inspector's weaknesses or "
+                "the boss's patrol pattern, but you want plausible deniability. Max 2 sentences, stay in character."
+            ),
+            "gameplay_effect": "intel",
+            "intel_pool": [
+                "Gus doesn't check photocopies closely.",
+                "The boss walks clockwise. Every time.",
+                "Gus approves anything that smells like pie.",
+                "The boss counts staplers at 2pm sharp.",
+            ],
+            "replies": {
+                "good": [
+                    "Cut me in or keep me out. Pick fast.",
+                    "Twenty percent and I forget your face.",
+                ],
+                "meh": [
+                    "Fascinating. Truly.",
+                    "I have eleven tabs open and none of them are you.",
+                ],
+                "bad": [
+                    "Is this going to be a whole thing?",
+                    "Noted. Filed. Forgotten.",
                 ],
             },
         },

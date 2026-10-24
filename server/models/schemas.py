@@ -111,6 +111,43 @@ class ClerkVoiceResponse(BaseModel):
     )
 
 
+# --- NPC (all NPCs, not just clerk) ---
+
+
+class NpcChatRequest(BaseModel):
+    round_id: str
+    npc: str = Field(description="NPC key: clerk | inspector | boss | kevin | dana")
+    text: str
+
+
+class NpcChatResponse(BaseModel):
+    reply: str
+    npc_name: str = Field(description="Display name (Brenda, Gus, etc.)")
+    persuasion_delta: int = Field(default=0, description="Change to persuasion (clerk only)")
+    suspicion_delta: float = Field(default=0.0, description="Change to suspicion (inspector/boss)")
+    intel: str | None = Field(default=None, description="Tip from Dana, if any")
+    effect: str = Field(description="persuasion | suspicion | intel | distraction | none")
+
+
+class NpcVoiceRequest(BaseModel):
+    round_id: str
+    npc: str = Field(description="NPC key: clerk | inspector | boss | kevin | dana")
+    audio_b64: str = Field(description="Base64-encoded audio (webm/opus from browser MediaRecorder)")
+
+
+class NpcVoiceResponse(BaseModel):
+    transcript: str = Field(description="What Deepgram heard the player say")
+    reply: str
+    npc_name: str
+    persuasion_delta: int = 0
+    suspicion_delta: float = 0.0
+    intel: str | None = None
+    effect: str
+    reply_audio_b64: str | None = Field(
+        default=None, description="Base64-encoded audio of the NPC's reply (Deepgram TTS)"
+    )
+
+
 # --- Submit ---
 
 

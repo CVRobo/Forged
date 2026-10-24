@@ -160,7 +160,9 @@ const DOSSIER_ENTRIES = {
   "version-bump":    { icon: "🧠", title: "Gus Learns",        text: "Gus only learns when you beat him. Each win makes him a little sharper, he watches harder for the warning signs that were in your order, and he recognizes close copies of it. Getting caught teaches him nothing, so try again." },
   "memo-deduction":  { icon: "📝", title: "Memo Rules",        text: "Two of the three memo rules are real: Gus actually watches for those. The third is a decoy." },
   "shop-intro":      { icon: "🛒", title: "The Shop",          text: "Between rounds you can buy perks and new disguises. Perks last the whole run (3 max)." },
-  "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. If he walks behind your desk, press Space to hide the screen. In the office, keep the envelope out of his sight." },
+  "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. The yellow cone on the floor is what he can see. If he walks behind your desk, press Space to hide the screen. In the office, keep the envelope out of his cone." },
+  "hiding":          { icon: "🚪", title: "Hiding",            text: "Walls and closed doors block the boss's view. Doors open when you walk into them; press E by one to close it behind you. Duck into a side room with the slip and shut the door until he's passed." },
+  "break-perks":     { icon: "☕", title: "Break Room",        text: "Coffee makes you walk faster and the boss slower to notice you for 30 s. A donut can sweeten Brenda (she'll whisper a hint), Gus, or even the boss." },
   "tells-explained": { icon: "🔍", title: "What Gus Checks",   text: "Who's buying, from where, on what device, what, when, and how fast. After a catch, the review line that gave you away glows red." },
   "streak-bonus":    { icon: "🔥", title: "Streaks",           text: "Getting away with it several rounds in a row builds a streak. Changing your plan keeps it alive." },
   "campaigns":       { icon: "🔁", title: "Several Orders",    text: "Operators can repeat an order a few days apart. More loot, but several orders on one card is something Gus watches, and one catch blocks the card for the rest." },
@@ -305,7 +307,7 @@ if (EMBED) {
   $("#insp-win-title").textContent = "Printer · Gus down the hall";
   $(".env-label").textContent = "DRAG TO PRINT";
   $("#envelope").title = "Drag me onto PRINT";
-  $("#btn-quit").textContent = "Quit to title";
+  $("#btn-quit").textContent = "Clock out"; // back to the office's Clock in card to pick a level
 }
 function toStage(cx, cy, el = stage) {
   const r = el.getBoundingClientRect();
@@ -328,6 +330,7 @@ function toast(text, kind = "") {
 
 document.addEventListener("click", e => {
   const go = e.target.closest("[data-go]");
+  if (go && EMBED && go.dataset.go === "levels") { sfx("click"); startRun(S.chosenLevel || 1); return; } // in the office the level was picked before clocking in
   if (go) { sfx("click"); if (go.dataset.go === "levels") renderLevels(); show(go.dataset.go); }
   const mn = e.target.closest("[data-menu]");
   if (mn) { sfx("click"); openMenu(mn.dataset.menu); }
@@ -931,6 +934,11 @@ window.addEventListener("message", e => {
   if (m.type === "heat" && Number.isFinite(+m.amount)) addHeat(+m.amount);
   if (m.type === "paused") setPaused(!!m.on);
   if (m.type === "quit") quitToTitle();
+  // the level is picked on the office's Clock in card: start that run (unless one is already going)
+  if (m.type === "level" && LEVELS[m.level] && !LEVELS[m.level].locked) {
+    S.chosenLevel = +m.level;
+    if (!$("#screen-desk.active")) startRun(S.chosenLevel);
+  }
   if (m.type === "dossier") openDossier();
   if (m.type === "tutorial-3d-done") tutWorldEvent(m.step);
   if (m.type === "gus-brain") applyRoomBrain(m); // LAN game: the room's Gus for your shop
@@ -1226,7 +1234,7 @@ function quitToTitle() {
   Object.assign(S, { inv: null, submitted: false });
   show("title");
 }
-$("#btn-quit").onclick = () => { sfx("click"); quitToTitle(); };
+$("#btn-quit").onclick = () => { sfx("click"); if (EMBED) post("quit-office"); else quitToTitle(); }; // in the office: back to the Clock in card
 
 /* ======================= Tutorial (first round) =======================
  * One hands-on tutorial for the first round. A small card sits beside whatever to use
@@ -1250,7 +1258,7 @@ const kb = action => `<kbd>${ForgedKeys.label(action)}</kbd>`;
  *   read     a reading step with a Next button              wait  "start": getting to the checkout
  *   dossier  entries to unlock when the step is done        enter runs when the step appears */
 const TUTORIAL = [
-  { id: "sit", world: "sat", label: "Go to your desk",
+  { id: "sit", world: "sat", label: "Go to your desk", dossier: ["boss-patrol"],
     text: () => `Walk to your desk (follow the green arrow) and press <kbd>${ForgedKeys.label("interact")}</kbd> to sit down.` },
   { id: "start", wait: "start",
     at: () => $("#screen-levels.active") ? ['.level-card[data-level="1"]'] : $("#screen-title.active") ? ["[data-go=levels]"] : [],
@@ -1264,9 +1272,9 @@ const TUTORIAL = [
   { id: "send", at: ["#envelope", "#outbox"], dossier: ["delivery"],
     until: () => S.printed || S.submitted, can: () => planReady(),
     text: () => EMBED ? `Drag the envelope onto <b>PRINT</b> (the dark box above). You'll stand up to deliver it.` : `Drag the envelope into the <b>OUTBOX</b> to send it.` },
-  { id: "pickup", world: "grabbed", label: "Grab it at the printer",
+  { id: "pickup", world: "grabbed", label: "Grab it at the printer", dossier: ["hiding"],
     text: () => `Walk to the printer and press <kbd>${ForgedKeys.label("interact")}</kbd> to grab your order slip.` },
-  { id: "deliver", world: "delivered", label: "Drop it in the IN tray",
+  { id: "deliver", world: "delivered", label: "Drop it in the IN tray", dossier: ["break-perks"],
     text: () => `Carry it to Gus's IN tray and press <kbd>${ForgedKeys.label("interact")}</kbd>. Keep out of the boss's sight.` },
   { id: "verdict", verdict: true, label: "Back to your desk", dossier: ["version-bump", "heat-basics", "tells-explained"],
     text: () => {
@@ -1284,7 +1292,7 @@ function tutorialDone() { try { return localStorage.getItem(TUT_KEY) === "1"; } 
 
 function startTutorial(fromId) {
   if (tut.on) return;
-  tut.steps = TUTORIAL.filter(st => EMBED || !st.world); // os.html on its own has no office to walk
+  tut.steps = TUTORIAL.filter(st => EMBED ? st.id !== "start" : !st.world); // os.html alone has no office to walk; in the office the level is picked before clocking in
   Object.assign(tut, { on: true, i: Math.max(0, tut.steps.findIndex(st => st.id === fromId)), entered: -1, done: false, verdictShown: false });
   post("tutorial-active", { on: true });
   clearInterval(tut.poll); tut.poll = setInterval(tutPoll, 200);
@@ -1395,6 +1403,7 @@ function tutWorldEvent(ev) { const st = tut.on && tutStep(); if (st && st.world 
 addEventListener("resize", () => tut.on && showTutStep());
 // first launch in the office: start at "Go to your desk" so the green arrow points there
 if (EMBED && !tutorialDone()) setTimeout(() => startTutorial("sit"), 600);
+if (EMBED) post("os-ready"); // the office replies with the level if you've already clocked in
 
 /* ======================= Player name (the leaderboard itself is in menu.js) ======================= */
 

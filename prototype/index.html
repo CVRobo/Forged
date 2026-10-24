@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="menu.css">
 <link rel="stylesheet" href="customize.css">
 <link rel="stylesheet" href="lan.css">
+<link rel="stylesheet" href="learning.css">
 </head>
 <body>
 <div id="world"></div>
@@ -55,6 +56,8 @@
       <li><b>Drop it</b> in Gus's IN tray and act natural.</li>
       <li>Watch out for <b>the boss</b> walking behind your desk.</li>
     </ol>
+    <div class="start-pick">Pick your job</div>
+    <div id="start-levels" class="start-levels"></div>
     <button id="btn-start">Clock in ▶</button>
     <div class="start-fine">Click to capture the mouse · Esc opens the Game Menu (keys, how to play, quit)</div>
   </div>
@@ -66,13 +69,17 @@
 <script src="menu.js"></script>
 <script src="world.js"></script>
 <script src="customize.js"></script>
+<script src="hr-booth.js"></script>
 <!-- plugins: rooms and features built on window.FW (see PLUGINS.md) -->
 <script src="rooms/boss-office.js"></script>
 <script src="rooms/break-room.js"></script>
 <script src="rooms/records-room.js"></script>
 <script src="audio.js"></script>
 <script src="voice.js"></script>
+<script src="voice-server.js"></script>
 <script src="features.js"></script>
+<!-- "Gus is learning": the real model's versions, from the DETECTOR LIVE TV and the Clock in card (learning.html is the same panel as a page) -->
+<script src="learning.js"></script>
 <!-- LAN multiplayer (serve.py hosts the room): loads last, so it can hook everything above -->
 <script src="lan.js"></script>
 </body>

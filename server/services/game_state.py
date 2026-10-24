@@ -229,6 +229,32 @@ def get_patch_notes(since_version: int = 0) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# NPC conversation history (multi-turn memory per round)
+# ---------------------------------------------------------------------------
+
+
+def save_npc_conversation(round_id: str, npc: str, turn: dict[str, str]) -> None:
+    """Append a conversation turn to the NPC's history for this round.
+
+    Args:
+        round_id: The current round ID.
+        npc: NPC key (clerk, inspector, boss, kevin, dana).
+        turn: Dict with 'role' (player|npc) and 'text'.
+    """
+    r = get_redis()
+    key = f"npc_conv:{round_id}:{npc}"
+    r.rpush(key, json.dumps(turn))
+    r.expire(key, 3600)  # same TTL as round state
+
+
+def load_npc_conversation(round_id: str, npc: str) -> list[dict[str, str]]:
+    """Load all conversation turns with this NPC in this round."""
+    r = get_redis()
+    raw = r.lrange(f"npc_conv:{round_id}:{npc}", 0, -1)
+    return [json.loads(item) for item in raw]
+
+
+# ---------------------------------------------------------------------------
 # Inspector memory (agent memory for Redis sponsor track)
 # ---------------------------------------------------------------------------
 

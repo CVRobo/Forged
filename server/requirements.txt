@@ -4,6 +4,7 @@ pydantic>=2.9.0
 redis>=5.2.0
 python-dotenv>=1.0.0
 anthropic>=0.39.0
+httpx>=0.27  # Cartesia voice (server/services/cartesia_service.py)
 deepgram-sdk>=3.7.0
 sentry-sdk[fastapi]>=2.18.0
 arize-phoenix>=5.0.0

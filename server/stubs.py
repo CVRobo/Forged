@@ -12,6 +12,7 @@ import random
 import uuid
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
 from server.services.detector import TELL_DESCRIPTIONS
@@ -24,6 +25,10 @@ from server.models.schemas import (
     ClerkVoiceResponse,
     LeaderboardEntry,
     MemoRule,
+    NpcChatRequest,
+    NpcChatResponse,
+    NpcVoiceRequest,
+    NpcVoiceResponse,
     PatchNote,
     OnlineRecord,
     PreviewRequest,
@@ -237,3 +242,100 @@ async def stub_leaderboard():
 async def preview_order(req: PreviewRequest):
     """Gus's gut feeling while the player types the checkout (the fraud model's score, nothing saved)."""
     return preview(req.record)
+
+
+# ---------------------------------------------------------------------------
+# Stub NPC routes (all NPCs, not just clerk)
+# ---------------------------------------------------------------------------
+
+
+def _stub_npc_respond(npc_key: str, text: str) -> tuple[str, str, dict]:
+    """Keyword-based NPC response for stubs. Returns (reply, npc_name, effects)."""
+    from server.services.npc_voice import (
+        _keyword_respond,
+        _keyword_score,
+        get_npc_info,
+    )
+
+    npc_info = get_npc_info(1, npc_key)
+    if npc_info is None:
+        return "...", npc_key, {"persuasion_delta": 0, "suspicion_delta": 0.0, "intel": None, "effect": "none"}
+
+    npc_name = npc_info["name"]
+    effect_type = npc_info.get("gameplay_effect", "none")
+    reply = _keyword_respond(npc_key, text)
+
+    effects: dict = {
+        "persuasion_delta": 0,
+        "suspicion_delta": 0.0,
+        "intel": None,
+        "effect": effect_type,
+    }
+
+    if effect_type == "persuasion":
+        effects["persuasion_delta"] = _keyword_score(text, npc_info)
+    elif effect_type == "intel":
+        keywords = npc_info.get("keywords", [])
+        if any(k in text.lower() for k in keywords):
+            pool = npc_info.get("intel_pool", [])
+            if pool:
+                effects["intel"] = random.choice(pool)
+
+    return reply, npc_name, effects
+
+
+@router.post("/npc/chat", response_model=NpcChatResponse)
+async def stub_npc_chat(req: NpcChatRequest):
+    """Stub NPC text chat: keyword-based responses for all NPCs."""
+    reply, npc_name, effects = _stub_npc_respond(req.npc, req.text)
+    return NpcChatResponse(
+        reply=reply,
+        npc_name=npc_name,
+        **effects,
+    )
+
+
+@router.post("/npc/voice", response_model=NpcVoiceResponse)
+async def stub_npc_voice(req: NpcVoiceRequest):
+    """Stub NPC voice chat: ignores audio, uses a canned transcript."""
+    fake_transcript = "Hey, can I ask you something real quick?"
+    reply, npc_name, effects = _stub_npc_respond(req.npc, fake_transcript)
+    return NpcVoiceResponse(
+        transcript=fake_transcript,
+        reply=reply,
+        npc_name=npc_name,
+        **effects,
+        reply_audio_b64=None,
+    )
+
+
+class _NpcSpeakRequest(BaseModel):
+    npc: str
+    text: str
+    round_id: str = ""
+
+
+@router.post("/npc/speak")
+async def stub_npc_speak(req: _NpcSpeakRequest):
+    """Stub TTS: uses Cartesia if key is set, otherwise no audio."""
+    from server import config as _cfg
+
+    if not _cfg.CARTESIA_API_KEY:
+        return {"audio_b64": None}
+
+    from server.services import cartesia_service
+    from server.services.npc_voice import get_npc_info, get_npc_voice, VALID_NPCS
+
+    if req.npc not in VALID_NPCS:
+        return {"audio_b64": None}
+
+    npc_info = get_npc_info(1, req.npc)
+    if npc_info is None:
+        return {"audio_b64": None}
+
+    try:
+        voice = get_npc_voice(npc_info)
+        audio = await cartesia_service.text_to_speech(req.text, voice=voice)
+        return {"audio_b64": cartesia_service.encode_audio(audio)}
+    except Exception:
+        return {"audio_b64": None}

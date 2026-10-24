@@ -414,10 +414,10 @@ FW.onUpdate((dt, now) => {
       }
       boss.g.visible = true;
       boss.g.position.x = SEAT.x; boss.g.position.z = SEAT.z;
-      boss.g.rotation.y = Math.PI / 2 + Math.sin(now / 1500) * .22; // smug swivel
+      boss.g.rotation.y = Math.PI / 2 + Math.sin(now / 1500) * (FW.level && FW.level().glassOffice ? .5 : .22); // smug swivel (wider on level 2: he scans the floor through the glass)
       boss.armR.rotation.x = -.3 + Math.max(0, Math.sin(now / 900)) * -.9; // drumming the desk
       boss.armL.rotation.x = -.6;
-      if (cone) cone.visible = false;
+      if (cone) cone.visible = !!(FW.level && FW.level().glassOffice); // level 2: he watches the floor through his glass wall
     } else {
       if (seated) { FW.standPose(boss); seated = false; }
       if (cone) cone.visible = B.state !== "drill"; // no cone while he's out at the fire-drill headcount

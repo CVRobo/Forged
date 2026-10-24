@@ -1,7 +1,7 @@
 """Clerk routes: POST /clerk and POST /clerk/voice.
 
 Text clerk uses Claude for scoring with keyword fallback.
-Voice clerk uses Deepgram STT -> clerk scoring -> Deepgram TTS.
+Voice clerk uses Cartesia STT -> clerk scoring -> Cartesia TTS.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from server.models.schemas import (
     ClerkVoiceRequest,
     ClerkVoiceResponse,
 )
-from server.services import claude_service, deepgram_service, game_state
+from server.services import cartesia_service, claude_service, game_state
 
 logger = logging.getLogger(__name__)
 
@@ -77,15 +77,15 @@ async def clerk_voice(req: ClerkVoiceRequest):
     level = round_state["level"]
     clerk_info = _get_clerk_info(level)
 
-    # 2. Decode audio and transcribe via Deepgram
+    # 2. Decode audio and transcribe via Cartesia
     try:
-        audio_bytes = deepgram_service.decode_audio(req.audio_b64)
-        transcript = await deepgram_service.speech_to_text(audio_bytes)
+        audio_bytes = cartesia_service.decode_audio(req.audio_b64)
+        transcript = await cartesia_service.speech_to_text(audio_bytes)
     except Exception as exc:
-        logger.error("Deepgram STT failed: %s", exc)
+        logger.error("Cartesia STT failed: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail="Voice transcription unavailable. Set DEEPGRAM_API_KEY or use /clerk for text.",
+            detail="Voice transcription unavailable. Set CARTESIA_API_KEY or use /clerk for text.",
         )
 
     # 3. Score the transcript (same as text clerk)
@@ -98,10 +98,10 @@ async def clerk_voice(req: ClerkVoiceRequest):
     # 5. TTS the reply (fallback: return null audio)
     reply_audio_b64 = None
     try:
-        audio = await deepgram_service.text_to_speech(reply)
-        reply_audio_b64 = deepgram_service.encode_audio(audio)
+        audio = await cartesia_service.text_to_speech(reply)
+        reply_audio_b64 = cartesia_service.encode_audio(audio)
     except Exception as exc:
-        logger.warning("Deepgram TTS failed: %s", exc)
+        logger.warning("Cartesia TTS failed: %s", exc)
 
     return ClerkVoiceResponse(
         transcript=transcript,
