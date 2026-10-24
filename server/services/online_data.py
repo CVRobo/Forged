@@ -26,6 +26,9 @@ _lock = threading.Lock()
 # How many player wins before we attempt a retrain
 RETRAIN_THRESHOLD = 5
 
+# When FORGED_USE_KAGGLE=1, use the Kaggle LightGBM model instead of the game LogReg
+USE_KAGGLE = os.environ.get("FORGED_USE_KAGGLE", "").strip() in ("1", "true", "yes")
+
 # the same columns, in the same order, as the game's CSV export (prototype/orders.js COLUMNS)
 COLUMNS = [
     "TransactionID", "isFraud", "TransactionDT", "TransactionAmt", "ProductCD",
@@ -80,7 +83,10 @@ def submit_online(record: OnlineRecord, verdict: GusVerdict | None, round_id: st
 def _try_ml_predict(record: OnlineRecord, browser_verdict: GusVerdict | None) -> SubmitResponse | None:
     """Run the ML detector on the record's rows. Returns None if no model loaded."""
     try:
-        from ml.online import predict as ml_predict
+        if USE_KAGGLE:
+            from ml.online import predict_kaggle as ml_predict
+        else:
+            from ml.online import predict as ml_predict
     except Exception:
         return None
 

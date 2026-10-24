@@ -5,6 +5,10 @@ Layout under model_dir():
     versions.json     [{version, trained_at, n_train, n_fraud, recall, fpr, threshold}, ...]
     buffer.jsonl      Player wins waiting for retrain
     base_data.joblib  The bootstrap training data (cached)
+
+Kaggle models are stored separately under kaggle_model_dir():
+    v{n}.joblib       KaggleDetector for version n
+    versions.json     [{version, trained_at, auc, recall, fpr, threshold}, ...]
 """
 
 from __future__ import annotations
@@ -111,3 +115,57 @@ def drain_buffer() -> list[dict]:
 
 def clear_cache() -> None:
     _load.cache_clear()
+    _load_kaggle.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Kaggle model storage (separate directory from game models)
+# ---------------------------------------------------------------------------
+
+def kaggle_model_dir() -> Path:
+    return Path(os.environ.get("FORGED_KAGGLE_MODEL_DIR",
+                               Path(__file__).resolve().parent / "kaggle_models"))
+
+
+def kaggle_registry() -> list[dict]:
+    path = kaggle_model_dir() / "versions.json"
+    return json.loads(path.read_text()) if path.exists() else []
+
+
+def current_kaggle_version() -> int | None:
+    """The newest Kaggle model version number, or None if no model exists."""
+    versions = kaggle_registry()
+    return max((v["version"] for v in versions), default=None)
+
+
+def save_kaggle_version(detector, metrics: dict) -> None:
+    """Persist a KaggleDetector and its metrics to disk."""
+    folder = kaggle_model_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+
+    joblib.dump(detector, folder / f"v{detector.version}.joblib")
+
+    meta = {
+        "version": detector.version,
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "threshold": detector.threshold,
+        **metrics,
+    }
+    rows = [v for v in kaggle_registry() if v["version"] != detector.version] + [meta]
+    (folder / "versions.json").write_text(
+        json.dumps(sorted(rows, key=lambda v: v["version"]), indent=1)
+    )
+    _load_kaggle.cache_clear()
+
+
+def load_kaggle_version(version: int | None = None):
+    """Load a specific Kaggle version, or the latest. Returns None if nothing saved."""
+    v = version or current_kaggle_version()
+    if v is None:
+        return None
+    return _load_kaggle(str(kaggle_model_dir()), v)
+
+
+@lru_cache(maxsize=16)
+def _load_kaggle(folder: str, version: int):
+    return joblib.load(Path(folder) / f"v{version}.joblib")

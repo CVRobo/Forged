@@ -7,6 +7,7 @@ Run with:
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from contextlib import asynccontextmanager
 
@@ -52,11 +53,23 @@ def _warm_online_detector() -> None:
         logger.warning("Online detector unavailable, typed checkouts will use browser Gus", exc_info=True)
 
 
+def _warm_kaggle_detector() -> None:
+    """Load (or train) the Kaggle LightGBM detector. Only when FORGED_USE_KAGGLE=1."""
+    try:
+        from ml.online import warm_kaggle
+
+        logger.info("Kaggle detector v%d ready", warm_kaggle())
+    except Exception:
+        logger.warning("Kaggle detector unavailable", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not config.USE_STUBS:
         threading.Thread(target=_warm_detector, daemon=True).start()
         threading.Thread(target=_warm_online_detector, daemon=True).start()
+        if os.environ.get("FORGED_USE_KAGGLE", "").strip() in ("1", "true", "yes"):
+            threading.Thread(target=_warm_kaggle_detector, daemon=True).start()
     yield
 
 

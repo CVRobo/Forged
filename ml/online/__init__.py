@@ -3,6 +3,9 @@
     from ml.online import warm, predict, current_version
 
 Server startup calls warm() to load or bootstrap v1.
+
+For the Kaggle LightGBM model:
+    from ml.online import warm_kaggle, predict_kaggle
 """
 
 from __future__ import annotations
@@ -20,6 +23,11 @@ from ml.online.store import (
     load_version,
     save_base_data,
     save_version,
+)
+from ml.online.store import (
+    current_kaggle_version,
+    load_kaggle_version,
+    save_kaggle_version,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,3 +77,38 @@ def retrain(new_fraud_rows: list[dict]) -> int | None:
     save_version(new_det, m)
     save_base_data(base + [{**r, "isFraud": 1} for r in new_fraud_rows])
     return new_det.version
+
+
+# ---------------------------------------------------------------------------
+# Kaggle LightGBM model API
+# ---------------------------------------------------------------------------
+
+def warm_kaggle() -> int:
+    """Load or train the Kaggle LightGBM model. Called at startup if FORGED_USE_KAGGLE=1."""
+    v = current_kaggle_version()
+    if v is not None:
+        logger.info("Kaggle detector v%d already exists", v)
+        return v
+
+    logger.info("Training Kaggle detector v1 — this may take a few minutes on first run...")
+    from ml.online.kaggle_data import load_raw, time_split
+    from ml.online.kaggle_model import evaluate as _evaluate_kaggle
+    from ml.online.kaggle_model import train_kaggle
+
+    df = load_raw()
+    train_df, val_df = time_split(df)
+    det = train_kaggle(train_df, val_df, fpr_target=0.05)
+    m = _evaluate_kaggle(det, val_df)
+    save_kaggle_version(det, m)
+    logger.info("Kaggle detector v1 ready: AUC=%.4f recall=%.2f fpr=%.3f",
+                m["auc"], m["recall"], m["fpr"])
+    return det.version
+
+
+def predict_kaggle(row_dict: dict) -> dict | None:
+    """Score a single order using the Kaggle LightGBM model. Returns None if no model."""
+    det = load_kaggle_version()
+    if det is None:
+        return None
+    from ml.online.kaggle_model import predict_kaggle as _predict_kaggle
+    return _predict_kaggle(det, row_dict)

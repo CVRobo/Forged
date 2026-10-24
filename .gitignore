@@ -21,6 +21,8 @@ ml/models/*.joblib
 ml/online/models/*.joblib
 ml/online/models/*.jsonl
 ml/online/models/versions.json
+ml/online/kaggle_models/*.joblib
+ml/online/kaggle_models/versions.json
 
 # Redis
 dump.rdb
