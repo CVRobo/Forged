@@ -1626,8 +1626,8 @@ ForgedMenu.init({
     if (document.pointerLockElement) document.exitPointerLock();
     $("#start").classList.remove("hide");
   },
-  canTour: () => P.seated && P.phase === "forging",
-  onTour: () => toOS("tour"),
+  canDossier: () => P.seated, // the Dossier lives on the computer
+  onDossier: () => toOS("dossier"),
   getStats: () => P.hud ? { money: P.hud.money, patches: P.hud.patches || 0, shame: P.hud.shame || [], round: P.hud.round } : null,
 });
 

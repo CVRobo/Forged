@@ -7,7 +7,7 @@
  *   host.onPause(on) freeze / unfreeze the game
  *   host.onResume()  after "Back to Game" (re-lock the mouse, refocus the computer…)
  *   host.onQuit()    "Quit to Title"
- *   host.canTour()   can the desk tutorial run right now?   host.onTour()  start it
+ *   host.canDossier() can the Dossier be shown right now?  host.onDossier()  show it
  *   host.getStats()  { money, patches, shame: [{version, trick, learned}], round } or null
  * Inside the office the computer never shows this menu itself: it posts { type: "menu" }.
  */
@@ -21,7 +21,7 @@ const money = n => "$" + Math.round(n).toLocaleString("en-US");
 const kbd = action => `<kbd>${esc(K.label(action))}</kbd>`;
 
 const PLAYER_KEY = "forged-player";
-const TIP_KEYS = ["forged-tutorial-done", "forged-schemes-used"];
+const TIP_KEYS = ["forged-tutorial-done", "forged-schemes-used", "forged-tips-seen"];
 const API = (() => { try { return (new URLSearchParams(location.search).get("api") || window.FORGED_API || "").replace(/\/$/, ""); } catch (e) { return ""; } })();
 function playerName() { try { return (localStorage.getItem(PLAYER_KEY) || "").trim() || "You"; } catch (e) { return "You"; } }
 
@@ -46,7 +46,7 @@ const SCREENS = {
       <button class="fm-btn wide primary" data-fm-act="back">Back to Game</button>
       <button class="fm-btn" data-fm-go="howto">How to Play</button>
       <button class="fm-btn" data-fm-go="board">Leaderboard</button>
-      <button class="fm-btn" data-fm-act="tour" ${host.canTour && host.canTour() ? "" : `disabled title="Start a round at your computer first"`}>Tutorial</button>
+      <button class="fm-btn" data-fm-act="dossier" ${host.canDossier && host.canDossier() ? "" : `disabled title="Sit at your computer to read it"`}>Dossier</button>
       <button class="fm-btn" data-fm-go="options">Options…</button>
       <button class="fm-btn wide danger" data-fm-act="quit">Quit to Title</button>
     </div>
@@ -221,7 +221,7 @@ function act(name) {
   if (name === "back") return close();
   if (name === "done") return back();
   if (name === "quit") { stack = []; root.classList.remove("show"); paused = false; host.onPause && host.onPause(false); host.onQuit && host.onQuit(); return; }
-  if (name === "tour") { if (!host.canTour || !host.canTour()) return; close(); host.onTour && host.onTour(); return; }
+  if (name === "dossier") { if (!host.canDossier || !host.canDossier()) return; close(); host.onDossier && host.onDossier(); return; }
   if (name === "reset-tips") { TIP_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} }); toast("Tutorial and scheme tips will show again"); return; }
   if (name === "reset-keys") { K.reset(); render(); toast("Keys reset to defaults"); }
 }
