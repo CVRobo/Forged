@@ -15,6 +15,8 @@ Then open http://localhost:8765. `serve.py` is a plain static server with browse
 | `index.html`, `world.js`, `world.css` | The 3D office (Three.js r128 from a CDN): your character, desks, printer, inspector booth, clerk, boss, corkboard |
 | `os.html`, `game.js`, `style.css` | The computer screen: FORGED OS with the typed checkout, the victim, memo, support chat, verdicts and shop. It also runs on its own if you open `os.html` directly |
 | `orders.js` | The online-order content (shops, stolen cards, ranks), the parsers that read the typed checkout, the IEEE-CIS row builder and the scripted Gus. Loaded before `game.js` |
+| `serve.py`, `lan_room.py`, `lan_ws.py` | The local server (caching off), which also hosts LAN games: the room's rules and a standard-library WebSocket |
+| `lan.js`, `lan.css` | LAN multiplayer in the office: the lobby on the Clock in card, the other players, the shared boss and Gus |
 
 ## How a round plays
 
@@ -51,6 +53,28 @@ A round gives 1 XP when caught and 2 when you get away with it (ranks at 2, 4, 7
 
 Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Controls**): `WASD` move · `Left Ctrl` sprint (`Left Shift` on Windows/Linux, where Ctrl+W closes the tab) · mouse look (click to capture it) · mouse wheel zoom · `E` or right-click interact · `F5`/`V` first ⇄ third person · hold `Tab` leaderboard · `Esc` Game Menu (pauses the office). On the computer: type, `Enter` next step · `1`–`7` or the mouse wheel jump between steps · `T` write to support · `Space` hide the screen · `Left Shift` stand up. Bindings live in `keys.js`; the menu is `menu.js`/`menu.css`.
 
+## LAN multiplayer (up to 4 players)
+
+`serve.py` also hosts LAN games. Whoever runs it is the LAN owner, and up to 3 friends on the same network can join, for 4 players in all.
+
+1. The owner runs `python serve.py` and opens http://localhost:8765/?lan, or presses **👥 LAN game** on the Clock in card.
+2. Friends open the LAN address that `serve.py` prints (for example http://192.168.1.23:8765/?lan). The lobby on the Clock in card shows it too.
+3. Everyone picks a name and clocks in whenever they like. There's no timer: drop in and leave any time. A 5th player is told the office is full.
+
+**What's shared:**
+- **The office.** You see everyone walking, sitting at their desks and carrying their order slips, in their own look from Customize. Desks go in join order, and **E** takes any free desk. A coworker steps away while a player has their desk.
+- **The boss.** The owner's game walks him and rolls the fire drills, and everyone else's game follows. When he catches anyone with a slip, he stops on every screen.
+- **Gus.** There's one Gus per shop for the whole room, and he learns from everyone's wins. A trick someone else got away with gets you caught, and his version goes up for everyone. Your own saved Gus is left alone and comes back when you leave.
+- **Verdicts and standings.** Every verdict gets the inspector's stamp, a corkboard pin, a TV point and a toast for everyone. Hold **Tab** for the room's standings.
+
+**Notes:**
+- Only the owner needs this folder and Python. Everyone else just needs a browser. On macOS, allow Python's incoming connections when the firewall asks.
+- If the owner leaves, the next player takes over the boss. If `serve.py` stops, everyone carries on solo.
+- Esc doesn't pause a LAN game: only you stop.
+- With `?api=`, the server shares Gus, so the room leaves him alone.
+- Still per player: coffee runs, the desk phone, doors and the printer. The boss also stays in his office while the owner is in the first-game tutorial.
+- The rules are in `lan_room.py`. Tests: `python3 -m pytest prototype/tests/test_lan.py -q`. Design: `docs/superpowers/specs/2026-10-24-lan-multiplayer-design.md`.
+
 ## How the two halves talk
 
 Both pages use `postMessage`:
@@ -69,6 +93,9 @@ Both pages use `postMessage`:
 | Office → computer | `heat` `{amount}` | The boss caught you with the envelope: add heat |
 | Office → computer | `deliver` | The envelope reached the IN tray; the computer runs the inspection |
 | Office → computer | `boss-near` | The boss is behind your chair; the computer starts the hide-the-screen prompt |
+| Computer → office | `gus-learned` | A win taught Gus something: `{level, version, tells, memory}`. A LAN room adds it to the shared Gus. (`hud` also says `lanBrain` while the room's Gus is in use) |
+| Office → computer | `gus-brain` | The LAN room's Gus for your shop, `{level, version, learned, memory}`. It replaces yours while you're in the room and is never saved over it |
+| Office → computer | `gus-solo` | You left the LAN room: your own Gus again |
 
 ## Connecting to the backend
 
