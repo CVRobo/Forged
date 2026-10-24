@@ -74,6 +74,23 @@ body.seated #hud, body.seated #controls { opacity: 0; }
 /* start */
 #start { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(30,20,10,.55), rgba(10,6,3,.9)); }
 #start.hide { display: none; }
+#start { overflow-y: auto; padding: 16px 0; } /* the level cards make the card taller: scroll on short screens */
+#start .start-card { max-width: 680px; padding: 26px 36px; margin: auto; }
+/* level pick on the Clock in card */
+.start-pick { font-weight: 800; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; opacity: .7; margin: 4px 0 8px; }
+.start-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 0 18px; }
+.sl-card { position: relative; font: inherit; color: var(--ink); text-align: left; background: #fff; border: 3px solid var(--ink); border-radius: 12px; padding: 0; cursor: pointer; overflow: hidden; box-shadow: 3px 3px 0 var(--ink); transition: transform .12s, box-shadow .12s; }
+.sl-card:hover:not(:disabled) { transform: translate(-1px, -2px); box-shadow: 4px 5px 0 var(--ink); }
+.sl-card.on { outline: 4px solid #2fb36b; outline-offset: 2px; }
+.sl-card:disabled { cursor: not-allowed; filter: grayscale(.9); opacity: .55; }
+.sl-art { height: 46px; display: grid; place-items: center; font-size: 26px; background: var(--sl, #f4a63a); border-bottom: 3px solid var(--ink); }
+.sl-body { padding: 7px 8px 8px; }
+.sl-num { font-size: 10px; font-weight: 800; letter-spacing: .1em; opacity: .6; }
+.sl-name { font-weight: 800; font-size: 13px; line-height: 1.15; }
+.sl-diff { display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 6px; border: 2px solid var(--ink); background: var(--card); }
+.sl-note { font-size: 11px; line-height: 1.25; margin-top: 4px; opacity: .8; }
+.sl-lock { position: absolute; top: 14px; left: 0; right: 0; text-align: center; font-size: 10px; font-weight: 900; letter-spacing: .08em; color: #fff; background: var(--ink); padding: 2px 0; }
+@media (max-width: 640px) { .start-levels { grid-template-columns: repeat(2, 1fr); } }
 .start-card { background: var(--card); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 10px 10px 0 var(--ink); padding: 34px 44px; max-width: 620px; text-align: center; transform: rotate(-1deg); }
 .start-logo { font-family: var(--display); font-size: 88px; color: var(--accent); -webkit-text-stroke: 3px var(--ink); text-shadow: 6px 6px 0 var(--ink); line-height: 1; }
 .start-card p { font-size: 16px; }
@@ -107,3 +124,14 @@ body.seated #minimap { opacity: 0; pointer-events: none; }
 
 /* the controls live in the Game Menu (Esc → Controls), not on screen */
 #controls { display: none !important; }
+
+/* tutorial tip card in the office (world.js showOfficeTip) */
+#office-tip { position: fixed; right: 16px; top: 76px; z-index: 6; width: min(380px, calc(100vw - 32px)); display: none; pointer-events: none;
+  background: var(--card); border: 4px solid var(--ink); border-radius: 14px; box-shadow: 6px 6px 0 #2ecc40; padding: 14px 16px; font-size: 14px; line-height: 1.5; }
+#office-tip.show { display: block; animation: ot-in .3s cubic-bezier(.2,1.3,.4,1); }
+@keyframes ot-in { from { transform: translateY(-10px); opacity: 0; } }
+#office-tip .ot-k { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #1d9a4b; }
+#office-tip .ot-t { font-family: var(--display); font-size: 20px; margin: 2px 0 4px; }
+#office-tip p { margin: 0; }
+#office-tip kbd { font-size: 12px; }
+body.seated #office-tip { display: none; }

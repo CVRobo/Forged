@@ -49,10 +49,11 @@ function resize() {
 }
 addEventListener("resize", resize); resize();
 
-// warm key light from the sun side, cool sky bounce from below/behind: a subtle warm/cool split
+// warm key light from above (ceiling panels): shadows fall short, right under things, never "through" a wall.
+// Cool sky bounce from below/behind: a subtle warm/cool split
 scene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", 0.52));
 const sun = new THREE.DirectionalLight("#ffecd0", 0.62);
-sun.position.set(-8, 18, 10);
+sun.position.set(-1.6, 30, 2.6); // almost straight down, a touch south-west so shapes keep a little depth
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;
@@ -196,7 +197,10 @@ const WALL_TEX = canvasTex(4, 128, (g, w, h) => {
 });
 const RAIL_MAT_COLOR = "#8a5a35", BASE_MAT_COLOR = "#3a2c22";
 // set how see-through a wall is (it fades when it stands between the camera and you), trim included
-function fadeWall(w, op) { (w.mats || [w.mat]).forEach(m => { m.opacity = op; m.depthWrite = op > .5; }); }
+function fadeWall(w, op) {
+  if (w.glass) op = Math.min(op, .28); // a glass wall stays see-through
+  (w.mats || [w.mat]).forEach(m => { m.opacity = op; m.depthWrite = op > .5; });
+}
 function wallRun(axis, fixed, from, to, doors = [], { thick = .3, color } = {}) {
   // axis "x": runs along x at z = fixed;  axis "z": runs along z at x = fixed
   const seg = (a, b, y, h, solid) => {
@@ -209,15 +213,15 @@ function wallRun(axis, fixed, from, to, doors = [], { thick = .3, color } = {}) 
     m.material = [mat, mat, cap, cap, mat, mat]; // box faces: ±x, ±y (top/bottom), ±z
     m.castShadow = false;
     if (solid) axis === "x" ? collide(mid, fixed, len, thick) : collide(fixed, mid, thick, len);
-    const fade = [mat, cap];
+    const fade = [mat, cap], trims = [];
     if (full) { // wooden chair rail and dark baseboard, on both faces of the wall
       const rail = M(RAIL_MAT_COLOR, { transparent: true }), base = M(BASE_MAT_COLOR, { transparent: true });
-      const trim = (hgt, dep, ty, tm) => { const t = axis === "x" ? box(len, hgt, thick + dep, tm, mid, ty, fixed) : box(thick + dep, hgt, len, tm, fixed, ty, mid); t.castShadow = false; };
+      const trim = (hgt, dep, ty, tm) => { const t = axis === "x" ? box(len, hgt, thick + dep, tm, mid, ty, fixed) : box(thick + dep, hgt, len, tm, fixed, ty, mid); t.castShadow = false; trims.push(t); };
       trim(.07, .07, RAIL_Y, rail);
       trim(.16, .05, .08, base);
       fade.push(rail, base);
     }
-    walls.push({ m, mat, mats: fade, axis, fixed, a, b });
+    walls.push({ m, mat, mats: fade, axis, fixed, a, b, solid: full, trims });
   };
   let start = from;
   doors.slice().sort((p, q) => p.at - q.at).forEach(d => {
@@ -234,6 +238,20 @@ function doorFrame(axis, fixed, at, width) {
   [-1, 1].forEach(sx => axis === "x" ? box(.12, 2.5, .4, trim, at + sx * width / 2, 1.25, fixed) : box(.4, 2.5, .12, trim, fixed, 1.25, at + sx * width / 2));
 }
 // does this wall segment block the line from the player to the camera?
+/* Can the boss see from A to B? Full-height walls and closed doors block the line; doorways
+ * (lintels) and open doors don't. Used by the vision cone, so you can hide behind a wall or a door. */
+function sightBlocked(ax, az, bx, bz) {
+  for (const w of walls) {
+    if (w.glass) continue; // he sees through glass
+    if (w.door ? w.door.hinge && Math.abs(w.door.hinge.rotation.y - w.door.base) > .35 : !w.solid) continue; // open door / doorway
+    const af = w.axis === "x" ? az : ax, bf = w.axis === "x" ? bz : bx;
+    if ((af - w.fixed) * (bf - w.fixed) >= 0) continue;
+    const t = (w.fixed - af) / (bf - af);
+    const cross = w.axis === "x" ? ax + t * (bx - ax) : az + t * (bz - az);
+    if (cross > w.a && cross < w.b) return true;
+  }
+  return false;
+}
 function wallBlocks(w, cam, pl) {
   const ca = w.axis === "x" ? cam.z : cam.x, pa = w.axis === "x" ? pl.z : pl.x;
   if ((ca - w.fixed) * (pa - w.fixed) >= 0) return false;
@@ -246,7 +264,10 @@ const DOORS = { west: { at: -5, width: 1.8 }, south: { at: -6, width: 2.2 }, eas
   exit: { at: 6, width: 1.84, frame: false } }; // the emergency exit: double doors to the parking lot (see "Emergency exit")
 wallRun("x", -RD / 2, -RW / 2, RW / 2);
 wallRun("x", RD / 2, -RW / 2, RW / 2, [DOORS.south, DOORS.exit]);
-wallRun("z", -RW / 2, -RD / 2, RD / 2, [DOORS.west]);
+const _bossFront = walls.length;
+wallRun("z", -RW / 2, -RD / 2, 0, [DOORS.west]);           // the boss office's front wall (glass on level 2)
+const BOSS_GLASS = walls.slice(_bossFront).filter(w => w.solid);
+wallRun("z", -RW / 2, 0, RD / 2);
 wallRun("z", RW / 2, -RD / 2, RD / 2, [DOORS.east]);
 
 /* ======================= Doors (boss office, break room, records) =======================
@@ -275,7 +296,7 @@ function makeDoor(name, axis, fixed, at, width, into) {
   const d = { name, axis, fixed, at, width, hinge, base, openAngle, block, open: false, npcHold: false, lastNpc: 0,
     mats: [wood, dark, glass], center: axis === "x" ? { x: at, z: fixed } : { x: fixed, z: at } };
   // fades with its wall (the camera code dims anything listed in `walls`)
-  walls.push({ m: leaf, mat: wood, mats: d.mats, axis, fixed, a: at - width / 2, b: at + width / 2 });
+  walls.push({ m: leaf, mat: wood, mats: d.mats, axis, fixed, a: at - width / 2, b: at + width / 2, door: d });
   doorObjs.push(d);
   return d;
 }
@@ -1043,9 +1064,23 @@ boss.g.position.set(-12.2, 0, -5); boss.g.visible = false;
 const B = { state: "wait", t: rand(14, 22), i: 0, warned: false, chatted: false, sus: 0, busted: false, pauseUntil: 0,
   remote: false, faceAt: null, bustedAt: 0 }; // LAN game (lan.js): remote = another player's browser walks him
 // vision cone on the floor (Hitman-style): get caught in it carrying the envelope and he stops you
-const CONE_R = 4.2, CONE_HALF = .55;
+/* How hard the office is, per level. Level 1 (Sunny Diner) keeps the original layout;
+ * level 2 (St. Mercy) has a glass-fronted boss office he watches the floor through from his
+ * desk (the printer included), and a sharper boss: longer, wider cone, suspicion fills faster. */
+const LEVEL_RULES = {
+  1: { glassOffice: false, coneR: 4.2, coneHalf: .55, susRate: 1.3 },
+  2: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25 },
+};
+let LV = LEVEL_RULES[1];
+// level 2: what he sees from his desk through the glass (the printer is ~12.5 m away). The cone is narrow and
+// he swivels side to side, so the printer is only in view in short glances; it fills slower from that far away.
+const DESK_R = 14, DESK_HALF = .22;
+const coneGeo = (r, half) => new THREE.CircleGeometry(r / 1.12, 28, -Math.PI / 2 - half, half * 2); // boss.g is scaled 1.12
+let PATROL_CONE = coneGeo(LV.coneR, LV.coneHalf);
+const DESK_CONE = coneGeo(DESK_R, DESK_HALF);
+const CONE_R = LV.coneR, CONE_HALF = LV.coneHalf; // (kept for older code that reads them)
 const coneMat = new THREE.MeshBasicMaterial({ color: "#ffd23f", transparent: true, opacity: .22, depthWrite: false, side: THREE.DoubleSide });
-const cone = new THREE.Mesh(new THREE.CircleGeometry(CONE_R / 1.12, 28, -Math.PI / 2 - CONE_HALF, CONE_HALF * 2), coneMat);
+const cone = new THREE.Mesh(PATROL_CONE, coneMat);
 cone.rotation.x = -Math.PI / 2; cone.position.y = .04; boss.g.add(cone);
 
 /* --- props --- */
@@ -1416,6 +1451,19 @@ const tutLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: tutLabelTex, d
 tutLabel.scale.set(2.2, .42, 1); tutLabel.renderOrder = 11;
 tutArrowGroup.add(tutLabel);
 
+/* tip card in the office during the tutorial's walking steps (the computer's card is hidden then) */
+const OFFICE_TIPS = {
+  sit: { title: "The office", text: () => `Follow the <b>green arrow</b> to your desk and press <kbd>${K.labels("interact")}</kbd>.<br>Meet <b>the boss</b>: he patrols the office, and the <b>yellow cone</b> on the floor is what he can see.` },
+  pickup: { title: "Don't get seen", text: () => `Grab your slip at the printer. If the boss's cone catches you <b>carrying it</b>, he stops you (+heat).<br><b>Walls and closed doors block his view.</b> Doors open as you walk into them; press <kbd>${K.labels("interact")}</kbd> by one to close it behind you.` },
+  deliver: { title: "Deliver it", text: () => `Drop it in Gus's IN tray. Act natural.<br>Tips: <b>coffee</b> from the break room makes you faster and the boss slower to notice; a <b>donut</b> can sweeten Brenda, Gus… or the boss.` },
+};
+const tipCard = document.createElement("div"); tipCard.id = "office-tip"; document.body.appendChild(tipCard);
+function showOfficeTip(phase) {
+  const t = OFFICE_TIPS[phase];
+  if (!t || !P.tutorialOn) { tipCard.classList.remove("show"); return; }
+  tipCard.innerHTML = `<div class="ot-k">Tutorial · in the office</div><div class="ot-t">${t.title}</div><p>${t.text()}</p>`;
+  tipCard.classList.add("show");
+}
 function updateTutArrowLabel() {
   if (!P.tutorialLabel) return;
   redraw(tutLabelTex, (g, w, h) => {
@@ -1519,7 +1567,7 @@ function wtoast(text, kind = "") {
   $("#wtoasts").appendChild(t); setTimeout(() => t.remove(), 3100);
 }
 const OBJECTIVES = {
-  idle: "Sit at your computer and open FORGED.exe",
+  idle: "Sit at your computer",
   briefing: "Make your plan on the computer",
   forging: "Make your plan on the computer",
   printing: "Printing…",
@@ -1534,6 +1582,18 @@ function setPhase(ph) {
   o.parentElement.classList.remove("flash"); void o.offsetWidth; o.parentElement.classList.add("flash");
 }
 
+// back to the Clock in card (Esc menu → Quit, or "Quit" on the computer), where you can pick another level
+function quitToStart() {
+  P.started = false;
+  stand();
+  Object.assign(P, { carrying: false, envelopeReady: false, printing: false });
+  carryEnv.visible = envelope.visible = false;
+  setPhase("idle"); toOS("quit");
+  if (document.pointerLockElement) document.exitPointerLock();
+  renderStartLevels();
+  $("#start").classList.remove("hide");
+}
+
 /* ======================= Messages from the computer ======================= */
 
 addEventListener("message", e => {
@@ -1542,6 +1602,8 @@ addEventListener("message", e => {
   osLoaded = true; // any message means the computer is up
   for (const fn of MSG_HOOKS) { try { fn(m); } catch (err) { console.error("[forged] plugin message failed", err); } }
   if (m.type === "stand") stand();
+  if (m.type === "os-ready" && P.started) toOS("level", { level: P.level || 1 }); // the computer loaded after you clocked in
+  if (m.type === "quit-office") { if (P.started) quitToStart(); }
   if (m.type === "menu") ForgedMenu.open(m.screen || "pause");
   if (m.type === "phase") {
     if (m.phase === "briefing" && !["pickup", "carrying", "judging"].includes(P.phase)) setPhase("briefing");
@@ -1550,8 +1612,8 @@ addEventListener("message", e => {
   if (m.type === "hud") applyHud(m);
   if (m.type === "print") startPrinting();
   if (m.type === "verdict") onVerdict(m);
-  if (m.type === "tutorial-active") { P.tutorialOn = !!m.on; if (!m.on) P.tutorialPhase = null; }
-  if (m.type === "tutorial-phase") { P.tutorialPhase = m.phase || null; P.tutorialLabel = m.label || ""; updateTutArrowLabel(); }
+  if (m.type === "tutorial-active") { P.tutorialOn = !!m.on; if (!m.on) P.tutorialPhase = null; showOfficeTip(P.tutorialPhase); }
+  if (m.type === "tutorial-phase") { P.tutorialPhase = m.phase || null; P.tutorialLabel = m.label || ""; updateTutArrowLabel(); showOfficeTip(P.tutorialPhase); }
 });
 
 function applyHud(h) {
@@ -1574,11 +1636,13 @@ function applyPalette(level, clerkInfo) {
   mats.accent.color.set(pal.accent); mats.accent2.color.set(pal.accent2);
   scene.background = new THREE.Color(pal.bg);
   if (clerkInfo) setTag(clerk, clerkInfo.name.toUpperCase() + " · CLERK", "#a4581c");
+  applyLevelRules(level);
 }
 
 let printSeq = 0;
 function startPrinting() {
   const id = ++printSeq;
+  B.printerBusted = false;
   P.printing = true; setPhase("printing"); sfx("print");
   setTimeout(() => {
     if (id !== printSeq || P.phase !== "printing") return;
@@ -1918,8 +1982,46 @@ function setFirstPerson(on) {
   else { P.pitch = clamp(P.pitch, .3, 1.15); P.dist = MIN_DIST; }
 }
 
+/* ======================= Level pick (on the Clock in card) =======================
+ * You choose the job before you spawn, so the office is already that level's look
+ * and rules (level 2: glass boss office, sharper boss). The computer skips its own
+ * level screen and starts the run straight away. Until the tutorial is done, only level 1. */
+const START_LEVELS = [
+  { n: 1, name: "Sunny Diner Supply", icon: "🥞", diff: "Easy", color: "#f4a63a", note: "The boss patrols the floor" },
+  { n: 2, name: "St. Mercy Pharmacy", icon: "🏥", diff: "Medium", color: "#9fd8c4", note: "Glass boss office · sharper boss" },
+  { n: 3, name: "Port Nocturne Shipping", icon: "🚢", diff: "Hard", color: "#1d2a44", locked: "COMING SOON" },
+  { n: 4, name: "Neon Arcade Holdings", icon: "🕹️", diff: "Boss", color: "#ff2bd6", locked: "COMING SOON" },
+];
+const LEVEL_KEY = "forged-level";
+const tutorialFinished = () => { try { return localStorage.getItem("forged-tutorial-done-v2") === "1"; } catch (e) { return false; } };
+function levelLock(L) { return L.locked || (L.n > 1 && !tutorialFinished() ? "FINISH THE TUTORIAL FIRST" : ""); }
+function pickLevel(n) {
+  P.level = n;
+  try { localStorage.setItem(LEVEL_KEY, String(n)); } catch (e) { /* remembered for this visit only */ }
+  document.querySelectorAll(".sl-card").forEach(c => c.classList.toggle("on", +c.dataset.level === n));
+  applyPalette(n); // the office behind the card changes to match
+}
+function renderStartLevels() {
+  const box = $("#start-levels"); if (!box) return;
+  box.innerHTML = START_LEVELS.map(L => {
+    const lock = levelLock(L);
+    return `<button class="sl-card" data-level="${L.n}" style="--sl:${L.color}" ${lock ? "disabled" : ""}>
+      <div class="sl-art">${L.icon}</div>
+      <div class="sl-body"><div class="sl-num">LEVEL ${L.n}</div><div class="sl-name">${L.name}</div>
+        <span class="sl-diff">${L.diff}</span>${L.note ? `<div class="sl-note">${L.note}</div>` : ""}</div>
+      ${lock ? `<div class="sl-lock">${lock}</div>` : ""}</button>`;
+  }).join("");
+  box.querySelectorAll(".sl-card").forEach(c => c.onclick = () => { if (!c.disabled) { sfx("click"); pickLevel(+c.dataset.level); } });
+  let saved = 1; try { saved = +localStorage.getItem(LEVEL_KEY) || 1; } catch (e) {}
+  const ok = START_LEVELS.find(L => L.n === saved && !levelLock(L));
+  pickLevel(ok ? saved : 1);
+}
+setTimeout(renderStartLevels); // after the rest of the office (palettes, boss rules) is set up
+
 $("#btn-start").onclick = () => {
   $("#start").classList.add("hide"); P.started = true;
+  applyPalette(P.level || 1);
+  toOS("level", { level: P.level || 1 }); // the computer starts this level's run right away
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) {}
   lockMouse();
   say(player, "Another day at the office…", 2500);
@@ -1941,15 +2043,7 @@ ForgedMenu.init({
     if (P.seated) { OS.focus(); OS.contentWindow && OS.contentWindow.focus(); }
     else { try { const r = canvas.requestPointerLock(); r && r.catch && r.catch(() => {}); } catch (e) { /* click the office to capture the mouse */ } }
   },
-  onQuit() {
-    P.started = false;
-    stand();
-    Object.assign(P, { carrying: false, envelopeReady: false, printing: false });
-    carryEnv.visible = envelope.visible = false;
-    setPhase("idle"); toOS("quit");
-    if (document.pointerLockElement) document.exitPointerLock();
-    $("#start").classList.remove("hide");
-  },
+  onQuit: quitToStart,
   onCustomize: () => window.ForgedCustomizer && ForgedCustomizer.open(),
   canDossier: () => P.seated, // the Dossier lives on the computer
   onDossier: () => toOS("dossier"),
@@ -2016,10 +2110,19 @@ function updateBoss(dt, now) {
   cone.visible = B.state !== "drill";
   if (B.state === "drill") return; // fire drill: features.js walks him to the assembly point and back
   if (B.state === "wait") {
-    if (B.sus) { B.sus = 0; setSus(0); }
-    if (B.remote) return; // LAN game: the owner's boss decides when he heads out (lan.js)
-    B.t -= dt;
-    if (B.t <= 0 && !P.tutorialOn) { B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door"); }
+    if (!B.remote) { // LAN game: the owner's boss decides when he heads out (lan.js)
+      B.t -= dt;
+      if (B.t <= 0 && !P.tutorialOn) {
+        B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door");
+        cone.geometry = PATROL_CONE; cone.position.y = .04;
+        return;
+      }
+    }
+    // level 2: from his desk he watches the floor through the glass (boss-office.js seats and swivels him)
+    if (LV.glassOffice && boss.g.visible && P.started) {
+      if (cone.geometry !== DESK_CONE) { cone.geometry = DESK_CONE; cone.position.y = .4; } // seated: lift it back to floor level
+      bossWatch(dt, now, boss.g.position, boss.g.rotation.y, DESK_R, DESK_HALF, false, LV.deskRate);
+    } else if (B.sus) { B.sus = 0; setSus(0); }
     return;
   }
   const pos = boss.g.position;
@@ -2053,18 +2156,45 @@ function updateBoss(dt, now) {
     B.warned = true; toOS("boss-near");
     say(boss, "Hmm? What are you working on?", 2500);
   }
-  // vision cone: carrying the envelope inside it builds suspicion
-  const vx = player.g.position.x - pos.x, vz = player.g.position.z - pos.z, vd = Math.hypot(vx, vz);
-  let ang = Math.atan2(vx, vz) - boss.g.rotation.y; ang = Math.atan2(Math.sin(ang), Math.cos(ang));
-  const inView = !P.seated && vd < CONE_R && Math.abs(ang) < CONE_HALF;
-  if (inView && P.carrying && !B.busted) {
-    if (B.sus === 0) { say(boss, "Hm?", 900); sfx("huh"); }
-    B.sus += dt * 1.3;
+  if (cone.geometry !== PATROL_CONE) { cone.geometry = PATROL_CONE; cone.position.y = .04; }
+  bossWatch(dt, now, pos, boss.g.rotation.y, LV.coneR, LV.coneHalf, true);
+  if (!P.seated && !B.chatted && !P.carrying && near(pos, 2.2)) {
+    B.chatted = true;
+    say(boss, "Shouldn't you be at your desk?", 2200);
+  }
+}
+
+/* What the boss notices inside his cone (and not behind a wall or a closed door):
+ * you carrying the slip, or the slip sitting in / coming out of the printer.
+ * Either fills his suspicion; when it's full, +10 heat. */
+const PRINTER_TRAY = { x: PRINTER.x, z: PRINTER.z + .55 };
+function bossWatch(dt, now, pos, facing, R, half, walking, rate = LV.susRate) {
+  const sees = (x, z) => {
+    const vx = x - pos.x, vz = z - pos.z;
+    if (Math.hypot(vx, vz) > R) return false;
+    let a = Math.atan2(vx, vz) - facing; a = Math.atan2(Math.sin(a), Math.cos(a));
+    return Math.abs(a) < half && !sightBlocked(pos.x, pos.z, x, z);
+  };
+  const youSeen = P.carrying && !P.seated && !B.busted && sees(player.g.position.x, player.g.position.z);
+  // the slip: in his cone, or (walking past) within earshot of the printer's "done" beeping
+  const slipOut = (P.envelopeReady || P.printing) && !B.printerBusted;
+  const slipSeen = slipOut && (sees(PRINTER_TRAY.x, PRINTER_TRAY.z) || (walking && Math.hypot(PRINTER_TRAY.x - pos.x, PRINTER_TRAY.z - pos.z) < 2.8 && !sightBlocked(pos.x, pos.z, PRINTER_TRAY.x, PRINTER_TRAY.z)));
+  if (youSeen || slipSeen) {
+    if (B.sus === 0) { say(boss, youSeen ? "Hm?" : "Hm? What's printing?", 1100); sfx("huh"); }
+    B.sus += dt * rate;
     if (B.sus >= 1) {
-      B.busted = true; B.sus = 0; B.bustedAt = now; // lan.js tells the owner, so he stops on everyone's screen
-      B.pauseUntil = now + 2800; P.frozenUntil = now + 2800;
-      say(boss, "What's in the envelope?! …Fine. Get back to work.", 2800);
-      wtoast("Spotted by the boss with the envelope! +10 heat", "bad");
+      B.sus = 0;
+      if (youSeen) {
+        B.busted = true; B.bustedAt = now; // lan.js tells the owner, so he stops on everyone's screen
+        if (walking) { B.pauseUntil = now + 2800; P.frozenUntil = now + 2800; }
+        say(boss, "What's in the envelope?! …Fine. Get back to work.", 2800);
+        wtoast("Spotted by the boss with the envelope! +10 heat", "bad");
+      } else {
+        B.printerBusted = true;
+        if (walking) B.pauseUntil = now + 2200;
+        say(boss, walking ? "Whose is THIS on the printer?! …Hmph. Back to work." : "I can SEE that printer from here, you know.", 2800);
+        wtoast("The boss saw your slip at the printer! +10 heat", "bad");
+      }
       toOS("heat", { amount: 10 });
       sfx("busted"); P.shake = .3; flashVignette();
     }
@@ -2072,11 +2202,31 @@ function updateBoss(dt, now) {
   if (B.sus > 0 && now > (P.nextBeat || 0)) { sfx("heart"); P.nextBeat = now + 520 - B.sus * 240; }
   setSus(B.sus);
   coneMat.color.set(B.sus > 0 || now < B.pauseUntil ? "#e0352b" : "#ffd23f");
-  coneMat.opacity = .22 + B.sus * .3;
-  if (!P.seated && !B.chatted && !P.carrying && near(pos, 2.2)) {
-    B.chatted = true;
-    say(boss, "Shouldn't you be at your desk?", 2200);
+  coneMat.opacity = (walking ? .22 : .14) + B.sus * .3;
+}
+
+/* level 2's glass boss office: glass panes, slim frames, no chair rail */
+const glassFrames = new THREE.Group(); glassFrames.visible = false; scene.add(glassFrames);
+{
+  const frameM = M("#5a6470");
+  for (const z of [-9, -7.45, -5.9, -4.1, -2.05, 0]) { const f = new THREE.Mesh(new THREE.BoxGeometry(.34, WALL_H, .08), frameM); f.position.set(-RW / 2, WALL_H / 2, z); glassFrames.add(f); }
+  for (const [a, b] of [[-9, -5.9], [-4.1, 0]]) [.05, WALL_H - .05].forEach(y => { const r = new THREE.Mesh(new THREE.BoxGeometry(.34, .08, b - a), frameM); r.position.set(-RW / 2, y, (a + b) / 2); glassFrames.add(r); });
+}
+function setGlassOffice(on) {
+  glassFrames.visible = on;
+  for (const w of BOSS_GLASS) {
+    w.glass = on;
+    w.mat.map = on ? null : WALL_TEX; w.mat.needsUpdate = true;
+    w.mat.color.set(on ? "#cfeeff" : pal.wall);
+    (w.trims || []).forEach(t => t.visible = !on);
   }
+}
+function applyLevelRules(level) {
+  LV = LEVEL_RULES[level] || LEVEL_RULES[1];
+  const old = PATROL_CONE; PATROL_CONE = coneGeo(LV.coneR, LV.coneHalf);
+  if (cone.geometry === old) cone.geometry = PATROL_CONE;
+  old.dispose();
+  setGlassOffice(LV.glassOffice);
 }
 
 const tmp = new THREE.Vector3();
@@ -2317,9 +2467,16 @@ function renderViewArms() {
 // the envelope you carry from the printer to the IN tray
 registerHeld(carryEnv, { hand: "right", offset: [.06, .12, .08], rot: [Math.PI / 2, 0, -.12] });
 
-// inner doors: E opens/closes; other characters open them as they arrive
+// inner doors: walk into a closed one and it opens; E opens/closes; other characters open them as they arrive
 function updateDoors(dt, now) {
+  const pp = player.g.position;
   for (const d of doorObjs) {
+    if (!d.open && !P.seated && P.started) {
+      // pressing against it: within a step of the closed door, inside its width, while moving
+      const along = d.axis === "x" ? pp.x - d.at : pp.z - d.at, across = d.axis === "x" ? pp.z - d.fixed : pp.x - d.fixed;
+      const pushing = ["forward", "back", "left", "right"].some(held) && Math.abs(along) < d.width / 2 - .1 && Math.abs(across) < .62;
+      if (pushing && now > (d.closedAt || 0) + 700) { d.open = true; sfx("door"); }
+    }
     const npcNear = characters.some(ch => ch !== player && ch.g.visible && Math.hypot(ch.g.position.x - d.center.x, ch.g.position.z - d.center.z) < 1.6);
     if (npcNear) d.lastNpc = now;
     d.npcHold = now - d.lastNpc < 900;
@@ -2338,7 +2495,7 @@ for (const d of DESKS) INTERACTIONS.push({
 for (const d of doorObjs) INTERACTIONS.push({
   label: () => `${d.open ? "Close" : "Open"} the ${d.name} door`,
   can: () => !P.seated && near(d.center, 1.5),
-  act: () => { d.open = !d.open; sfx("door"); },
+  act: () => { d.open = !d.open; if (!d.open) d.closedAt = performance.now(); sfx("door"); }, // a short grace so it doesn't bounce open again
 });
 
 const UPDATERS = [], MSG_HOOKS = [];
@@ -2409,7 +2566,9 @@ window.FW = {
   // hooks
   onUpdate: fn => UPDATERS.push(fn),
   // doors: FW.doors[i].open; the emergency exit: FW.exit.propped = true lets you out (fire drill)
-  doors: doorObjs, exit: exitState, isOutside, LOT, ASSEMBLY,
+  doors: doorObjs, exit: exitState, isOutside, LOT, ASSEMBLY, sightBlocked,
+  // level rules: level() → { glassOffice, coneR, coneHalf, susRate }
+  level: () => LV, LEVEL_RULES, setLevelRules: applyLevelRules,
   // held items: hold.register(group, { hand: "right" | "left" | () => side, offset, rot }); toggle .visible to pick up / put down
   hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),
