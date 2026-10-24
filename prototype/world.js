@@ -540,6 +540,55 @@ marker.scale.y = 1.5; scene.add(marker);
 const ring = new THREE.Mesh(new THREE.RingGeometry(.65, .82, 40), new THREE.MeshBasicMaterial({ color: "#ffd23f", transparent: true, opacity: .85, side: THREE.DoubleSide, depthWrite: false }));
 ring.rotation.x = -Math.PI / 2; ring.position.y = .03; scene.add(ring);
 
+/* --- green tutorial arrow: shown when P.tutorialOn instead of the yellow marker --- */
+const tutArrowGroup = new THREE.Group(); tutArrowGroup.visible = false; scene.add(tutArrowGroup);
+{
+  // Cone pointing down (green)
+  const coneMat = M("#2ecc40");
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(.22, .5, 8), coneMat);
+  cone.position.y = .5; cone.rotation.z = Math.PI; // point down
+  tutArrowGroup.add(outline(cone, .03));
+  // Shaft cylinder
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .5, 8), coneMat);
+  shaft.position.y = 1.0;
+  tutArrowGroup.add(outline(shaft, .025));
+  // Ring on ground
+  const tutRingGeo = new THREE.RingGeometry(.65, .82, 40);
+  const tutRingMat = new THREE.MeshBasicMaterial({ color: "#2ecc40", transparent: true, opacity: .85, side: THREE.DoubleSide, depthWrite: false });
+  const tutRing = new THREE.Mesh(tutRingGeo, tutRingMat);
+  tutRing.rotation.x = -Math.PI / 2; tutRing.position.y = -1.5; // relative to the group, adjusted later
+  tutArrowGroup.add(tutRing);
+}
+// Label billboard
+const tutLabelTex = canvasTex(512, 96, (g, w, h) => {
+  g.fillStyle = "rgba(46,204,64,.9)"; roundRect(g, 8, 8, w - 16, h - 16, 18); g.fill();
+  g.fillStyle = "#fff"; g.font = "bold 32px 'Space Mono', monospace"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText("Walk to your desk", w / 2, h / 2);
+});
+const tutLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: tutLabelTex, depthTest: false }));
+tutLabel.scale.set(2.2, .42, 1); tutLabel.renderOrder = 11;
+tutArrowGroup.add(tutLabel);
+
+function updateTutArrowLabel() {
+  if (!P.tutorialLabel) return;
+  redraw(tutLabelTex, (g, w, h) => {
+    g.fillStyle = "rgba(46,204,64,.9)"; roundRect(g, 8, 8, w - 16, h - 16, 18); g.fill();
+    g.fillStyle = "#fff"; g.font = "bold 32px 'Space Mono', monospace"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(P.tutorialLabel.slice(0, 30), w / 2, h / 2);
+  });
+}
+
+function updateTutArrow(now) {
+  if (!P.tutorialOn) { tutArrowGroup.visible = false; return; }
+  const t = markerTarget();
+  tutArrowGroup.visible = !!t;
+  if (!t) return;
+  const bob = Math.sin(now / 250) * .15;
+  tutArrowGroup.position.set(t.x, t.y + bob, t.z);
+  tutArrowGroup.rotation.y = now / 600;
+  tutLabel.position.y = 1.6;
+}
+
 /* --- the player's desk gets messier every round (design doc §4) --- */
 let messCount = 0;
 function messUpDesk() {
@@ -561,7 +610,8 @@ player.g.rotation.y = Math.PI;
 const carryEnv = box(.5, .03, .32, envelopeMat, .52, 1.05, .12, player.g); carryEnv.rotation.set(Math.PI / 2, 0, .25); carryEnv.visible = false;
 
 const P = { fp: false, frozenUntil: 0, lastStep: 0, stampAt: 0, started: false, seated: false, carrying: false, phase: "idle", yaw: .6, pitch: .55, dist: 6.5,
-  keys: new Set(), envelopeReady: false, printing: false, scheme: "", shake: 0, hud: null };
+  keys: new Set(), envelopeReady: false, printing: false, scheme: "", shake: 0, hud: null,
+  tutorialOn: false, tutorialPhase: null, tutorialLabel: "" };
 
 /* ======================= Sound (tiny WebAudio synth, same style as the computer) ======================= */
 
@@ -645,6 +695,8 @@ addEventListener("message", e => {
   if (m.type === "hud") applyHud(m);
   if (m.type === "print") startPrinting();
   if (m.type === "verdict") onVerdict(m);
+  if (m.type === "tutorial-active") { P.tutorialOn = !!m.on; if (!m.on) P.tutorialPhase = null; }
+  if (m.type === "tutorial-phase") { P.tutorialPhase = m.phase || null; P.tutorialLabel = m.label || ""; updateTutArrowLabel(); }
 });
 
 function applyHud(h) {
@@ -708,12 +760,15 @@ function markerTarget() {
 }
 function updateMarker(now) {
   const t = markerTarget();
-  marker.visible = ring.visible = !!t;
-  if (!t) return;
+  // hide yellow marker when green tutorial arrow is active
+  const showYellow = !!t && !P.tutorialOn;
+  marker.visible = ring.visible = showYellow;
+  if (!showYellow) { updateTutArrow(now); return; }
   marker.position.set(t.x, t.y + Math.sin(now / 250) * .15, t.z);
   marker.rotation.y = now / 600;
   ring.position.set(t.x, .03, t.z);
   const k = 1 + Math.sin(now / 300) * .08; ring.scale.set(k, k, k);
+  updateTutArrow(now);
 }
 
 /* ======================= Interactions ======================= */
@@ -739,6 +794,7 @@ function updatePrompt() {
 function sit() {
   P.seated = true;
   document.exitPointerLock && document.exitPointerLock();
+  if (P.tutorialOn) toOS("tutorial-3d-done", { step: "sat" });
   player.g.position.set(CHAIR.x, 0, CHAIR.z + .05); player.g.rotation.y = Math.PI; seatPose(player, true);
   player.head.visible = player.tag.visible = false; // the camera sits right behind your head
   document.body.classList.add("seated");
@@ -775,9 +831,11 @@ function stand() {
 function grab() {
   P.envelopeReady = false; envelope.visible = false; P.carrying = true; carryEnv.visible = true; sfx("pickup");
   setPhase("carrying");
+  if (P.tutorialOn) toOS("tutorial-3d-done", { step: "grabbed" });
 }
 function deliver() {
   P.carrying = false; carryEnv.visible = false; sfx("drop");
+  if (P.tutorialOn) toOS("tutorial-3d-done", { step: "delivered" });
   // envelope slides from the IN tray into the scanner
   const env = box(.5, .03, .32, envelopeMat, -.7, 1.22, .75, boothDesk);
   const t0 = performance.now();
@@ -1008,7 +1066,7 @@ function updatePlayer(dt, now) {
 function updateBoss(dt, now) {
   if (B.state === "wait") {
     B.t -= dt;
-    if (B.t <= 0) { B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door"); }
+    if (B.t <= 0 && !P.tutorialOn) { B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door"); }
     return;
   }
   const [tx, tz] = BOSS_PATH[B.i];
@@ -1107,6 +1165,70 @@ function updateBubbles(now) {
   }
 }
 
+/* ======================= Minimap ======================= */
+
+const miniCanvas = $("#minimap");
+const miniCtx = miniCanvas ? miniCanvas.getContext("2d") : null;
+const toMX = x => (x / RW + .5) * 200;
+const toMZ = z => (z / RD + .5) * 138;
+function drawMinimap(now) {
+  if (!miniCtx || P.seated) return;
+  const g = miniCtx;
+  g.clearRect(0, 0, 200, 138);
+  // Floor
+  g.fillStyle = "rgba(232,183,122,.25)";
+  g.fillRect(0, 0, 200, 138);
+  // Furniture rectangles
+  g.fillStyle = "rgba(138,90,53,.5)";
+  // Player desk
+  g.fillRect(toMX(MY_DESK.x - 1.1), toMZ(MY_DESK.z - .55), (2.2 / RW) * 200, (.55 / RD) * 138);
+  // Coworker desks
+  [[-3, 2], [-3, -3]].forEach(([dx, dz]) => g.fillRect(toMX(dx - 1.1), toMZ(dz - .55), (2.2 / RW) * 200, (1.1 / RD) * 138));
+  // Printer
+  g.fillStyle = "rgba(154,160,166,.5)";
+  g.fillRect(toMX(PRINTER.x - .7), toMZ(PRINTER.z - .45), (1.4 / RW) * 200, (.9 / RD) * 138);
+  // Booth
+  g.fillStyle = "rgba(31,138,138,.4)";
+  g.fillRect(toMX(BOOTH.x - 1.6), toMZ(BOOTH.z), (3.2 / RW) * 200, (1.2 / RD) * 138);
+  // Clerk desk
+  g.fillStyle = "rgba(138,90,53,.5)";
+  g.fillRect(toMX(CLERK_DESK.x - 1.1), toMZ(CLERK_DESK.z - .55), (2.2 / RW) * 200, (1.1 / RD) * 138);
+  // IN tray marker
+  g.fillStyle = "#e0352b";
+  g.fillRect(toMX(IN_TRAY.x - .3), toMZ(IN_TRAY.z - .22), (0.6 / RW) * 200, (.45 / RD) * 138);
+  // Boss dot (if visible)
+  if (boss.g.visible) {
+    g.fillStyle = "#111";
+    g.beginPath(); g.arc(toMX(boss.g.position.x), toMZ(boss.g.position.z), 5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#fff"; g.font = "bold 7px sans-serif"; g.textAlign = "center"; g.fillText("B", toMX(boss.g.position.x), toMZ(boss.g.position.z) + 2.5);
+  }
+  // Objective dot
+  const obj = markerTarget();
+  if (obj) {
+    const blink = Math.sin(now / 200) > 0;
+    if (blink) {
+      const isTut = P.tutorialOn;
+      g.fillStyle = isTut ? "#2ecc40" : "#ffd23f";
+      const r = isTut ? 6 : 4;
+      g.beginPath(); g.arc(toMX(obj.x), toMZ(obj.z), r, 0, Math.PI * 2); g.fill();
+      if (isTut && P.tutorialLabel) {
+        g.fillStyle = "#fff"; g.font = "bold 7px sans-serif"; g.textAlign = "center";
+        g.fillText(P.tutorialLabel.slice(0, 12), toMX(obj.x), toMZ(obj.z) - 8);
+      }
+    }
+  }
+  // Player dot (red) with facing line
+  const px = toMX(player.g.position.x), pz = toMZ(player.g.position.z);
+  g.fillStyle = "#e0352b"; g.beginPath(); g.arc(px, pz, 4, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = "#fff"; g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(px, pz);
+  g.lineTo(px - Math.sin(player.g.rotation.y) * 8, pz - Math.cos(player.g.rotation.y) * 8);
+  g.stroke();
+  // Border
+  g.strokeStyle = "rgba(43,29,20,.6)"; g.lineWidth = 1;
+  g.strokeRect(0, 0, 200, 138);
+}
+
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
@@ -1132,6 +1254,7 @@ function loop(now) {
   updatePrompt();
   updateBubbles(now);
   renderer.render(scene, camera);
+  drawMinimap(now);
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
