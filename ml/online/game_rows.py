@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -21,6 +22,8 @@ PLAYER_CSV = Path(os.environ.get("FORGED_DATA_DIR", ROOT / "server" / "data")) /
 def simulated(kind: str, sessions: int, seed: int) -> pd.DataFrame:
     """kind "players" (attacks) or "honest" (the cardholders themselves). Generated once, then cached."""
     path = DATA_DIR / f"simulated_{kind}_{sessions}_{seed}.jsonl"
+    if path.exists() and shutil.which("node") and '"crs_id"' not in path.open(encoding="utf-8").readline():
+        path.unlink()  # made before the victims were CRS personas: make them again
     if not path.exists():
         rows = subprocess.run(["node", str(Path(__file__).with_name("simulate.js")), str(sessions), str(seed), kind],
                               capture_output=True, text=True, check=True).stdout

@@ -10,6 +10,10 @@ and the card/email/device/address history counts (C and D columns).
 The real data is restricted to transactions with identity info (device, browser),
 because every game order has it: the model learns the "online order with a device"
 segment of the dataset.
+
+Two inputs come from CRS, not from the row itself (crs.py): crs_idv, whether the cardholder's
+identity verifies, and crs_risk, Fraud Finder's risk for the buyer's email and name. Versions
+saved before them (v1, v2) keep their own feature list (LEGACY_FEATURES).
 """
 from __future__ import annotations
 
@@ -20,10 +24,15 @@ import pandas as pd
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
-NUMERIC = ["TransactionAmt", "hour", "dist1", "dist2", "C1", "C2", "C6", "C11", "C13", "C14", "D1", "D3", "D4", "D10", "D15"]
+NUMERIC = ["TransactionAmt", "hour", "dist1", "dist2", "C1", "C2", "C6", "C11", "C13", "C14", "D1", "D3", "D4", "D10", "D15",
+           "crs_risk"]
 CATEGORICAL = ["ProductCD", "card4", "card6", "P_email", "R_email", "M4", "M5", "M6", "id_12", "id_16", "proxy",
-               "os", "browser", "DeviceType", "device"]
+               "os", "browser", "DeviceType", "device", "crs_idv"]
 FEATURES = NUMERIC + CATEGORICAL
+CRS = ["crs_risk", "crs_idv"]
+LEGACY_FEATURES = [f for f in FEATURES if f not in CRS]
+# categories that don't come from the real data (it has no CRS answers): fixed, not counted
+FIXED_VOCAB = {"crs_idv": ["FAIL", "PASS", "STEP_UP", "other"]}
 
 # raw columns needed from the dataset
 RAW_TX = ["TransactionID", "isFraud", "TransactionDT", "TransactionAmt", "ProductCD", "card4", "card6", "dist1", "dist2",
@@ -71,8 +80,8 @@ DEVICE_RULES = [("windows", "windows"), ("ios device", "ios"), ("macos", "mac"),
                 ("pixel|nexus", "google"), ("linux", "linux"), ("emulator|sdk_gphone|generic", "emulator")]
 
 
-def frame(df: pd.DataFrame) -> pd.DataFrame:
-    """Raw IEEE-CIS rows (dataset or game) → the model's feature frame."""
+def frame(df: pd.DataFrame, features: list[str] | None = None) -> pd.DataFrame:
+    """Raw IEEE-CIS rows (dataset or game) → the model's feature frame (FEATURES, or a saved version's list)."""
     def col(name):
         return df[name] if name in df else pd.Series(np.nan, index=df.index)
     x = pd.DataFrame(index=df.index)
@@ -91,13 +100,23 @@ def frame(df: pd.DataFrame) -> pd.DataFrame:
     x["os"] = _family(col("id_30"), OS_RULES)
     x["browser"] = _family(col("id_31"), BROWSER_RULES)
     x["device"] = _family(col("DeviceInfo"), DEVICE_RULES)
-    return x[FEATURES]
+    features = features or FEATURES
+    if any(f in CRS for f in features):
+        from ml.online import crs
+        c = crs.columns(df)
+        x["crs_risk"], x["crs_idv"] = c["crs_risk"].astype("float64"), c["crs_idv"]
+    return x[features]
 
 
 def vocab(x: pd.DataFrame, min_count: int = 30) -> dict[str, list[str]]:
     """Each categorical column's values seen at least min_count times in training; the rest become "other"."""
     out = {}
     for c in CATEGORICAL:
+        if c in FIXED_VOCAB:
+            out[c] = list(FIXED_VOCAB[c])
+            continue
+        if c not in x:
+            continue
         counts = x[c].value_counts()
         out[c] = sorted(set(counts[counts >= min_count].index.astype(str)) | {"other"})
     return out
@@ -107,6 +126,8 @@ def encode(x: pd.DataFrame, voc: dict[str, list[str]]) -> pd.DataFrame:
     """Fixed categories, so a model trained on one vocabulary scores any row the same way."""
     x = x.copy()
     for c in CATEGORICAL:
+        if c not in x:
+            continue
         v = x[c].astype("string")
         v = v.where(v.isna() | v.isin(voc[c]), "other")
         x[c] = pd.Categorical(v, categories=voc[c])

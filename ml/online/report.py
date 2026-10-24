@@ -69,23 +69,22 @@ def report(players: pd.DataFrame) -> dict:
             "attack_catch": learning_curve()}
 
 
-def learning_curve() -> dict:
-    """The honest learning curve: the share of held-out attack orders each promoted version catches,
-    taken from the gate's own measurement at promotion time (retrain stores the new version's
-    `test.player_catch` and its parent's `parent_test.player_catch`). This is where learning shows —
-    the aggregate catch over all player traffic barely moves, because a version's gains are specific
-    to the family it learned; the gate's held-out attack set is the fair before/after.
+def learning_curve() -> list[dict]:
+    """The honest learning curve: one step per promotion, the share of held-out attack orders the
+    parent caught and the new version catches, as the gate measured them at promotion time (retrain
+    stores `parent_test.player_catch` and `test.player_catch`). Each step has its own held-out set
+    (the players or red-team orders it learned from), so steps are compared within, never across.
+    The aggregate catch over all player traffic barely moves, because a version's gains are specific
+    to the family it learned.
     """
     reg = {r["version"]: r for r in M.registry() if r.get("promoted")}
-    curve: dict[int, float] = {}
-    for v, meta in reg.items():
-        pc = (meta.get("test") or {}).get("player_catch")
-        if pc is not None:
-            curve[v] = round(float(pc), 3)
-        parent, ppc = meta.get("parent"), (meta.get("parent_test") or {}).get("player_catch")
-        if parent in reg and ppc is not None:
-            curve.setdefault(parent, round(float(ppc), 3))  # the parent's catch on this version's held set
-    return {k: curve[k] for k in sorted(curve)}
+    steps = []
+    for v, meta in sorted(reg.items()):
+        after, before = (meta.get("test") or {}).get("player_catch"), (meta.get("parent_test") or {}).get("player_catch")
+        if meta.get("parent") in reg and after is not None and before is not None:
+            steps.append({"from": meta["parent"], "to": v, "before": round(float(before), 3), "after": round(float(after), 3),
+                          "held": meta.get("note", "") + (" (promoted by hand: " + meta["forced_why"] + ")" if meta.get("forced") else "")})
+    return steps
 
 
 def print_report(r: dict) -> None:

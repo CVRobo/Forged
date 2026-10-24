@@ -85,8 +85,8 @@ def retrain(players: pd.DataFrame | None = None, force: bool = False) -> dict:
     w = T.weights(b["train"], extra=len(tr))
     w[len(train) - len(tr):] = np.where(got_through.to_numpy(), EVASION_WEIGHT, 1.0)
 
-    mdl, _ = M.fit(train, w, voc=live.vocab)  # the same vocabulary, so versions score alike
-    new = M.Version((max(r["version"] for r in M.registry()) + 1), mdl, live.vocab, 0.0)
+    mdl, voc = M.fit(train, w, voc=live.vocab)  # the same vocabulary (plus any new inputs'), so versions score alike
+    new = M.Version((max(r["version"] for r in M.registry()) + 1), mdl, voc, 0.0)
     T.calibrate(new, b["val"])
 
     held = pd.concat([p["val"], p["test"]], ignore_index=True)  # held-out player sessions (see note on _recall_floor)

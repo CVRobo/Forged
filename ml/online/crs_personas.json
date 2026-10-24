@@ -1,0 +1,293 @@
+{
+ "source": "CRS CalHacks sandbox test personas (@crscreditapi/crs-calhacks-mcp-server 1.1.2). Every person here is fake.",
+ "personas": [
+  {
+   "id": "P02",
+   "profile": "Super-prime mortgage holder",
+   "idv": {
+    "firstName": "DANIEL",
+    "lastName": "WHITFIELD",
+    "ssn": "666701002",
+    "dob": "1972-11-02",
+    "street1": "88 LAKESHORE BLVD",
+    "city": "AUSTIN",
+    "state": "TX",
+    "zip": "78746"
+   },
+   "fraud_finder": {
+    "firstName": "DANIEL",
+    "lastName": "WHITFIELD",
+    "phoneNumber": "5550101002",
+    "email": "daniel.whitfield@example.com",
+    "ipAddress": "203.0.113.12",
+    "address": {
+     "addressLine1": "88 LAKESHORE BLVD",
+     "city": "AUSTIN",
+     "state": "TX",
+     "postalCode": "78746"
+    }
+   },
+   "expect": {
+    "idv": "PASS",
+    "risk": 9,
+    "why": "name, SSN, DOB and address all verify"
+   }
+  },
+  {
+   "id": "P05",
+   "profile": "Subprime",
+   "idv": {
+    "firstName": "RICKY",
+    "lastName": "DALTON",
+    "ssn": "666701005",
+    "dob": "1988-09-09",
+    "street1": "7031 SUNSET RIDGE RD",
+    "city": "ORLANDO",
+    "state": "FL",
+    "zip": "32819"
+   },
+   "fraud_finder": {
+    "firstName": "RICKY",
+    "lastName": "DALTON",
+    "phoneNumber": "5550101005",
+    "email": "ricky.dalton@example.com",
+    "ipAddress": "203.0.113.15",
+    "address": {
+     "addressLine1": "7031 SUNSET RIDGE RD",
+     "city": "ORLANDO",
+     "state": "FL",
+     "postalCode": "32819"
+    }
+   },
+   "expect": {
+    "idv": "PASS",
+    "risk": 52,
+    "why": "name, SSN, DOB and address all verify"
+   }
+  },
+  {
+   "id": "P06",
+   "profile": "Chapter 7 discharged",
+   "idv": {
+    "firstName": "ANGELA",
+    "lastName": "MORRISSEY",
+    "ssn": "666701006",
+    "dob": "1979-04-18",
+    "street1": "960 MAPLEWOOD AVE",
+    "city": "COLUMBUS",
+    "state": "OH",
+    "zip": "43209"
+   },
+   "fraud_finder": {
+    "firstName": "ANGELA",
+    "lastName": "MORRISSEY",
+    "phoneNumber": "5550101006",
+    "email": "angela.morrissey@example.com",
+    "ipAddress": "203.0.113.16",
+    "address": {
+     "addressLine1": "960 MAPLEWOOD AVE",
+     "city": "COLUMBUS",
+     "state": "OH",
+     "postalCode": "43209"
+    }
+   },
+   "expect": {
+    "idv": "PASS",
+    "risk": 12,
+    "why": "name, SSN, DOB and address all verify"
+   }
+  },
+  {
+   "id": "P07",
+   "profile": "Chapter 13 active",
+   "idv": {
+    "firstName": "MARCUS",
+    "lastName": "BELLAMY",
+    "ssn": "666701007",
+    "dob": "1975-12-05",
+    "street1": "1507 PEACHTREE INDUSTRIAL BLVD",
+    "city": "ATLANTA",
+    "state": "GA",
+    "zip": "30341"
+   },
+   "fraud_finder": {
+    "firstName": "MARCUS",
+    "lastName": "BELLAMY",
+    "phoneNumber": "5550101007",
+    "email": "marcus.bellamy@example.com",
+    "ipAddress": "203.0.113.17",
+    "address": {
+     "addressLine1": "1507 PEACHTREE INDUSTRIAL BLVD",
+     "city": "ATLANTA",
+     "state": "GA",
+     "postalCode": "30341"
+    }
+   },
+   "expect": {
+    "idv": "PASS",
+    "risk": 12,
+    "why": "name, SSN, DOB and address all verify"
+   }
+  },
+  {
+   "id": "P12",
+   "profile": "Identity mismatch",
+   "idv": {
+    "firstName": "VICTOR",
+    "lastName": "ANAND",
+    "ssn": "666701012",
+    "dob": "1968-08-08",
+    "street1": "55 WATER ST FL 20",
+    "city": "NEW YORK",
+    "state": "NY",
+    "zip": "10041"
+   },
+   "fraud_finder": {
+    "firstName": "VICTOR",
+    "lastName": "ANAND",
+    "phoneNumber": "5550101012",
+    "email": "v.anand.1968@example.com",
+    "ipAddress": "198.51.100.12",
+    "address": {
+     "addressLine1": "55 WATER ST FL 20",
+     "city": "NEW YORK",
+     "state": "NY",
+     "postalCode": "10041"
+    }
+   },
+   "expect": {
+    "idv": "FAIL",
+    "risk": 85,
+    "why": "SSN issued to a different name; DOB mismatch; address not associated with SSN"
+   }
+  },
+  {
+   "id": "P13",
+   "profile": "Synthetic identity / fraud",
+   "idv": {
+    "firstName": "KAYLA",
+    "lastName": "BRENNAN",
+    "ssn": "666701013",
+    "dob": "1999-12-24",
+    "street1": "9021 KINGSTON PIKE",
+    "city": "KNOXVILLE",
+    "state": "TN",
+    "zip": "37923"
+   },
+   "fraud_finder": {
+    "firstName": "KAYLA",
+    "lastName": "BRENNAN",
+    "phoneNumber": "5550101013",
+    "email": "kb.9921x@example.com",
+    "ipAddress": "198.51.100.13",
+    "address": {
+     "addressLine1": "9021 KINGSTON PIKE",
+     "city": "KNOXVILLE",
+     "state": "TN",
+     "postalCode": "37923"
+    }
+   },
+   "expect": {
+    "idv": "FAIL",
+    "risk": 88,
+    "why": "SSN issue date inconsistent with DOB; multiple names linked to SSN"
+   }
+  },
+  {
+   "id": "P14",
+   "profile": "Deceased indicator",
+   "idv": {
+    "firstName": "HAROLD",
+    "lastName": "PETTIGREW",
+    "ssn": "666701014",
+    "dob": "1948-01-19",
+    "street1": "310 ELM ST",
+    "city": "DAYTON",
+    "state": "OH",
+    "zip": "45402"
+   },
+   "fraud_finder": {
+    "firstName": "HAROLD",
+    "lastName": "PETTIGREW",
+    "phoneNumber": "5550101014",
+    "email": "harold.pettigrew@example.com",
+    "ipAddress": "203.0.113.24",
+    "address": {
+     "addressLine1": "310 ELM ST",
+     "city": "DAYTON",
+     "state": "OH",
+     "postalCode": "45402"
+    }
+   },
+   "expect": {
+    "idv": "FAIL",
+    "risk": 80,
+    "why": "SSN reported as belonging to a deceased person (Death Master File)"
+   }
+  },
+  {
+   "id": "P16",
+   "profile": "Fraud alert on file",
+   "idv": {
+    "firstName": "SAMUEL",
+    "lastName": "OYELARAN",
+    "ssn": "666701016",
+    "dob": "1977-06-12",
+    "street1": "1200 BRICKELL BAY DR APT 2203",
+    "city": "MIAMI",
+    "state": "FL",
+    "zip": "33131"
+   },
+   "fraud_finder": {
+    "firstName": "SAMUEL",
+    "lastName": "OYELARAN",
+    "phoneNumber": "5550101016",
+    "email": "samuel.oyelaran@example.com",
+    "ipAddress": "203.0.113.26",
+    "address": {
+     "addressLine1": "1200 BRICKELL BAY DR APT 2203",
+     "city": "MIAMI",
+     "state": "FL",
+     "postalCode": "33131"
+    }
+   },
+   "expect": {
+    "idv": "KBA_REQUIRED",
+    "risk": 50,
+    "why": "basic verification passes but fraud alert triggers step-up; KBA questions then OTP to phone on file (needs TUC3004 on the quote)"
+   }
+  },
+  {
+   "id": "P17",
+   "profile": "Bureau divergence",
+   "idv": {
+    "firstName": "ELENA",
+    "lastName": "CASTELLANOS",
+    "ssn": "666701017",
+    "dob": "1987-11-20",
+    "street1": "4400 N CENTRAL EXPY STE 100",
+    "city": "DALLAS",
+    "state": "TX",
+    "zip": "75206"
+   },
+   "fraud_finder": {
+    "firstName": "ELENA",
+    "lastName": "CASTELLANOS",
+    "phoneNumber": "5550101017",
+    "email": "elena.castellanos@example.com",
+    "ipAddress": "203.0.113.27",
+    "address": {
+     "addressLine1": "4400 N CENTRAL EXPY STE 100",
+     "city": "DALLAS",
+     "state": "TX",
+     "postalCode": "75206"
+    }
+   },
+   "expect": {
+    "idv": "PASS",
+    "risk": 11,
+    "why": "name, SSN, DOB and address all verify"
+   }
+  }
+ ]
+}

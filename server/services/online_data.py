@@ -63,6 +63,7 @@ MEMO_RULES = {
     "new_address": "A new shipping address on an old card is a red flag.",
     "new_account": "Brand-new accounts get a second look.",
     "foreign_card": "Cards from abroad need a second look.",
+    "identity": "Run every buyer through the CRS identity check.",
 }
 MEMO_DECOYS = {
     "device_mobile": "Orders from phones are always fraud.",
@@ -83,7 +84,7 @@ COLUMNS = [
     *[f"C{i}" for i in range(1, 15)], *[f"D{i}" for i in range(1, 16)], *[f"M{i}" for i in range(1, 10)],
     *[f"V{i}" for i in range(1, 340)], *[f"id_{i:02d}" for i in range(1, 39)], "DeviceType", "DeviceInfo",
     "session_id", "origin", "level_id", "round_no", "scheme_id", "campaign_id", "step", "verdict", "score",
-    "top_reasons", "detector_version", "cover_note", "player",
+    "top_reasons", "detector_version", "cover_note", "crs_id", "buyer_email", "buyer_name", "buyer_is_holder", "player",
 ]
 
 
@@ -170,6 +171,9 @@ def model_status() -> dict:
         except Exception as e:
             ok, why = False, f"{type(e).__name__}: {e}"
         status.update(learning=ok, why_not_learning=why or None)
+        if "crs_idv" in v.features:
+            from ml.online import crs
+            status["crs"] = crs.status()
     return status
 
 
@@ -284,6 +288,7 @@ def save_rows(record: OnlineRecord, verdict: dict, round_id: str, player: str | 
         return 0
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with _lock:
+        _upgrade_header()
         new = not ROWS_CSV.exists() or ROWS_CSV.stat().st_size == 0
         with ROWS_CSV.open("a", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
@@ -291,6 +296,25 @@ def save_rows(record: OnlineRecord, verdict: dict, round_id: str, player: str | 
                 w.writeheader()
             w.writerows(rows)
     return sum(r["verdict"] == "APPROVED" for r in rows)
+
+
+def _upgrade_header() -> None:
+    """A CSV written before COLUMNS grew (e.g. the CRS identity columns) is rewritten with the new
+    header, old rows blank in the new columns, so appended rows never land under the wrong names."""
+    if not ROWS_CSV.exists() or ROWS_CSV.stat().st_size == 0:
+        return
+    with ROWS_CSV.open(newline="", encoding="utf-8") as f:
+        header = next(csv.reader(f), [])
+    if header == COLUMNS:
+        return
+    with ROWS_CSV.open(newline="", encoding="utf-8") as f:
+        old = list(csv.DictReader(f))
+    tmp = ROWS_CSV.with_suffix(".tmp")
+    with tmp.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(old)
+    tmp.replace(ROWS_CSV)
 
 
 def _maybe_retrain(evasions: int) -> None:
