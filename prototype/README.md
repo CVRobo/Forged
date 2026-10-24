@@ -78,10 +78,23 @@ Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Cont
 
 ### Hosting it online
 
-Use this when the Wi-Fi won't let laptops reach each other, which is common on venue and campus networks, or when players aren't in the same place. `prototype/Dockerfile` runs the same server on any host that runs containers and supports WebSockets. `serve.py` listens on `$PORT`. There, the button reads **👥 Online game**, the lobby shares the site's own address, and the first player to join owns the room.
+Use this when the Wi-Fi won't let laptops reach each other, which is common on venue and campus networks, or when players aren't in the same place. There, the button reads **👥 Online game**, the lobby shares the site's own address, and the first player to join owns the room.
 
-- **Render (free):** **New → Blueprint** with this repo uses `render.yaml` (a Docker web service on the free plan). Or **New → Web Service** with Docker, Dockerfile path `./prototype/Dockerfile` and Docker context `./prototype`. Render needs access to the GitHub repo.
-- **Anywhere else:** `docker build -t forged-prototype prototype`, then run it with the platform's `PORT`.
+**The whole game, real model included (the `Dockerfile` at the repo root).** One container runs three things:
+- **The front:** `prototype/serve.py` on `$PORT` serves the game and the multiplayer room, and passes API calls through.
+- **The backend:** FastAPI (`server/`), where the real fraud model from `ml/online` judges every order and drives the checkout's gut feeling.
+- **Redis:** holds the backend's rounds and sessions, in memory only.
+
+`serve.py` also answers `config.js`, which points the game at the same site, so the plain link plays against the real model. If the backend is down or still starting, the game falls back to the scripted Gus.
+
+- **Render (free):** **New → Blueprint** with this repo uses `render.yaml`. For a web service set up by hand, use Docker, leave Root Directory empty, and set the Dockerfile path to `./Dockerfile` and the Docker context to `.`. Render needs access to the GitHub repo.
+- **No environment variables are needed.** Optional ones: `ANTHROPIC_API_KEY` for Claude's lines instead of the canned ones, `SENTRY_DSN` for error tracking, and `REDIS_URL` for an outside Redis such as Redis Cloud instead of the one in the container.
+- **Check it:** `/health` reports the backend and the live model version.
+- **Model behaviour:** the model judges with the shipped versions and doesn't retrain there, because retraining needs the Kaggle training data. Orders are logged to `server/data/ieee_rows.csv` inside the container, which is lost when the service restarts.
+- **Anywhere else:** `docker build -t forged .`, then run it with the platform's `PORT`.
+
+**Game only (`prototype/Dockerfile`):** a lighter image with the scripted Gus and no backend. Use Root Directory `prototype`, or `docker build -t forged-prototype prototype`.
+
 - There is one room of 4 for everyone with the link.
 - On Render's free plan the service sleeps after 15 idle minutes. Waking it takes about a minute and starts an empty room.
 

@@ -1,0 +1,14 @@
+# Only what the root Dockerfile copies matters; keep the build context small and free of local data
+.git
+.claude
+**/__pycache__
+**/*.pyc
+**/.venv
+.env
+frontend
+docs
+ml/online/data
+ml/online/tests
+server/data
+server/tests
+prototype/tests
