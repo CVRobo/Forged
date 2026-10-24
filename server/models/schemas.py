@@ -1,0 +1,150 @@
+"""Pydantic models for all API request/response shapes.
+
+This file is the single source of truth for the API contract types.
+Keep it flat and portable — a future language port reads these to generate structs.
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+# --- Shared sub-models ---
+
+
+class Vendor(BaseModel):
+    name: str
+    domain: str
+    bank: str
+    usual_amount: list[float] = Field(description="[min, max] range")
+    icon: str
+    items: list[list] = Field(description="[[desc, qty, price], ...]")
+
+
+class CaseFile(BaseModel):
+    company: str
+    vendors: list[Vendor]
+    approvers: list[list[str]] = Field(description="[[name, authority], ...]")
+    notes: list[str]
+
+
+class MemoRule(BaseModel):
+    text: str
+    real: bool
+
+
+class Tell(BaseModel):
+    tell_type: str
+    strength: float
+    region: str | None = None
+
+
+class InvoiceRecord(BaseModel):
+    level: int
+    scheme: str
+    vendor: str
+    amount: float
+    bank_account: str
+    sender_domain: str
+    invoice_no: str
+    po_number: str
+    date: str
+    line_items: list[str]
+    field_altered: list[str]
+    legibility: dict[str, float] = Field(
+        description="Per-region visibility 0-1: header, meta, items, bank, footer"
+    )
+    scan_quality: float
+    copy_generation: int
+    stamp_type: list[str]
+    stamp_position: list[list[int]]
+    domain_mismatch: bool
+    letterhead_match: bool
+    cover_email: str
+    heat: int
+
+
+# --- Round ---
+
+
+class RoundStartRequest(BaseModel):
+    level: int = Field(ge=1, le=4)
+    session_id: str | None = None
+
+
+class RoundStartResponse(BaseModel):
+    round_id: str
+    memo: list[MemoRule]
+    inspector_version: int
+    case_file: CaseFile
+
+
+# --- Clerk ---
+
+
+class ClerkRequest(BaseModel):
+    round_id: str
+    text: str
+
+
+class ClerkResponse(BaseModel):
+    reply: str
+    persuasion_score: int = Field(ge=0, le=100)
+
+
+class ClerkVoiceRequest(BaseModel):
+    round_id: str
+    audio_b64: str = Field(description="Base64-encoded audio (webm/opus from browser MediaRecorder)")
+
+
+class ClerkVoiceResponse(BaseModel):
+    transcript: str = Field(description="What Deepgram heard the player say")
+    reply: str
+    persuasion_score: int = Field(ge=0, le=100)
+    reply_audio_b64: str | None = Field(
+        default=None, description="Base64-encoded audio of the clerk's reply (Deepgram TTS)"
+    )
+
+
+# --- Submit ---
+
+
+class SubmitRequest(BaseModel):
+    round_id: str
+    record: InvoiceRecord
+
+
+class SubmitResponse(BaseModel):
+    verdict: str = Field(description="PAID or FLAGGED")
+    top_tells: list[Tell]
+    inspector_line: str
+    payout: int
+    new_version: int
+
+
+# --- Patch Notes ---
+
+
+class PatchNote(BaseModel):
+    version: int
+    learned: list[str]
+    invoices_trained_on: int
+
+
+# --- Metrics ---
+
+
+class VersionMetrics(BaseModel):
+    version: int
+    catch_rate: float
+    false_positive_rate: float
+    held_out_catch_rate: float
+
+
+# --- Leaderboard ---
+
+
+class LeaderboardEntry(BaseModel):
+    player: str
+    money: int
+    patches_caused: int
