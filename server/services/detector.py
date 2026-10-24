@@ -57,8 +57,8 @@ def detect(record: InvoiceRecord, version: int, memo: list[dict]) -> tuple[list[
         ml_tells, raw_suspicion = predict(record, version, memo)
         logger.info("ML detector returned %d tells (suspicion=%.1f)", len(ml_tells), raw_suspicion)
         return ml_tells, raw_suspicion
-    except Exception:
-        logger.debug("ML detector unavailable, using rule-based fallback")
+    except Exception as exc:
+        logger.warning("ML detector unavailable (%s), using rule-based fallback", exc)
 
     tells = _compute_tells(record)
     raw_suspicion = sum(t.strength for t in tells)

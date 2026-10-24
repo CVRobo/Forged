@@ -6,6 +6,10 @@ Run with:
 
 from __future__ import annotations
 
+import logging
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,7 +29,27 @@ if config.SENTRY_DSN:
 
 # --- App ---
 
-app = FastAPI(title="Forged API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+def _warm_detector() -> None:
+    """Load (or train, about 6 s the first time) the ML detector so the first submit isn't slow."""
+    try:
+        from ml.detector import warm
+
+        logger.info("ML detector v%d ready", warm())
+    except Exception:
+        logger.warning("ML detector unavailable, submits will use rule-based tells", exc_info=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if not config.USE_STUBS:
+        threading.Thread(target=_warm_detector, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="Forged API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

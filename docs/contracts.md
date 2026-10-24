@@ -213,43 +213,52 @@ The canonical shape of a submitted invoice. B uses this for training, A stores i
 
 ## 3. ML Interface (A ↔ B)
 
-B exposes two functions from `ml/detector.py`:
+B exposes these from `ml/detector.py` (details and the server-side to-do list: `ml/README.md`):
 
 ```python
-def predict(record: dict) -> dict:
+from ml.detector import predict, retrain, top_features, memo_rules, versions, replay_grid, warm
+
+def predict(record, version=None, memo=None, history=(), model_version=None) -> Prediction:
     """
-    Args:
-        record: Invoice record matching the schema above.
-    Returns:
-        {
-            "tells": [{"tell_type": str, "strength": float, "region": str | None}, ...],
-            "suspicion": float,  # raw score before modifiers
-            "top_features": [str, str]  # names of the two strongest features
-        }
+    record:  the InvoiceRecord above (dict or the pydantic object).
+    version: the server's inspector version (only used to scale `suspicion`, below).
+    history: this session's earlier records, oldest first (feeds the session features).
+    Returns a Prediction that unpacks as (tells, suspicion), the way
+    server/services/detector.py calls it, plus:
+        .flagged      bool   the model's verdict at this level's FPR target   <- use this
+        .score        float  calibrated P(fraud)
+        .threshold    float
+        .version      int    the model version that judged it
+        .tells        [{"tell_type", "strength", "region", "features"}], strongest first
+        .suspicion    float  scaled so the old rule (x (0.55 + 0.12*(v-1)), > 38) lands on .flagged
+        .to_dict()
     """
 
-def retrain(examples: list[dict]) -> dict:
+def retrain(examples: list, force: bool = False) -> dict:
     """
-    Args:
-        examples: List of invoice records with a "label" field added
-                  ("fraud" or "legitimate").
+    examples: game records of PAID player attacks (optionally with round_id, session_id,
+              detector_version). Labels come from the payload check (mule accounts),
+              not from a "label" field.
+    force:    the demo override (POST /admin/retrain?force=true).
     Returns:
         {
-            "new_version": int,
+            "new_version": int,          # the live version after this call
+            "candidate_version": int, "promoted": bool, "forced": bool,
             "metrics": {
-                "catch_rate": float,
-                "false_positive_rate": float,
-                "held_out_catch_rate": float
+                "catch_rate": float,           # frozen scripted test set
+                "false_positive_rate": float,  # frozen legit set
+                "held_out_catch_rate": float   # held-out variants of the player's tricks
             },
-            "learned": [str, ...]  # human-readable descriptions of new patterns
+            "learned": [str, ...],       # patch-note lines
+            "examples": {...}, "guard": {...}, "gate": {...}
         }
     """
 
-def top_features(version: int | None = None) -> list[str]:
-    """
-    Returns the top 2 feature names for the given version (or current).
-    Used to generate the real memo rules.
-    """
+def top_features(version=None) -> list[str]   # the 2 features the memo rules are about
+def memo_rules(version=None) -> list[str]     # the 2 real memo rules, as sentences
+def versions() -> list[dict]                  # every saved version with metrics and thresholds
+def replay_grid() -> dict                     # versions, batches, recall[i][j], n[i][j] (spec 2.4)
+def warm() -> int                             # load or train v1; returns the live version
 ```
 
 ---
