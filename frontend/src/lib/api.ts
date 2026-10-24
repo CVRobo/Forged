@@ -41,6 +41,7 @@ export interface Tell {
   tell_type: string;
   strength: number;
   region: string | null;
+  description: string | null;
 }
 
 export interface InvoiceRecord {
@@ -68,6 +69,7 @@ export interface InvoiceRecord {
 
 export interface RoundStartResponse {
   round_id: string;
+  session_id: string;
   memo: MemoRule[];
   inspector_version: number;
   case_file: CaseFile;
