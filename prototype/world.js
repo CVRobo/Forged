@@ -224,7 +224,7 @@ function wallRun(axis, fixed, from, to, doors = [], { thick = .3, color } = {}) 
     const a = d.at - d.width / 2, b = d.at + d.width / 2;
     if (a > start) seg(start, a, WALL_H / 2, WALL_H, true);
     seg(a, b, WALL_H - .35, .7, false); // lintel over the doorway
-    doorFrame(axis, fixed, d.at, d.width);
+    if (d.frame !== false) doorFrame(axis, fixed, d.at, d.width);
     start = b;
   });
   if (to > start) seg(start, to, WALL_H / 2, WALL_H, true);
@@ -242,11 +242,51 @@ function wallBlocks(w, cam, pl) {
   return cross > w.a - 1 && cross < w.b + 1;
 }
 // main office: doorways west (boss office), south (break room), east (records & mail)
-const DOORS = { west: { at: -5, width: 1.8 }, south: { at: -6, width: 2.2 }, east: { at: 5.5, width: 2 } };
+const DOORS = { west: { at: -5, width: 1.8 }, south: { at: -6, width: 2.2 }, east: { at: 5.5, width: 2 },
+  exit: { at: 6, width: 1.84, frame: false } }; // the emergency exit: double doors to the parking lot (see "Emergency exit")
 wallRun("x", -RD / 2, -RW / 2, RW / 2);
-wallRun("x", RD / 2, -RW / 2, RW / 2, [DOORS.south]);
+wallRun("x", RD / 2, -RW / 2, RW / 2, [DOORS.south, DOORS.exit]);
 wallRun("z", -RW / 2, -RD / 2, RD / 2, [DOORS.west]);
 wallRun("z", RW / 2, -RD / 2, RD / 2, [DOORS.east]);
+
+/* ======================= Doors (boss office, break room, records) =======================
+ * Press E near one to open or close it; it stays where you leave it. A closed door blocks
+ * you. Anyone else (the boss, coworkers) opens it as they reach it and it closes behind them.
+ * Each door fades with its wall when it's between you and the camera. */
+const doorObjs = [];
+function makeDoor(name, axis, fixed, at, width, into) {
+  const wood = M("#9c6a3e", { transparent: true }), dark = M("#5c3a1f", { transparent: true });
+  const glass = new THREE.MeshStandardMaterial({ color: "#bfe8ff", transparent: true, opacity: .45, roughness: .1 });
+  const hinge = new THREE.Group(), w = width - .08, h = 2.44;
+  // the hinge sits at the low end of the doorway; the leaf runs along the wall (local +x)
+  const base = axis === "x" ? 0 : -Math.PI / 2;
+  if (axis === "x") hinge.position.set(at - width / 2 + .04, 0, fixed); else hinge.position.set(fixed, 0, at - width / 2 + .04);
+  hinge.rotation.y = base; scene.add(hinge);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(w, h, .07), wood); leaf.position.set(w / 2, h / 2, 0); leaf.castShadow = true; hinge.add(leaf);
+  [[.06, h / 2], [w - .06, h / 2]].forEach(([x, y]) => { const r = new THREE.Mesh(new THREE.BoxGeometry(.06, h - .04, .08), dark); r.position.set(x, y, 0); hinge.add(r); }); // stiles
+  [.08, h - .08, 1.05].forEach(y => { const r = new THREE.Mesh(new THREE.BoxGeometry(w - .06, .06, .08), dark); r.position.set(w / 2, y, 0); hinge.add(r); }); // rails
+  const win = new THREE.Mesh(new THREE.BoxGeometry(w * .45, .55, .08), glass); win.position.set(w / 2, 1.7, 0); hinge.add(win);
+  [-1, 1].forEach(sd => { const k = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 10), M("#d8b34a")); k.position.set(w - .14, 1.02, sd * .07); hinge.add(k); }); // knobs
+  const block = axis === "x"
+    ? { minX: at - width / 2, maxX: at + width / 2, minZ: fixed - .16, maxZ: fixed + .16 }
+    : { minX: fixed - .16, maxX: fixed + .16, minZ: at - width / 2, maxZ: at + width / 2 };
+  colliders.push(block);
+  const openAngle = axis === "x" ? -into * 1.5 : base + into * 1.5;
+  const d = { name, axis, fixed, at, width, hinge, base, openAngle, block, open: false, npcHold: false, lastNpc: 0,
+    mats: [wood, dark, glass], center: axis === "x" ? { x: at, z: fixed } : { x: fixed, z: at } };
+  // fades with its wall (the camera code dims anything listed in `walls`)
+  walls.push({ m: leaf, mat: wood, mats: d.mats, axis, fixed, a: at - width / 2, b: at + width / 2 });
+  doorObjs.push(d);
+  return d;
+}
+function setDoorBlocking(d, blocking) {
+  const i = colliders.indexOf(d.block);
+  if (blocking && i < 0) colliders.push(d.block);
+  if (!blocking && i >= 0) colliders.splice(i, 1);
+}
+makeDoor("boss office", "z", -RW / 2, DOORS.west.at, DOORS.west.width, -1);
+makeDoor("break room", "x", RD / 2, DOORS.south.at, DOORS.south.width, +1);
+makeDoor("records", "z", RW / 2, DOORS.east.at, DOORS.east.width, +1);
 
 /* A room next to the main office: checker floor, ceiling and walls. Skip the
  * side it shares with the main office (that wall already has the doorway). */
@@ -883,9 +923,9 @@ const corkTex = canvasTex(1024, 640, (g, w, h) => {
   });
 });
 const cork = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.5), new THREE.MeshStandardMaterial({ map: corkTex, roughness: 1 }));
-cork.position.set(3, 1.9, -RD / 2 + .17); scene.add(cork);
+cork.position.set(3, 1.9, -RD / 2 + .23); scene.add(cork); // proud of the chair rail (which sticks out to +.185)
 { // chunky wooden frame round the corkboard
-  const K = kits(), f = K(wood), z = -RD / 2 + .19;
+  const K = kits(), f = K(wood), z = -RD / 2 + .25;
   f.add(RBOXG(4.26, .13, .07, .025), 3, 1.9 + 1.31, z).add(RBOXG(4.26, .13, .07, .025), 3, 1.9 - 1.31, z)
     .add(RBOXG(.13, 2.5, .07, .025), 3 - 2.065, 1.9, z).add(RBOXG(.13, 2.5, .07, .025), 3 + 2.065, 1.9, z);
   K.place();
@@ -924,7 +964,7 @@ plant(-12.2, 8.2, "tall"); plant(12.2, 8.2, "bush"); plant(12.2, -8.2, "bush"); 
 }
 const jug = cyl(.26, .26, .5, M("#7cc6ff", { transparent: true, opacity: .7 }), -12.3, 1.25, -8.2); jug.castShadow = false; collide(-12.3, -8.2, .7, .7);
 // the emergency exit sits on the south wall east of the break room, so it opens onto the outside
-const EXIT_X = 6;
+const EXIT_X = DOORS.exit.at;
 const exitSign = signPlane("EXIT", null, 1, .35, "#1d9a4b"); exitSign.position.set(EXIT_X, 2.6, RD / 2 - .17); exitSign.rotation.y = Math.PI; scene.add(exitSign);
 // the emergency exit under the sign: double metal doors with push bars and wired-glass windows
 const exitDoor = (() => {
@@ -944,10 +984,98 @@ const exitDoor = (() => {
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.0, .35), new THREE.MeshBasicMaterial({ color: "#3dff8a", transparent: true, opacity: .25 }));
   glow.position.set(0, 2.6, zf - .02); glow.rotation.y = Math.PI; g.add(glow);         // the sign glows
   const alarm = new THREE.Mesh(new THREE.BoxGeometry(.18, .12, .05), red); alarm.position.set(1.15, 1.5, zf - .02); g.add(alarm);
-  collide(0, zf, 1.9, .3);
-  return { leaves };
+  const block = { minX: EXIT_X - .95, maxX: EXIT_X + .95, minZ: zf - .15, maxZ: zf + .3 };
+  colliders.push(block);
+  return { leaves, block };
 })();
 let exitOpenUntil = 0;
+// propped open during a fire drill (features.js); it only shuts again once you're back inside
+const exitState = { propped: false, open: false, youOut: false };
+const isOutside = () => player.g.position.z > RD / 2 + .2;
+// once you've been outside, the exit stays open for you until you're clearly back in, so it never shuts
+// on you mid-step in the doorway. You can only get outside while it's propped, so this can't be used to sneak out.
+function youreOut() {
+  if (isOutside()) exitState.youOut = true;
+  else if (player.g.position.z < RD / 2 - 1.1) exitState.youOut = false;
+  return exitState.youOut;
+}
+function setExitPassable(on) {
+  if (exitState.open === on) return;
+  exitState.open = on;
+  const i = colliders.indexOf(exitDoor.block);
+  if (on && i >= 0) colliders.splice(i, 1);
+  if (!on && i < 0) colliders.push(exitDoor.block);
+}
+
+/* ======================= Parking lot (outside the emergency exit) =======================
+ * A small fenced lot where everyone gathers during a fire drill. The only way in or out
+ * is the emergency exit. Break room to the west (x < 0), records room to the east (x > 13). */
+const LOT = { x0: .15, x1: 12.6, z0: RD / 2 + .15, z1: 17.6 };
+const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
+{
+  const w = LOT.x1 - LOT.x0, d = LOT.z1 - LOT.z0, cx = (LOT.x0 + LOT.x1) / 2, cz = (LOT.z0 + LOT.z1) / 2;
+  // asphalt with painted bays along the east fence and a walkway from the door
+  const tex = canvasTex(1024, 640, (g, cw, ch) => {
+    const r = seeded(91);
+    g.fillStyle = "#4a4d52"; g.fillRect(0, 0, cw, ch);
+    for (let k = 0; k < 9000; k++) { g.fillStyle = r() < .5 ? "#3d4045" : "#5b5f65"; g.globalAlpha = .5; g.fillRect(r() * cw, r() * ch, 2, 2); }
+    g.globalAlpha = 1;
+    const X = x => (x - LOT.x0) / w * cw, Z = z => (z - LOT.z0) / d * ch;
+    g.strokeStyle = "#f2efe6"; g.lineWidth = 6;
+    for (let i = 0; i <= 4; i++) { const z = 10.4 + i * 1.75; g.beginPath(); g.moveTo(X(8.2), Z(z)); g.lineTo(X(LOT.x1), Z(z)); g.stroke(); } // 4 bays
+    g.fillStyle = "#f2efe6"; for (let z = LOT.z0; z < 13.4; z += .7) g.fillRect(X(EXIT_X - .9), Z(z), X(EXIT_X + .9) - X(EXIT_X - .9), Z(z + .35) - Z(z)); // zebra walkway
+    g.strokeStyle = "#ffd23f"; g.lineWidth = 8; g.setLineDash([26, 18]);
+    g.beginPath(); g.arc(X(ASSEMBLY.x), Z(ASSEMBLY.z), (2.0 / w) * cw, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); // assembly circle
+  });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(w, d), M("#fff", { map: tex }));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(cx, .004, cz); ground.receiveShadow = true; scene.add(ground);
+  // grass beyond the fence, so the lot doesn't float in the void
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(40, 18), M("#7fae5a"));
+  grass.rotation.x = -Math.PI / 2; grass.position.set(cx, -.01, LOT.z1 + 8.5); grass.receiveShadow = true; scene.add(grass);
+  // chain-link fence: posts, rails and see-through mesh; south side and east side
+  const fenceTex = canvasTex(64, 64, (g, cw, ch) => {
+    g.clearRect(0, 0, cw, ch); g.strokeStyle = "rgba(200,205,210,.9)"; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(cw, ch); g.moveTo(cw, 0); g.lineTo(0, ch); g.stroke();
+  });
+  fenceTex.wrapS = fenceTex.wrapT = THREE.RepeatWrapping;
+  const post = M("#8d949b");
+  const fence = (ax, ay, bx, by) => {
+    const len = Math.hypot(bx - ax, by - ay), mx = (ax + bx) / 2, mz = (ay + by) / 2, ang = Math.atan2(by - ay, bx - ax);
+    const t = fenceTex.clone(); t.needsUpdate = true; t.repeat.set(len / .35, 1.5 / .35);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.5), new THREE.MeshBasicMaterial({ map: t, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+    mesh.position.set(mx, .78, mz); mesh.rotation.y = -ang; scene.add(mesh);
+    const rail = box(len, .05, .05, post, mx, 1.52, mz); rail.rotation.y = -ang;
+    for (let k = 0; k <= Math.ceil(len / 2.5); k++) { const f = k / Math.ceil(len / 2.5); cyl(.04, .04, 1.6, post, ax + (bx - ax) * f, .8, ay + (by - ay) * f); }
+    if (Math.abs(by - ay) < 1e-6) collide(mx, ay, len, .2); else collide(ax, mz, .2, len);
+  };
+  fence(-.2, LOT.z1, LOT.x1, LOT.z1);
+  fence(LOT.x1, RD / 2 + .1, LOT.x1, LOT.z1);
+  // two parked cars in the bays
+  const car = (x, z, color, ry) => {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    const body = M(color), glass = M("#bfe8ff"), tyre = M("#1f1f22"), chrome = M("#d6dadf");
+    box(2.2, .55, 1.05, body, 0, .5, 0, g);
+    box(1.15, .45, .95, body, -.15, .98, 0, g);
+    box(1.0, .34, .97, glass, -.15, .98, 0, g);
+    [[-.7, .5], [.7, .5], [-.7, -.5], [.7, -.5]].forEach(([wx, wz]) => { const t = cyl(.22, .22, .16, tyre, wx, .22, wz, g); t.rotation.x = Math.PI / 2; });
+    box(.06, .14, .9, chrome, 1.12, .48, 0, g);
+    collide(x, z, Math.abs(Math.cos(ry)) * 2.3 + Math.abs(Math.sin(ry)) * 1.15, Math.abs(Math.sin(ry)) * 2.3 + Math.abs(Math.cos(ry)) * 1.15);
+  };
+  car(10.6, 11.27, "#2f6fd6", 0);
+  car(10.6, 14.77, "#e0352b", 0);
+  // lamp post, bench, assembly sign
+  cyl(.07, .09, 4.2, post, 7.6, 2.1, 16.9); box(.6, .1, .3, post, 7.35, 4.2, 16.9);
+  const lampGlass = new THREE.Mesh(new THREE.BoxGeometry(.4, .06, .24), new THREE.MeshBasicMaterial({ color: "#fff3c4" })); lampGlass.position.set(7.2, 4.13, 16.9); scene.add(lampGlass);
+  collide(7.6, 16.9, .3, .3);
+  const benchWood = M("#8a5a35");
+  box(1.6, .08, .45, benchWood, 1.6, .48, 17.0); box(1.6, .35, .06, benchWood, 1.6, .75, 17.22);
+  [-.7, .7].forEach(dx => box(.06, .45, .45, post, 1.6 + dx, .24, 17.0));
+  collide(1.6, 17.0, 1.7, .5);
+  cyl(.05, .05, 2.2, post, ASSEMBLY.x - 1.6, 1.1, ASSEMBLY.z + 1.9);
+  const sign = signPlane("ASSEMBLY POINT", "Fire drill? Line up here", 1.4, .7, "#1d9a4b");
+  sign.position.set(ASSEMBLY.x - 1.6, 2.2, ASSEMBLY.z + 1.85); sign.rotation.y = Math.PI; scene.add(sign);
+  collide(ASSEMBLY.x - 1.6, ASSEMBLY.z + 1.9, .2, .2);
+}
 
 
 /* --- windows with half-drawn blinds on the north wall (all geometry sits in front of the wall face) --- */
@@ -1411,7 +1539,7 @@ const INTERACTIONS = [
   { label: () => "Drop it in the IN tray", can: () => P.carrying && near(IN_TRAY, 1.9), act: deliver },
   { label: () => `Talk to ${P.hud ? P.hud.clerk.name : "Brenda"}`, can: () => near({ x: CLERK_DESK.x, z: CLERK_DESK.z + 1.2 }, 2.2) || near({ x: CLERK_DESK.x, z: CLERK_DESK.z - 1.6 }, 1.6), act: () => say(clerk, P.hud ? `"${P.hud.clerk.hello}" <br><small>(Send your cover note from your computer.)</small>` : `"I'm on lunch, hon. Email me."`, 3800) },
   { label: () => `Chat with ${P.hud ? P.hud.inspector : "Gus"}`, can: () => !P.carrying && P.phase !== "judging" && !(P.phase === "result" && bubbles.some(b => b.ch === inspector)) && near(IN_TRAY, 1.9), act: () => say(inspector, pick(["Mmm… pie.", "Did you know I have a stapler?", "I read every invoice. Mostly.", "Is it lunch yet?"]), 2600) },
-  { label: () => "Clock out early", can: () => near({ x: EXIT_X, z: RD / 2 - 1 }, 1.6), act: () => {
+  { label: () => "Clock out early", can: () => !exitState.propped && !isOutside() && near({ x: EXIT_X, z: RD / 2 - 1 }, 1.6), act: () => {
       exitOpenUntil = performance.now() + 1600; sfx("door");
       if (P.carrying) say(player, "Leave with a fake order slip in my hand? Bold.", 2600);
       else say(player, pick(["Not before quota. The boss would notice.", "One more order. Then I'm out.", "The parking lot looks free… but my desk looks profitable."]), 2600);
@@ -1779,6 +1907,8 @@ function setSus(v) {
   if (r !== shownSus) { shownSus = r; $("#vignette").style.setProperty("--sus", r); }
 }
 function updateBoss(dt, now) {
+  cone.visible = B.state !== "drill";
+  if (B.state === "drill") return; // fire drill: features.js walks him to the assembly point and back
   if (B.state === "wait") {
     if (B.sus) { B.sus = 0; setSus(0); }
     B.t -= dt;
@@ -2056,6 +2186,24 @@ function renderViewArms() {
 // the envelope you carry from the printer to the IN tray
 registerHeld(carryEnv, { hand: "right", offset: [.06, .12, .08], rot: [Math.PI / 2, 0, -.12] });
 
+// inner doors: E opens/closes; other characters open them as they arrive
+function updateDoors(dt, now) {
+  for (const d of doorObjs) {
+    const npcNear = characters.some(ch => ch !== player && ch.g.visible && Math.hypot(ch.g.position.x - d.center.x, ch.g.position.z - d.center.z) < 1.6);
+    if (npcNear) d.lastNpc = now;
+    d.npcHold = now - d.lastNpc < 900;
+    const want = d.open || d.npcHold;
+    setDoorBlocking(d, !want);
+    const target = want ? d.openAngle : d.base;
+    d.hinge.rotation.y += (target - d.hinge.rotation.y) * Math.min(1, dt * 9);
+  }
+}
+for (const d of doorObjs) INTERACTIONS.push({
+  label: () => `${d.open ? "Close" : "Open"} the ${d.name} door`,
+  can: () => !P.seated && near(d.center, 1.5),
+  act: () => { d.open = !d.open; sfx("door"); },
+});
+
 const UPDATERS = [], MSG_HOOKS = [];
 let last = performance.now();
 function loop(now) {
@@ -2074,7 +2222,13 @@ function loop(now) {
   if (st < 1) inspector.armR.rotation.x = st < .5 ? -.3 - st * 4.8 : -2.7 + (st - .5) * 4.8;
   else inspector.armR.rotation.x = -.3;
   updateMarker(now);
-  { const open = now < exitOpenUntil ? .55 : 0; exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); }); }
+  { // emergency exit: propped open during a drill and while you're still outside; otherwise only the "clock out" peek
+    const passable = exitState.propped || youreOut();
+    setExitPassable(passable);
+    const open = passable ? 1.45 : now < exitOpenUntil ? .55 : 0;
+    exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); });
+  }
+  updateDoors(dt, now);
   for (const fn of UPDATERS) { try { fn(dt, now); } catch (e) { console.error("[forged] plugin update failed", e); } }
   updateCine(now);
   updateConfetti(dt);
@@ -2112,6 +2266,8 @@ window.FW = {
   rand, pick, clamp, money,
   // hooks
   onUpdate: fn => UPDATERS.push(fn),
+  // doors: FW.doors[i].open; the emergency exit: FW.exit.propped = true lets you out (fire drill)
+  doors: doorObjs, exit: exitState, isOutside, LOT, ASSEMBLY,
   // held items: hold.register(group, { hand: "right" | "left" | () => side, offset, rot }); toggle .visible to pick up / put down
   hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),

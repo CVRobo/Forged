@@ -56,6 +56,7 @@ const ACH = [
   { id: "tip", name: "Inside info", desc: "Get a tip about the boss" },
   { id: "drill", name: "Survived a fire drill", desc: "Make it through a fire drill" },
   { id: "drillDeliver", name: "Fire sale", desc: "Deliver during a fire drill" },
+  { id: "modelEmployee", name: "Model employee", desc: "Get counted at the assembly point" },
 ];
 const unlocked = new Set(store.get("ach", []));
 function unlock(id) {
@@ -216,10 +217,21 @@ function makeNpc(ch, name, standOff, toJunction, toExit) {
   };
 }
 // Kevin sits on the south side of the north desk, Dana on the south side of the south desk.
+// During a fire drill they walk out the emergency exit to the assembly point in the parking lot.
+const AP = FW.ASSEMBLY || { x: EXIT_X - 2.4, z: 15.2 };
+const OUTSIDE = (FW.RD ?? 18) / 2 + 1.4;  // just past the exit
 const NPCS = [
-  makeNpc(kevin, "Kevin", .75, [[-5, 4.4]], [[0.6, 6.4], [EXIT_X - .6, 7.8]]),
-  makeNpc(dana, "Dana", .75, [[-5, -1.0], [-5, 4.4]], [[-0.9, -0.6], [-0.6, 6.4], [EXIT_X + .6, 7.8]]),
+  makeNpc(kevin, "Kevin", .75, [[-5, 4.4]], [[0.6, 6.4], [EXIT_X - .6, 7.8], [EXIT_X - .3, OUTSIDE], [AP.x - .9, AP.z + .4]]),
+  makeNpc(dana, "Dana", .75, [[-5, -1.0], [-5, 4.4]], [[-0.9, -0.6], [-0.6, 6.4], [EXIT_X + .6, 7.8], [EXIT_X + .3, OUTSIDE], [AP.x - .1, AP.z + 1.2]]),
 ];
+// Brenda (the clerk) evacuates too; she never goes on coffee runs
+const BRENDA = makeNpc(clerk, "Brenda", -.7, [], [[10.2, 2.35], [10.2, 7.8], [EXIT_X + 1.2, 7.8], [EXIT_X + .5, OUTSIDE], [AP.x + .7, AP.z + .9]]);
+// the boss walks out with his clipboard to do the headcount (world.js leaves him alone in state "drill")
+const BOSS_N = makeNpc(boss, "Boss", 0, [], []);
+const BOSS_SPOT = { x: AP.x + 1.7, z: AP.z - .4 };
+const clipboard = FW.box(.32, .42, .03, FW.M("#c69a5c"), 0, -.78, .16, boss.armR); clipboard.rotation.x = -.5; clipboard.visible = false;
+FW.box(.26, .3, .01, FW.M("#ffffff"), 0, .02, .02, clipboard);
+const MOVERS = [...NPCS, BRENDA, BOSS_N];
 const npcByName = { kevin: NPCS[0], dana: NPCS[1] };
 
 function walk(n, pts, done) { n.path = pts; n.pi = 0; n.done = done; n.mode = "walk"; }
@@ -251,12 +263,12 @@ function coffeeRun(n) {
 let nextCoffee = performance.now() + rand(30000, 50000);
 
 function updateNpcs(dt, now) {
-  for (const n of NPCS) {
+  for (const n of MOVERS) {
     if (n.mode === "seated") continue;
     const ch = n.ch, pos = ch.g.position;
     if (n.mode === "walk") {
       const tgt = n.path[n.pi], dx = tgt[0] - pos.x, dz = tgt[1] - pos.z, d = Math.hypot(dx, dz);
-      const sp = drill.active ? 2.4 : 1.5;
+      const sp = n === BOSS_N ? 3.4 : drill.active ? 2.4 : 1.5; // the boss strides out from his office, far from the exit
       if (d < .06) {
         n.pi++;
         if (n.pi >= n.path.length) { n.mode = "idle"; const f = n.done; n.done = null; if (f) f(); }
@@ -278,6 +290,7 @@ function updateNpcs(dt, now) {
       if (n.mode === "wait" && now > n.waitUntil) { n.mode = "idle"; n.face = null; const f = n.after; n.after = null; if (f) f(); }
     }
     if (n.holding) ch.armR.rotation.x = -1.2;
+    if (n === BOSS_N && clipboard.visible) ch.armR.rotation.x = -1.0; // reading the headcount
     // snitch: on a coffee run, near you while you carry the envelope
     if (n.trip && !n.snitched && P.carrying && !drill.active && playerNear(pos.x, pos.z, 3)) {
       n.snitched = true;
@@ -398,43 +411,84 @@ alarmBulb.position.set(EXIT_X, 3.0, FW.RD / 2 - .25); FW.scene.add(alarmBulb);
 const redOverlay = document.createElement("div");
 redOverlay.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:radial-gradient(ellipse at center, rgba(255,0,0,0) 45%, rgba(255,20,20,.55) 100%);";
 document.body.appendChild(redOverlay);
-const DRILL_MS = 15000;
+const DRILL_MS = 25000; // long enough to walk out, or to sneak a delivery and still make the headcount
+// headcount chip at the top of the screen during a drill
+const countChip = document.createElement("div");
+countChip.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:6;display:none;pointer-events:none;padding:8px 16px;font:700 14px var(--ui,monospace);color:#fff;background:#b3261e;border:3px solid #2b1d14;border-radius:12px;box-shadow:4px 4px 0 #2b1d14;";
+document.body.appendChild(countChip);
 
 function startDrill(now) {
   if (drill.active) return;
-  drill.active = true; drill.endAt = now + DRILL_MS;
-  FW.wtoast("🔥 FIRE DRILL! The boss is busy herding everyone out — 15 s to deliver unseen!", "good");
-  // the boss stops patrolling; if he is in his office he stays there
+  drill.active = true; drill.endAt = now + DRILL_MS; drill.returning = false;
+  if (FW.exit) FW.exit.propped = true;
+  FW.wtoast("🔥 FIRE DRILL! Get to the assembly point outside, or use the empty office… the boss counts heads at the end.", "good");
+  // the boss stops whatever he was doing and walks out with his clipboard
   B.sus = 0;
-  if (B.state === "wait") B.t = Math.max(B.t, DRILL_MS / 1000 + 4);
-  else { B.pauseUntil = now + DRILL_MS; FW.say(boss, "FIRE DRILL! Everybody OUT! Single file!", 3000); }
-  // coworkers head for the exit sign
-  for (const n of NPCS) {
+  const wasHome = B.state === "wait";
+  B.state = "drill"; boss.g.visible = true; clipboard.visible = true;
+  if (wasHome) FW.standPose(boss);
+  const bp = boss.g.position;
+  // to the south wall: from his desk through his office door (x -13, z -5) like on patrol,
+  // from the west lane straight down it, from the patrol's east lane (x -5.5) straight down that
+  const toSouth = bp.x < -13 ? [[bp.x, -2.8], [-16.5, -2.8], [-14, -5], [-10.4, -5], [-10.4, 7.8]]
+    : bp.x < -8 ? [[-10.4, bp.z], [-10.4, 7.8]] : [[bp.x, 7.8]];
+  BOSS_N.out = [[bp.x, bp.z], ...toSouth, [EXIT_X, 7.8], [EXIT_X, OUTSIDE], [BOSS_SPOT.x, BOSS_SPOT.z]];
+  walk(BOSS_N, BOSS_N.out, () => {
+    BOSS_N.mode = "idle"; BOSS_N.face = { x: AP.x - .5, z: AP.z + .8 };
+    FW.say(boss, "Line up! Headcount!", 2400);
+  });
+  FW.say(boss, "FIRE DRILL! Everybody OUT! Single file!", 3000);
+  // coworkers and Brenda head for the assembly point
+  for (const n of [...NPCS, BRENDA]) {
     if (n.mode !== "seated") continue;
     getUp(n);
-    walk(n, n.toExit, () => { n.mode = "idle"; n.face = { x: n.ch.g.position.x, z: 20 }; });
+    walk(n, n.toExit, () => { n.mode = "idle"; n.face = BOSS_SPOT; });
   }
   setTimeout(() => FW.say(kevin, pick(["Is this a drill?!", "Not again!", "I left my sandwich!"]), 2000), 600);
   setTimeout(() => FW.say(dana, pick(["Walk, don't run.", "Ugh. I was on a roll.", "Does this count as a break?"]), 2000), 2200);
+  setTimeout(() => FW.say(clerk, pick(["Finally, a real lunch break.", "Is the parking lot catering?"]), 2200), 3600);
   FW.say(inspector, "I'm not leaving my stapler.", 2600);
 }
 function endDrill(now) {
-  drill.active = false;
+  drill.active = false; drill.returning = true;
   alarmLight.intensity = 0; alarmBulb.material.color.set("#5a1010");
-  redOverlay.style.opacity = 0; drill.lastOp = -1;
+  redOverlay.style.opacity = 0; drill.lastOp = -1; countChip.style.display = "none";
   drill.nextAt = now + rand(240000, 330000);
-  FW.wtoast("Drill over. Back to work, everyone.");
-  if (boss.g.visible) FW.say(boss, "Alright, alright. Back to work!", 2200);
-  unlock("drill");
-  for (const n of NPCS) {
-    if (n.mode === "seated") continue;
-    const back = [...reversed(n.toExit), n.stand];
-    // they start from where they stand, which is the last exit waypoint
-    n.mode = "idle"; n.face = null;
-    setTimeout(() => walk(n, back, () => sitDown(n)), rand(0, 1200));
+  // the headcount: outside you're counted, inside you're missing
+  const counted = FW.isOutside ? FW.isOutside() : false;
+  if (counted) {
+    FW.say(boss, pick(["…and you. Good. Model employee.", "Everyone's here. Even you. Huh.", "All present. Back to work!"]), 2600);
+    FW.toOS("heat", { amount: -10 });
+    FW.wtoast("Counted at the assembly point. −10 heat", "good");
+    unlock("modelEmployee");
+  } else {
+    FW.say(boss, "Where were YOU during the drill?!", 2800);
+    FW.toOS("heat", { amount: 15 });
+    FW.wtoast("Missed the headcount: the boss noticed. +15 heat", "bad");
+    FW.sfx("busted");
   }
+  unlock("drill");
+  // everyone walks back in (the exit stays propped until they're through)
+  const walked = (n, route) => n.mode === "walk" && n.path === route ? route.slice(0, n.pi) : route;
+  for (const n of [...NPCS, BRENDA]) {
+    if (n.mode === "seated") continue;
+    const back = [...reversed(walked(n, n.toExit)), n.stand];
+    n.mode = "idle"; n.face = null;
+    setTimeout(() => walk(n, back, () => sitDown(n)), rand(600, 1800));
+  }
+  // the boss retraces his route and disappears into his office (or out of sight past the exit)
+  const bossBack = reversed(walked(BOSS_N, BOSS_N.out || []));
+  BOSS_N.mode = "idle";
+  setTimeout(() => walk(BOSS_N, bossBack.length ? bossBack : [[boss.g.position.x, boss.g.position.z]], () => {
+    clipboard.visible = false; boss.g.visible = false; BOSS_N.mode = "seated"; BOSS_N.face = null;
+    boss.g.position.set(-12.2, 0, -5); B.state = "wait"; B.t = rand(14, 22); B.i = 0;
+  }), 2600);
 }
 function updateDrill(dt, now) {
+  // after a drill, shut the exit once everyone's walked back through it (you included: world.js waits for you)
+  if (drill.returning && MOVERS.every(n => n.ch.g.position.z < (FW.RD ?? 18) / 2 - .3 || !n.ch.g.visible)) {
+    drill.returning = false; if (FW.exit) FW.exit.propped = false;
+  }
   if (!drill.active) {
     if (now > drill.nextAt) {
       drill.nextAt = now + 1000;                           // re-check every second
@@ -442,9 +496,10 @@ function updateDrill(dt, now) {
     }
     return;
   }
-  // keep the boss busy for the whole drill (he may come out mid-drill)
-  if (B.state === "wait") B.t = Math.max(B.t, (drill.endAt - now) / 1000 + 2);
-  else if (B.pauseUntil < drill.endAt) B.pauseUntil = drill.endAt;
+  // headcount countdown and where you are
+  const left = Math.max(0, Math.ceil((drill.endAt - now) / 1000)), out = FW.isOutside && FW.isOutside();
+  countChip.style.display = P.seated ? "none" : "block";
+  countChip.textContent = `🔥 Headcount in ${left}s · You: ${out ? "at the assembly point ✓" : "inside"}`;
   const on = Math.sin(now / 130) > 0;
   alarmLight.intensity = on ? 2.4 : .4;
   alarmBulb.material.color.set(on ? "#ff2a2a" : "#5a1010");
