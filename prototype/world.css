@@ -104,6 +104,10 @@ body.seated #minimap { opacity: 0; pointer-events: none; }
 #vignette { --sus: 0; position: fixed; inset: 0; pointer-events: none; z-index: 3; box-shadow: inset 0 0 180px 60px rgba(224,53,43,.85); opacity: calc(var(--sus) * .8); }
 #vignette.flash { animation: vflash 1.1s ease-out; }
 @keyframes vflash { 0% { opacity: 1; } 100% { opacity: calc(var(--sus) * .8); } }
+#vignette.fade-out { animation: vFadeOut .4s ease forwards; pointer-events: auto; z-index: 1099; }
+#vignette.fade-in  { animation: vFadeIn  .4s ease forwards; z-index: 1099; }
+@keyframes vFadeOut { from { opacity: 0; box-shadow: inset 0 0 0 0 #000; } to { opacity: 1; box-shadow: inset 0 0 0 2000px #000; } }
+@keyframes vFadeIn  { from { opacity: 1; box-shadow: inset 0 0 0 2000px #000; } to { opacity: 0; box-shadow: inset 0 0 0 0 #000; } }
 
 /* the controls live in the Game Menu (Esc → Controls), not on screen */
 #controls { display: none !important; }

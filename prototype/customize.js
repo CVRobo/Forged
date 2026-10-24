@@ -67,22 +67,36 @@ function renderOpts() {
 }
 function apply() { FW.restyleChar(preview, look); renderOpts(); }
 
+// detect which group a click lands in → switch camera mode
+const FACE_KEYS = new Set(["hair", "hairColor", "skin", "brows", "mouth", "nose"]);
+const FACE_TOGS = new Set(["glasses", "earrings", "mustache"]);
+const BODY_KEYS = new Set(["shirt", "pants", "tie"]);
+
 root.addEventListener("click", e => {
+  lastInteraction = performance.now();
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.step) {
     const opts = CHOICES[b.dataset.step], i = Math.max(0, opts.findIndex(o => o[0] === look[b.dataset.step]));
     look[b.dataset.step] = opts[(i + +b.dataset.dir + opts.length) % opts.length][0]; apply();
-  } else if (b.dataset.col) { look[b.dataset.col] = b.dataset.v || null; apply(); }
+    if (FACE_KEYS.has(b.dataset.step)) setCamMode("face");
+  } else if (b.dataset.col) {
+    look[b.dataset.col] = b.dataset.v || null; apply();
+    if (FACE_KEYS.has(b.dataset.col)) setCamMode("face");
+    else if (BODY_KEYS.has(b.dataset.col)) setCamMode("body");
+  }
   else if (b.dataset.cz === "random") {
     look = { ...look, skin: pick(SKINS), hairColor: pick(HAIR_COLORS), shirt: pick(freeShirts()), pants: pick(PANTS), tie: Math.random() < .35 ? pick(TIES) : null,
       hair: pick(CHOICES.hair)[0], brows: pick(CHOICES.brows)[0], mouth: pick(CHOICES.mouth)[0], nose: pick(CHOICES.nose)[0],
       glasses: Math.random() < .3, earrings: Math.random() < .25, mustache: Math.random() < .2 };
-    apply();
-  } else if (b.dataset.cz === "reset") { look = { ...FW.DEFAULT_LOOK, ...(room() ? { shirt: room().mine } : {}) }; apply(); }
+    apply(); setCamMode("body");
+  } else if (b.dataset.cz === "reset") { look = { ...FW.DEFAULT_LOOK, ...(room() ? { shirt: room().mine } : {}) }; apply(); setCamMode("body"); }
   else if (b.dataset.cz === "cancel") close(false);
   else if (b.dataset.cz === "done") close(true);
 });
-root.addEventListener("change", e => { const t = e.target.closest("[data-tog]"); if (t) { look[t.dataset.tog] = t.checked; apply(); } });
+root.addEventListener("change", e => {
+  lastInteraction = performance.now();
+  const t = e.target.closest("[data-tog]"); if (t) { look[t.dataset.tog] = t.checked; apply(); if (FACE_TOGS.has(t.dataset.tog)) setCamMode("face"); }
+});
 
 /* ---------------- the turning preview ---------------- */
 const canvas = $("#cz-canvas");
@@ -100,14 +114,55 @@ preview.tag.visible = false;
 FW.restyleChar(preview, look);
 
 let spin = .5, vel = 0, drag = null, raf = 0, last = 0;
-canvas.addEventListener("pointerdown", e => { drag = e.clientX; vel = 0; canvas.setPointerCapture(e.pointerId); });
-canvas.addEventListener("pointermove", e => { if (drag == null) return; const d = (e.clientX - drag) * .012; spin += d; vel = d; drag = e.clientX; });
+
+/* --- camera mode: "body" (default full-body spin) or "face" (zoomed head, no auto-spin) --- */
+const CAM_BODY = { px: 0, py: 1.55, pz: 5.4, tx: 0, ty: 1.2, tz: 0 };
+const CAM_FACE = { px: 0, py: 2.05, pz: 3.2, tx: 0, ty: 2.0, tz: 0 };
+let camMode = "body", lastInteraction = 0, spinTarget = null;
+const _camPos = new THREE.Vector3(), _camTgt = new THREE.Vector3();
+const PI2 = Math.PI * 2;
+
+function setCamMode(mode) {
+  if (mode === camMode) return;
+  camMode = mode; lastInteraction = performance.now();
+  if (mode === "face") {
+    // snap rotation toward the nearest forward-facing angle (character faces camera at multiples of 2π)
+    spinTarget = Math.round(spin / PI2) * PI2;
+    vel = 0;
+  } else {
+    spinTarget = null;
+  }
+}
+
+canvas.addEventListener("pointerdown", e => { drag = e.clientX; vel = 0; canvas.setPointerCapture(e.pointerId); lastInteraction = performance.now(); setCamMode("body"); });
+canvas.addEventListener("pointermove", e => { if (drag == null) return; const d = (e.clientX - drag) * .012; spin += d; vel = d; drag = e.clientX; lastInteraction = performance.now(); });
 canvas.addEventListener("pointerup", () => { drag = null; });
+
 function frame(now) {
   const dt = Math.min(.05, (now - (last || now)) / 1000); last = now;
-  if (drag == null) { vel *= .92; spin += vel + dt * .45; }
+  const idle = now - lastInteraction;
+  if (drag == null) {
+    vel *= .92;
+    if (camMode === "face" && spinTarget != null) {
+      // lerp toward the forward-facing angle
+      spin += (spinTarget - spin) * Math.min(1, dt * 5);
+    } else if (camMode === "body" && idle > 5000) {
+      // resume gentle auto-rotation only after 5 s idle
+      spin += vel + dt * .45;
+    } else {
+      // just coast on residual velocity (after drag or recent interaction)
+      spin += vel;
+    }
+  }
   turntable.rotation.y = spin;
   preview.head.position.y = 2.02 + Math.sin(now / 600) * .015;
+  // camera lerp toward current mode target
+  const lf = 1 - Math.pow(.04, dt); // exponential ease (~92% per second)
+  const m = camMode === "face" ? CAM_FACE : CAM_BODY;
+  camera.position.lerp(_camPos.set(m.px, m.py, m.pz), lf);
+  camera.lookAt(_camTgt.set(m.tx, m.ty, m.tz));
+  // idle timer: revert face → body after 15 s
+  if (camMode === "face" && idle > 15000) setCamMode("body");
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) {
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -123,6 +178,7 @@ function open(done) {
   FW.restyleChar(preview, look); renderOpts();
   root.classList.add("show");
   if (document.pointerLockElement) document.exitPointerLock();
+  camMode = "body"; camera.position.set(CAM_BODY.px, CAM_BODY.py, CAM_BODY.pz); lastInteraction = performance.now();
   last = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
 }
 function close(keep) {

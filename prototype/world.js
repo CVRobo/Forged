@@ -1027,6 +1027,24 @@ cork.position.set(3, 1.9, -RD / 2 + .23); scene.add(cork); // proud of the chair
   K.place();
 }
 
+/* --- changing room door on the west wall, left of the desks (opens the character customizer) --- */
+const CHANGING_ROOM_POS = { x: -RW / 2 + 1.2, z: 6 };
+{
+  const x = -RW / 2 + .16, cz = 6;
+  const doorW = 1.3, doorH = 2.4;
+  // door panel flat on the west wall (faces +x into the room)
+  const door = new THREE.Mesh(new THREE.BoxGeometry(.07, doorH, doorW), M("#9c6a3e"));
+  door.position.set(x, doorH / 2, cz); door.castShadow = true; scene.add(door);
+  // dark frame stiles + header
+  const dark = M("#5c3a1f");
+  [-1, 1].forEach(sz => { const r = new THREE.Mesh(new THREE.BoxGeometry(.08, doorH, .07), dark); r.position.set(x, doorH / 2, cz + sz * doorW / 2); scene.add(r); });
+  const top = new THREE.Mesh(new THREE.BoxGeometry(.08, .07, doorW + .14), dark); top.position.set(x, doorH + .035, cz); scene.add(top);
+  // knob
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 10), M("#d8b34a")); knob.position.set(x + .07, 1.02, cz + doorW / 2 - .14); scene.add(knob);
+  // sign above the door
+  const sign = signPlane("CHANGING ROOM", null, 1.6, .3, "#1f8a8a"); sign.rotation.y = Math.PI / 2; sign.position.set(x + .01, 2.6, cz); scene.add(sign);
+}
+
 /* --- clerk --- */
 const CLERK_DESK = { x: 8, z: 4 };
 desk(CLERK_DESK.x, CLERK_DESK.z, { flip: true });
@@ -1650,6 +1668,17 @@ const INTERACTIONS = [
     } },
   { label: () => "Look at the corkboard", can: () => near({ x: 3, z: -RD / 2 + 1.2 }, 1.8), act: () => wtoast(pins.length ? `${pins.length} trick${pins.length > 1 ? "s" : ""} pinned. ${pins.filter(p => p.caught).length} caught.` : "Empty… for now.") },
   { label: () => "Small talk with the Boss", can: () => boss.g.visible && near(boss.g.position, 1.8), act: () => say(boss, pick(["Shouldn't you be at your desk?", "Numbers. I want numbers.", "Nice weather for compliance."]), 2400) },
+  { label: () => "Changing room", can: () => near(CHANGING_ROOM_POS, 1.8), act: () => {
+      sfx("door");
+      const v = $("#vignette");
+      v.classList.remove("fade-in", "flash"); v.classList.add("fade-out");
+      setTimeout(() => {
+        ForgedCustomizer.open(function () {
+          v.classList.remove("fade-out"); v.classList.add("fade-in");
+          v.addEventListener("animationend", () => v.classList.remove("fade-in"), { once: true });
+        });
+      }, 420);
+    } },
 ];
 let current = null;
 function updatePrompt() {
@@ -2156,6 +2185,11 @@ function drawMinimap(now) {
   // IN tray marker
   g.fillStyle = "#e0352b";
   g.fillRect(toMX(IN_TRAY.x - .3), toMZ(IN_TRAY.z - .22), (0.6 / RW) * 200, (.45 / RD) * 138);
+  // Changing room door
+  g.fillStyle = "rgba(31,138,138,.7)";
+  g.fillRect(toMX(CHANGING_ROOM_POS.x - .3), toMZ(CHANGING_ROOM_POS.z - .65), (.2 / RW) * 200, (1.3 / RD) * 138);
+  g.fillStyle = "#fff"; g.font = "bold 6px sans-serif"; g.textAlign = "left";
+  g.save(); g.translate(toMX(CHANGING_ROOM_POS.x + .1), toMZ(CHANGING_ROOM_POS.z)); g.rotate(-Math.PI / 2); g.fillText("CR", 0, 0); g.restore();
   // Boss dot (if visible)
   if (boss.g.visible) {
     g.fillStyle = "#111";
