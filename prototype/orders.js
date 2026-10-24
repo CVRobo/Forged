@@ -58,13 +58,21 @@ const SHOPS = {
 
 /* ======================= Cardholders (the victims) ======================= */
 
-// addr1 is the IEEE-CIS billing region code, addr2 the country code (87 = US)
+// addr1 is the IEEE-CIS billing region code, addr2 the country code (87 = US).
+// Each cardholder is a CRS sandbox persona (`crs`, see ml/online/crs_personas.json; all fake people):
+// Gus checks the identity an order claims with CRS. The last four don't check out (a fraud alert on
+// file, an SSN that belongs to someone else, a synthetic identity, a deceased person), so their
+// cards are for sale but they never shop themselves (`ghost`; ml/online/simulate.js).
 const HOLDERS = [
-  { name: "Pat Miller", city: "Columbus, OH", addr1: 299, email: "pat.miller@yahoo.com", phone: "iphone" },
-  { name: "Dee Alvarez", city: "Phoenix, AZ", addr1: 325, email: "dee.alvarez@gmail.com", phone: "iphone" },
-  { name: "Sam Okoro", city: "Atlanta, GA", addr1: 204, email: "samokoro@hotmail.com", phone: "android" },
-  { name: "Lou Bennett", city: "Tampa, FL", addr1: 264, email: "lbennett@aol.com", phone: "iphone" },
-  { name: "Kim Tran", city: "Dallas, TX", addr1: 330, email: "kim.tran@comcast.net", phone: "android" },
+  { name: "Angela Morrissey", city: "Columbus, OH", addr1: 299, email: "angela.morrissey@yahoo.com", phone: "iphone", crs: "P06" },
+  { name: "Daniel Whitfield", city: "Austin, TX", addr1: 325, email: "daniel.whitfield@gmail.com", phone: "iphone", crs: "P02" },
+  { name: "Marcus Bellamy", city: "Atlanta, GA", addr1: 204, email: "marcusbellamy@hotmail.com", phone: "android", crs: "P07" },
+  { name: "Ricky Dalton", city: "Orlando, FL", addr1: 264, email: "rdalton@aol.com", phone: "iphone", crs: "P05" },
+  { name: "Elena Castellanos", city: "Dallas, TX", addr1: 330, email: "elena.castellanos@comcast.net", phone: "android", crs: "P17" },
+  { name: "Samuel Oyelaran", city: "Miami, FL", addr1: 264, email: "sam.oyelaran@gmail.com", phone: "iphone", crs: "P16" },
+  { name: "Victor Anand", city: "New York, NY", addr1: 315, email: "victor.anand@yahoo.com", phone: "iphone", crs: "P12", ghost: true },
+  { name: "Kayla Brennan", city: "Knoxville, TN", addr1: 184, email: "kaylab99@gmail.com", phone: "android", crs: "P13", ghost: true },
+  { name: "Harold Pettigrew", city: "Dayton, OH", addr1: 299, email: "hpettigrew@aol.com", phone: "android", crs: "P14", ghost: true },
 ];
 
 /* ======================= Toolkit options =======================
@@ -250,7 +258,9 @@ const T_COLS = ["TransactionID", "isFraud", "TransactionDT", "TransactionAmt", "
   ...Array.from({ length: 14 }, (_, i) => "C" + (i + 1)), ...Array.from({ length: 15 }, (_, i) => "D" + (i + 1)),
   ...Array.from({ length: 9 }, (_, i) => "M" + (i + 1)), ...Array.from({ length: 339 }, (_, i) => "V" + (i + 1))];
 const ID_COLS = [...Array.from({ length: 38 }, (_, i) => "id_" + String(i + 1).padStart(2, "0")), "DeviceType", "DeviceInfo"];
-const GAME_COLS = ["session_id", "origin", "level_id", "round_no", "scheme_id", "campaign_id", "step", "verdict", "score", "top_reasons", "detector_version", "cover_note"];
+// crs_id, buyer_*: the identity the order claims, which the server checks with CRS (ml/online/crs.py)
+const GAME_COLS = ["session_id", "origin", "level_id", "round_no", "scheme_id", "campaign_id", "step", "verdict", "score", "top_reasons", "detector_version", "cover_note",
+  "crs_id", "buyer_email", "buyer_name", "buyer_is_holder"];
 const COLUMNS = [...T_COLS, ...ID_COLS, ...GAME_COLS];
 
 /* Turn the campaign into rows, one per order, in the IEEE-CIS column format.
@@ -322,6 +332,7 @@ function toRows(ctx) {
       DeviceType: f.dev.type, DeviceInfo: f.dev.info,
       session_id: session, origin: "player", level_id: level, round_no: round, scheme_id: scheme,
       campaign_id: campaign, step: step + 1, verdict: null, score: null, top_reasons: null, detector_version: null, cover_note: "",
+      crs_id: holder.crs || null, buyer_email: hijacked ? "" : f.emailAddr, buyer_name: (o.in && o.in.name) || holder.name, buyer_is_holder: hijacked,
     };
     past.push({ t, cardKey, emailKey, deviceKey: f.deviceKey, addressKey: f.addressKey, amount: f.amount });
     return row;
@@ -361,6 +372,7 @@ const TELL_LABELS = {
   amount_unusual: "way more than people spend here",
   amount_jump: "$1 tests, then a big buy",
   name_mismatch: "the name isn't the one on the card",
+  new_account: "a brand-new account",
   odd_domain: "an email from a weird website",
   copycat: "the same trick that fooled me before",
   velocity: "too many orders, too fast",
@@ -369,11 +381,12 @@ const TELL_LABELS = {
   device_mobile: "ordered from a phone",
   friday: "it's Friday",
   yahoo: "a Yahoo email",
+  identity: "CRS says that identity doesn't check out",
 };
 const TELL_BOX = {
-  email_risky: "buyer", email_mismatch: "buyer", yahoo: "buyer", new_card: "card", foreign_card: "card", velocity: "card",
+  email_risky: "buyer", email_mismatch: "buyer", yahoo: "buyer", new_account: "buyer", new_card: "card", foreign_card: "card", velocity: "card",
   ip_far: "device", proxy: "device", emulator: "device", new_device: "device", device_reuse: "device", device_mobile: "device",
-  far_ship: "ship", new_address: "ship", name_mismatch: "buyer", odd_domain: "buyer", gift_card: "cart", amount_unusual: "cart", amount_jump: "cart", night: "cart", friday: "cart",
+  far_ship: "ship", new_address: "ship", name_mismatch: "buyer", odd_domain: "buyer", identity: "card", gift_card: "cart", amount_unusual: "cart", amount_jump: "cart", night: "cart", friday: "cart",
 };
 
 const MEMOS = {
@@ -584,6 +597,7 @@ const CITIES = [
   ["Scottsdale", 33.49, -111.93], ["Tempe", 33.43, -111.94], ["Fort Worth", 32.76, -97.33], ["St. Petersburg", 27.77, -82.64, ["st petersburg", "st pete"]],
   ["Clearwater", 27.97, -82.8], ["Marietta", 33.95, -84.55], ["Dublin", 40.1, -83.11], ["Plano", 33.02, -96.7], ["Berkeley", 37.87, -122.27],
   ["Philadelphia", 39.95, -75.17, ["philly"]], ["Portland", 45.52, -122.68], ["Nashville", 36.16, -86.78], ["New Orleans", 29.95, -90.07],
+  ["Knoxville", 35.96, -83.92], ["Dayton", 39.76, -84.19], ["Tucson", 32.22, -110.97],
   ["Toronto", 43.65, -79.38, [], true], ["Mexico City", 19.43, -99.13, [], true], ["London", 51.5, -0.13, [], true], ["Paris", 48.86, 2.35, [], true],
   ["Rotterdam", 51.92, 4.48, [], true], ["Lagos", 6.52, 3.38, [], true], ["Moscow", 55.76, 37.62, [], true], ["Bucharest", 44.43, 26.1, [], true],
   ["Manila", 14.6, 120.98, [], true], ["Dubai", 25.2, 55.27, [], true], ["Hong Kong", 22.32, 114.17, [], true], ["Berlin", 52.52, 13.4, [], true],
@@ -688,7 +702,9 @@ function parseShip(text, item, holder, email) {
     return { id: "billing", dist1: 0, toYou: false, physical: true, label: "Their home, " + holder.city };
   }
   const city = findCity(t) || (/garage|cousin|friend|mule|locker|po box|next door|neighbo/.test(t) ? hc : null);
-  if (city && city.foreign) return { id: "reshipper", dist1: null, toYou: true, physical: true, abroad: true, label: String(text).trim() };
+  // abroad keeps its real distance: a blank dist1 is what most of the dataset's online orders have
+  if ((city && city.foreign) || (!city && /abroad|overseas|international/.test(t)))
+    return { id: "reshipper", dist1: (city && miles(city, hc)) || 4000, toYou: true, physical: true, abroad: true, label: String(text).trim() };
   const d = city ? miles(city, hc) : 25;
   return { id: "mule", dist1: Math.max(2, city === hc ? 4 + (t.length % 9) : d), toYou: true, physical: true, label: String(text).trim(), city: city ? city.name : null };
 }

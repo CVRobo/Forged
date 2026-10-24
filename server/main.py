@@ -9,9 +9,11 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from server import config
 
@@ -42,10 +44,23 @@ def _warm_detector() -> None:
         logger.warning("ML detector unavailable, submits will use rule-based tells", exc_info=True)
 
 
+def _warm_online() -> None:
+    """Load the online fraud model so the first /preview (the checkout gut-feeling, 4 s timeout)
+    isn't a ~4 s cold load. Runs in both stub and non-stub modes, since the online routes use it
+    regardless. Harmless when no model is trained yet — the game falls back to the scripted Gus."""
+    try:
+        from ml.online import model as online_model
+
+        logger.info("Online fraud model v%d warmed", online_model.load().version)
+    except Exception:
+        logger.info("Online fraud model not available yet; the game will use the scripted Gus", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not config.USE_STUBS:
         threading.Thread(target=_warm_detector, daemon=True).start()
+    threading.Thread(target=_warm_online, daemon=True).start()
     yield
 
 
@@ -77,4 +92,28 @@ else:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "stubs": config.USE_STUBS}
+    from server.services.online_data import model_status
+
+    # model: the live fraud-model version, why it's off if it is, and whether it can learn here
+    return {"status": "ok", "stubs": config.USE_STUBS, "model": model_status()}
+
+
+# The fraud-model report page (ml/online/report.html + report.js), served from the API the game
+# already talks to, so a "Model report" link in the game works however the game itself is served.
+_REPORT_DIR = Path(__file__).resolve().parents[1] / "ml" / "online"
+
+
+@app.get("/report")
+async def report_page():
+    f = _REPORT_DIR / "report.html"
+    if not f.exists():
+        raise HTTPException(status_code=404, detail="report not generated (run: python -m ml.online.briefing --html)")
+    return FileResponse(f, media_type="text/html")
+
+
+@app.get("/report.js")
+async def report_data():
+    f = _REPORT_DIR / "report.js"
+    if not f.exists():
+        raise HTTPException(status_code=404, detail="report.js not generated")
+    return FileResponse(f, media_type="application/javascript")

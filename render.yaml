@@ -1,0 +1,13 @@
+# Render Blueprint: the hosted game in one service, with the real fraud model behind it
+# (Dockerfile at the repo root; prototype/README.md, "Hosting it online").
+# The free plan sleeps after 15 idle minutes; waking takes about a minute and starts an empty room.
+services:
+  - type: web
+    name: forged-prototype
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    autoDeployTrigger: commit # every push to the Blueprint's branch redeploys
+    # optional environment variables, set in the dashboard: ANTHROPIC_API_KEY (Claude's lines), SENTRY_DSN

@@ -14,11 +14,13 @@ from fastapi import APIRouter, HTTPException
 
 from server import config
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
-from server.services.online_data import submit_online
+from server.services.online_data import model_memo, model_version, preview, submit_online
 from server.models.schemas import (
     CaseFile,
     MemoRule,
     OnlineRecord,
+    PreviewRequest,
+    PreviewResponse,
     RoundStartRequest,
     RoundStartResponse,
     SubmitRequest,
@@ -68,10 +70,14 @@ async def round_start(req: RoundStartRequest):
     # 2. Get current inspector version from Redis
     version = game_state.get_current_version()
 
-    # 3. Build memo rules (2 real + 1 decoy)
-    real_tells = [m["tell"] for m in level_data["memo"] if m["real"]]
-    decoy_text = await claude_service.generate_memo_decoy(level, real_tells)
-    memo = _pick_memo(level_data, decoy_text)
+    # 3. Build memo rules (2 real + 1 decoy): the fraud model's own while it's live (the online game)
+    model_rules = model_memo()
+    if model_rules is not None:
+        memo = [MemoRule(**m) for m in model_rules]
+    else:
+        real_tells = [m["tell"] for m in level_data["memo"] if m["real"]]
+        decoy_text = await claude_service.generate_memo_decoy(level, real_tells)
+        memo = _pick_memo(level_data, decoy_text)
 
     # 4. Resolve session — continue existing or create new
     if req.session_id and game_state.load_session(req.session_id) is not None:
@@ -97,7 +103,7 @@ async def round_start(req: RoundStartRequest):
         round_id=round_id,
         session_id=session_id,
         memo=memo,
-        inspector_version=version,
+        inspector_version=model_version() or version,  # the fraud model's, when it's live: the one judging
         case_file=CaseFile(
             company=level_data["company"],
             vendors=level_data["vendors"],
@@ -115,7 +121,7 @@ async def round_start(req: RoundStartRequest):
 @router.post("/submit", response_model=SubmitResponse)
 async def submit(req: SubmitRequest):
     if isinstance(req.record, OnlineRecord):  # the typed checkout
-        return submit_online(req.record, req.gus, req.round_id, req.player)
+        return submit_online(req.record, req.gus, req.round_id, req.player, req.perks)
     # 1. Load round state from Redis
     round_state = game_state.load_round(req.round_id)
     if round_state is None:
@@ -232,3 +238,9 @@ async def submit(req: SubmitRequest):
         payout=payout,
         new_version=new_version,
     )
+
+
+@router.post("/preview", response_model=PreviewResponse)
+async def preview_order(req: PreviewRequest):
+    """Gus's gut feeling while the player types the checkout (the fraud model's score, nothing saved)."""
+    return preview(req.record)

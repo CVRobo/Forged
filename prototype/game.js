@@ -128,10 +128,10 @@ const INSPECTOR_STAGES = [
 
 /* which blank of the plan to circle in the forensic replay, per tell */
 const TELL_REGION = {
-  email_risky: "you", email_mismatch: "you", yahoo: "you", name_mismatch: "you", odd_domain: "you", new_device: "device", device_reuse: "device",
+  email_risky: "you", email_mismatch: "you", yahoo: "you", name_mismatch: "you", odd_domain: "you", new_account: "you", new_device: "device", device_reuse: "device",
   emulator: "device", device_mobile: "device", ip_far: "where", proxy: "where", far_ship: "ship", new_address: "ship",
   gift_card: "cart", amount_unusual: "cart", copycat: "cart", amount_jump: "when", velocity: "when", night: "when", friday: "when",
-  new_card: "card", foreign_card: "card",
+  new_card: "card", foreign_card: "card", identity: "card",
 };
 const TELL_LABELS = O.TELL_LABELS;
 
@@ -365,7 +365,7 @@ function renderLevels() {
 function startRun(level) {
   Object.assign(S, { level, round: 0, money: 0, heat: 0, version: 1, perks: [], unlocks: [], dossier: false,
     shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [],
-    hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null, xp: loadXp(), rankUp: null });
+    hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null, xp: loadXp(), rankUp: null, lanBrain: false });
   Object.assign(S, loadBrain(level)); // Gus keeps what he learned from your past wins
   stage.dataset.level = level;
   $("#desk-mess").innerHTML = "";
@@ -391,7 +391,8 @@ function nextRound(retry = false) {
   // the stolen cards on your desk this round (a Mastermind picks one; everyone else gets the first)
   const wallet = again ? S.wallet : shuffle(O.HOLDERS.filter(h => !prev || h.name !== prev.name)).slice(0, 3).map(h => ({ ...h, card: pick(O.CARDS) }));
   Object.assign(S, { scheme: null, inv: null, input: null, step: null, sugg: {}, persuasion: 0, submitted: false,
-    printed: false, delivered: false, lastResult: null, rows: null, holder: again ? prev : wallet[0], wallet, retryTells: again ? again.tells : null });
+    printed: false, delivered: false, lastResult: null, rows: null, holder: again ? prev : wallet[0], wallet, retryTells: again ? again.tells : null,
+    gutApi: S.gutApi && S.gutApi.off ? S.gutApi : null });
   $("#tb-round").textContent = S.round;
   $("#invoice").innerHTML = ""; $("#invoice").className = "paper plan";
   $("#strip").innerHTML = "";
@@ -500,6 +501,11 @@ function startPlanning() {
   const L = LEVELS[S.level], r = rank(), h = S.holder, first = h.name.split(" ")[0].toLowerCase(), last = h.name.split(" ")[1].toLowerCase();
   // answers to the questions a rank doesn't ask yet: a plain look-alike shopper at home
   S.input = { item: "", price: "", name: "", email: `${first}.${last}${10 + h.addr1 % 80}@gmail.com`, device: "", where: "", ship: "", when: "", repeat: "", gap: "" };
+  // the questions a rank doesn't ask yet come as a quiet starter kit: their stolen login, on their kind of phone, from their city
+  const asks = id => steps().some(s => s.id === id);
+  if (!asks("you")) Object.assign(S.input, { name: h.name, email: h.email });
+  if (!asks("device")) S.input.device = h.phone === "iphone" ? "iPhone" : "Samsung Galaxy";
+  if (!asks("where")) S.input.where = h.city.split(",")[0];
   S.inv = { orders: [], cur: 0, coverEmail: "" };
   S.step = steps()[0].id;
   S.sugg = {}; S.touched = new Set();
@@ -552,15 +558,39 @@ function rebuild(full = true) {
 /* Gus's gut feeling: the same rules as the verdict, without the luck */
 function gutFeeling() {
   if (!S.inv.orders.length) return null;
+  // with a server, the fraud model's own score: worry 1 is exactly where the verdict says caught
+  const g = S.gutApi;
+  if (API && g && !g.off && g.worry != null) return g.worry < 1 ? 42 * g.worry : 42 + g.worry;
   const rows = previewRows();
   const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion,
     learned: S.learned, memory: S.memory, leniency: leniency(), preview: true });
   return Math.max(...r.results.map(x => x.suspicion ?? 0));
 }
 const MOODS = [[22, "😊", "Looks normal"], [32, "🙂", "Fine, I guess"], [42, "🤨", "Hmm…"], [1e9, "😠", "No way"]];
+/* POST /preview: ask the fraud model about the checkout as it is now. The last answer stays on
+ * screen until the new one arrives; without a model (503) the scripted gut feeling takes over */
+function askGus() {
+  if (!API || !S.inv || !S.inv.orders.length || (S.gutApi && S.gutApi.off)) return;
+  const key = JSON.stringify([S.input, S.holder.name, rank().n, S.round]);
+  if (S.gutApi && S.gutApi.key === key) return;
+  S.gutApi = { ...(S.gutApi || {}), key };
+  clearTimeout(S.gutT);
+  S.gutT = setTimeout(async () => {
+    const { verdict, ...rec } = record();
+    try {
+      const r = await api("POST", "/preview", { record: rec }, 4000);
+      if (!S.gutApi || S.gutApi.key !== key) return; // the player kept typing
+      S.gutApi.worry = +r.worry;
+      renderMood();
+    } catch (e) {
+      if (/HTTP 503/.test(e && e.message)) S.gutApi = { off: true }; // no model on the server
+    }
+  }, 250);
+}
 function renderMood() {
   const el = $("#gut");
   if (!el) return;
+  askGus();
   const s = gutFeeling(), m = s == null ? ["", "😶", "Waiting…"] : MOODS.find(x => s < x[0]);
   el.innerHTML = `<span class="gut-face">${m[1]}</span><span class="gut-txt"><small>Gus's gut feeling</small>${m[2]}</span>`;
 }
@@ -684,7 +714,20 @@ function loadBrain(level) {
   return { version: 1, learned: {}, memory: [] };
 }
 function saveBrain() {
+  if (S.lanBrain) return; // a LAN room's shared Gus never overwrites your own
   try { localStorage.setItem(BRAIN_KEY(S.level), JSON.stringify({ version: S.version, learned: S.learned, memory: S.memory.slice(-40) })); } catch (e) {}
+}
+/* LAN game (lan.js): everyone at the same shop plays one Gus. The room's brain replaces yours while
+ * you're in the room, your wins teach it (gus-learned, posted from showCorkboard), and leaving brings yours back. */
+function applyRoomBrain(b) {
+  if (API || +b.level !== S.level) return; // with a server, the server already shares Gus
+  Object.assign(S, { version: Math.max(1, +b.version || 1), learned: { ...(b.learned || {}) }, memory: (b.memory || []).slice(-40), lanBrain: true });
+  renderInspector(); updateHud();
+}
+function soloBrain() {
+  if (!S.lanBrain) return;
+  Object.assign(S, loadBrain(S.level), { lanBrain: false });
+  renderInspector(); updateHud();
 }
 const leniency = () => [0, 18, 10, 4, 0, 0][rank().n]; // a Rookie's first plans should mostly work
 
@@ -710,7 +753,7 @@ function updateHud() {
   updateDebug();
   const st = stageFor(S.version);
   post("hud", { level: S.level, money: S.money, heat: S.heat, version: S.version, round: S.round,
-    patches: S.patches, shame: S.shame,
+    patches: S.patches, shame: S.shame, lanBrain: !!S.lanBrain,
     inspector: LEVELS[S.level].inspector.name, emoji: st.emoji, clerk: LEVELS[S.level].clerk });
 }
 
@@ -898,6 +941,8 @@ window.addEventListener("message", e => {
   }
   if (m.type === "dossier") openDossier();
   if (m.type === "tutorial-3d-done") tutWorldEvent(m.step);
+  if (m.type === "gus-brain") applyRoomBrain(m); // LAN game: the room's Gus for your shop
+  if (m.type === "gus-solo") soloBrain();       // left the LAN room: your own Gus again
 });
 
 /* ======================= Inspection (MOCK verdict) ======================= */
@@ -943,8 +988,10 @@ async function judge() {
   if (!API || !S.roundId) return mock;
   try {
     const { verdict, ...rec } = record(); // the verdict is what we're asking for
-    // the server keeps the rows; until it has its own model it answers with the browser's Gus
-    const gus = { caught: mock.caught, tells: mock.tells.map(t => [t[0], +(+t[1]).toFixed(2)]), payout: mock.payout };
+    // the server's fraud model judges the rows (it falls back to the browser's Gus without one)
+    const mult = S.perks.includes("night") ? 2 : 1; // what each order pays you if it gets through
+    const values = S.inv.orders.map(o => { const f = factsOf(o); return f.ship.toYou ? +(f.amount * mult).toFixed(2) : 0; });
+    const gus = { caught: mock.caught, tells: mock.tells.map(t => [t[0], +(+t[1]).toFixed(2)]), payout: mock.payout, values };
     const r = await api("POST", "/submit", { round_id: S.roundId, player: playerName(), record: rec, perks: S.perks, gus }, 10000);
     return adaptVerdict(r, mock);
   } catch (e) { offline(e); return mock; }
@@ -1042,12 +1089,18 @@ function showCorkboard() {
   if (!r.caught && !forgotten) {
     if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
     else S.version++;
+    const taught = { tells: {}, memory: [] }; // what this win taught him, for a LAN room's shared Gus
     (r.results || []).forEach((x, i) => {
       if (x.declined || !S.rows[i]) return;
-      S.memory.push(O.signature(S.rows[i])); // he'll recognize this trick
-      x.tells.slice(0, 2).forEach(t => { S.learned[t[0]] = (S.learned[t[0]] || 0) + 1; if (!S.studied.includes(t[0])) S.studied.push(t[0]); });
+      const sig = O.signature(S.rows[i]);
+      S.memory.push(sig); taught.memory.push(sig); // he'll recognize this trick
+      x.tells.slice(0, 2).forEach(t => {
+        S.learned[t[0]] = (S.learned[t[0]] || 0) + 1; taught.tells[t[0]] = (taught.tells[t[0]] || 0) + 1;
+        if (!S.studied.includes(t[0])) S.studied.push(t[0]);
+      });
     });
     saveBrain();
+    if (r.newVersion == null) post("gus-learned", { level: S.level, version: S.version, ...taught });
   }
   renderInspector(); updateHud();
   if (S.version > oldV) {
@@ -1467,6 +1520,8 @@ function downloadCsv() {
   toast(`⬇ ${all.length} rows exported`, "good");
 }
 if ($("#btn-csv")) $("#btn-csv").onclick = () => { sfx("click"); downloadCsv(); };
+// the fraud-model report page, served by the API (so it works however the game is served)
+if ($("#btn-report") && API) { $("#btn-report").hidden = false; $("#btn-report").onclick = () => { sfx("click"); window.open(API + "/report", "_blank"); }; }
 window.forgedRows = { all: storedRows, csv: downloadCsv, clear: () => { try { localStorage.removeItem(ROWS_KEY); } catch (e) {} } };
 
 const paintDebugKey = () => { $("#debug-key").textContent = ForgedKeys.label("detector"); };

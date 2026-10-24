@@ -23,6 +23,10 @@ const CHOICES = {
   nose: [["round", "Round"], ["big", "Big"]],
 };
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// in a LAN or online room (lan.js) everyone wears their own shirt colour: { mine, taken: { colour: name } } or null
+const room = () => (window.forgedLan && forgedLan.shirts && forgedLan.shirts()) || null;
+const freeShirts = () => { const r = room(); return r ? SHIRTS.filter(c => !r.taken[c]) : SHIRTS; };
 
 let look = FW.getLook(), saved = null, onDone = null;
 
@@ -45,16 +49,20 @@ const stepper = (key, label) => {
   return `<div class="cz-row"><span class="cz-label">${label}</span>
     <div class="cz-step"><button data-step="${key}" data-dir="-1" aria-label="Previous ${label}">◀</button><span>${cur[1]}</span><button data-step="${key}" data-dir="1" aria-label="Next ${label}">▶</button></div></div>`;
 };
-const swatches = (key, label, colors, allowNone) => `<div class="cz-row"><span class="cz-label">${label}</span><div class="cz-sw">
+const swatches = (key, label, colors, allowNone) => {
+  const taken = key === "shirt" && room() ? room().taken : {}; // another player's shirt colour can't be picked
+  return `<div class="cz-row"><span class="cz-label">${label}</span><div class="cz-sw">
   ${allowNone ? `<button class="cz-none ${!look[key] ? "on" : ""}" data-col="${key}" data-v="" title="None">✕</button>` : ""}
-  ${colors.map(c => `<button class="${look[key] === c ? "on" : ""}" style="background:${c}" data-col="${key}" data-v="${c}" title="${c}"></button>`).join("")}</div></div>`;
+  ${colors.map(c => taken[c] ? `<button class="taken" style="background:${c}" disabled title="${esc(taken[c])} wears this"></button>`
+    : `<button class="${look[key] === c ? "on" : ""}" style="background:${c}" data-col="${key}" data-v="${c}" title="${c}"></button>`).join("")}</div></div>`;
+};
 const toggle = (key, label) => `<label class="cz-tog"><input type="checkbox" data-tog="${key}" ${look[key] ? "checked" : ""}> ${label}</label>`;
 
 function renderOpts() {
   $("#cz-opts").innerHTML = `
     <div class="cz-group"><div class="cz-sub">Hair</div>${stepper("hair", "Style")}${swatches("hairColor", "Colour", HAIR_COLORS)}</div>
     <div class="cz-group"><div class="cz-sub">Face</div>${swatches("skin", "Skin", SKINS)}${stepper("brows", "Eyebrows")}${stepper("mouth", "Mouth")}${stepper("nose", "Nose")}</div>
-    <div class="cz-group"><div class="cz-sub">Clothes</div>${swatches("shirt", "Shirt", SHIRTS)}${swatches("pants", "Trousers", PANTS)}${swatches("tie", "Tie", TIES, true)}</div>
+    <div class="cz-group"><div class="cz-sub">Clothes</div>${swatches("shirt", "Shirt", SHIRTS)}${room() ? `<p class="cz-note">Everyone here wears their own shirt colour: faded ones are taken.</p>` : ""}${swatches("pants", "Trousers", PANTS)}${swatches("tie", "Tie", TIES, true)}</div>
     <div class="cz-group"><div class="cz-sub">Accessories</div><div class="cz-togs">${toggle("glasses", "Glasses")}${toggle("earrings", "Earrings")}${toggle("mustache", "Mustache")}</div></div>`;
 }
 function apply() { FW.restyleChar(preview, look); renderOpts(); }
@@ -66,11 +74,11 @@ root.addEventListener("click", e => {
     look[b.dataset.step] = opts[(i + +b.dataset.dir + opts.length) % opts.length][0]; apply();
   } else if (b.dataset.col) { look[b.dataset.col] = b.dataset.v || null; apply(); }
   else if (b.dataset.cz === "random") {
-    look = { ...look, skin: pick(SKINS), hairColor: pick(HAIR_COLORS), shirt: pick(SHIRTS), pants: pick(PANTS), tie: Math.random() < .35 ? pick(TIES) : null,
+    look = { ...look, skin: pick(SKINS), hairColor: pick(HAIR_COLORS), shirt: pick(freeShirts()), pants: pick(PANTS), tie: Math.random() < .35 ? pick(TIES) : null,
       hair: pick(CHOICES.hair)[0], brows: pick(CHOICES.brows)[0], mouth: pick(CHOICES.mouth)[0], nose: pick(CHOICES.nose)[0],
       glasses: Math.random() < .3, earrings: Math.random() < .25, mustache: Math.random() < .2 };
     apply();
-  } else if (b.dataset.cz === "reset") { look = { ...FW.DEFAULT_LOOK }; apply(); }
+  } else if (b.dataset.cz === "reset") { look = { ...FW.DEFAULT_LOOK, ...(room() ? { shirt: room().mine } : {}) }; apply(); }
   else if (b.dataset.cz === "cancel") close(false);
   else if (b.dataset.cz === "done") close(true);
 });
@@ -111,6 +119,7 @@ function frame(now) {
 /* ---------------- open / close ---------------- */
 function open(done) {
   saved = FW.getLook(); look = { ...saved }; onDone = done || null;
+  const r = room(); if (r) look.shirt = r.mine; // in a room, start from the shirt you're actually wearing there
   FW.restyleChar(preview, look); renderOpts();
   root.classList.add("show");
   if (document.pointerLockElement) document.exitPointerLock();

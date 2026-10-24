@@ -1061,7 +1061,8 @@ const bossPlate = signPlane("BOSS", null, .8, .3, "#2b1d14"); bossPlate.rotation
 const boss = makeChar({ shirt: "#1b1b1b", pants: "#111", tie: "#e0352b", look: { hair: "combover", hairColor: "#555", wide: true, brows: "angry", mouth: "frown", mustache: true, nose: "big" }, name: "THE BOSS", tagColor: "#e0352b", scale: 1.12 });
 const BOSS_PATH = [[-12.2, -5], [-10.4, -5], [-10.4, 5.4], [-5.5, 5.4], [-5.5, -5.6], [-10.4, -5.6], [-12.2, -5]];
 boss.g.position.set(-12.2, 0, -5); boss.g.visible = false;
-const B = { state: "wait", t: rand(14, 22), i: 0, warned: false, chatted: false, sus: 0, busted: false, pauseUntil: 0 };
+const B = { state: "wait", t: rand(14, 22), i: 0, warned: false, chatted: false, sus: 0, busted: false, pauseUntil: 0,
+  remote: false, faceAt: null, bustedAt: 0 }; // LAN game (lan.js): remote = another player's browser walks him
 // vision cone on the floor (Hitman-style): get caught in it carrying the envelope and he stops you
 /* How hard the office is, per level. Level 1 (Sunny Diner) keeps the original layout;
  * level 2 (St. Mercy) has a glass-fronted boss office he watches the floor through from his
@@ -1655,16 +1656,20 @@ function startPrinting() {
   }, 2600);
 }
 
+// a verdict goes on the corkboard and the DETECTOR LIVE TV (lan.js pins the other players' too)
+function pinVerdict(m) {
+  pins.push({ x: 60 + (pins.length % 4) * 230, y: 130 + Math.floor(pins.length / 4 % 3) * 160, r: rand(-.12, .12), scheme: m.scheme, vendor: m.vendor, caught: m.caught });
+  redraw(corkTex);
+  tvHistory.push({ caught: m.caught, version: tvVersion }); redraw(tvTex);
+}
 function onVerdict(m) {
   const cls = m.caught ? "flagged" : "paid";
   say(inspector, `<span class="stamp">${m.caught ? "CAUGHT" : "APPROVED"}</span>"${m.line}"`, 6000, cls);
-  pins.push({ x: 60 + (pins.length % 4) * 230, y: 130 + Math.floor(pins.length / 4 % 3) * 160, r: rand(-.12, .12), scheme: m.scheme, vendor: m.vendor, caught: m.caught });
-  redraw(corkTex);
+  pinVerdict(m);
   if (m.caught) { if (!CINE.active) P.shake = .5; wtoast("CAUGHT: Gus pinned your trick to the corkboard", "bad"); }
   else wtoast(`GOT AWAY +${money(m.payout)}`, "good");
   scanSlot.material.emissive.set(m.caught ? "#e0352b" : "#7cff9a"); scanSlot.material.emissiveIntensity = 1.2;
   setTimeout(() => { scanSlot.material.emissive.set("#7cff9a"); scanSlot.material.emissiveIntensity = .2; }, 3000);
-  tvHistory.push({ caught: m.caught, version: tvVersion }); redraw(tvTex);
   messUpDesk();
   if (CINE.active) scanVerdict(m);
   else { P.stampAt = performance.now(); setTimeout(() => sfx(m.caught ? "buzz" : "cash"), 350); }
@@ -2105,11 +2110,13 @@ function updateBoss(dt, now) {
   cone.visible = B.state !== "drill";
   if (B.state === "drill") return; // fire drill: features.js walks him to the assembly point and back
   if (B.state === "wait") {
-    B.t -= dt;
-    if (B.t <= 0 && !P.tutorialOn) {
-      B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door");
-      cone.geometry = PATROL_CONE; cone.position.y = .04;
-      return;
+    if (!B.remote) { // LAN game: the owner's boss decides when he heads out (lan.js)
+      B.t -= dt;
+      if (B.t <= 0 && !P.tutorialOn) {
+        B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door");
+        cone.geometry = PATROL_CONE; cone.position.y = .04;
+        return;
+      }
     }
     // level 2: from his desk he watches the floor through the glass (boss-office.js seats and swivels him)
     if (LV.glassOffice && boss.g.visible && P.started) {
@@ -2118,24 +2125,31 @@ function updateBoss(dt, now) {
     } else if (B.sus) { B.sus = 0; setSus(0); }
     return;
   }
-  const [tx, tz] = BOSS_PATH[B.i];
   const pos = boss.g.position;
-  const dx = tx - pos.x, dz = tz - pos.z, d = Math.hypot(dx, dz);
-  const sp = 1.7;
-  if (now < B.pauseUntil) {
-    // stopped to interrogate you: face the player
-    boss.g.rotation.y = Math.atan2(player.g.position.x - pos.x, player.g.position.z - pos.z);
-    animWalk(boss, dt, 0);
-    return;
-  }
-  if (d < .05) {
-    B.i++;
-    if (B.i >= BOSS_PATH.length) { B.state = "wait"; B.t = rand(16, 32); boss.g.visible = false; animWalk(boss, dt, 0); return; }
+  if (B.remote) {
+    // LAN game: lan.js moves him where the owner's boss is; here we only check what he sees of you
+    if (now < B.pauseUntil) return;
   } else {
-    pos.x += dx / d * Math.min(d, sp * dt); pos.z += dz / d * Math.min(d, sp * dt);
-    boss.g.rotation.y = Math.atan2(dx, dz);
+    const [tx, tz] = BOSS_PATH[B.i];
+    const dx = tx - pos.x, dz = tz - pos.z, d = Math.hypot(dx, dz);
+    const sp = 1.7;
+    if (now < B.pauseUntil) {
+      // stopped to interrogate you (in a LAN game, whoever he caught: B.faceAt)
+      const f = B.faceAt || player.g.position;
+      boss.g.rotation.y = Math.atan2(f.x - pos.x, f.z - pos.z);
+      animWalk(boss, dt, 0);
+      return;
+    }
+    B.faceAt = null;
+    if (d < .05) {
+      B.i++;
+      if (B.i >= BOSS_PATH.length) { B.state = "wait"; B.t = rand(16, 32); boss.g.visible = false; animWalk(boss, dt, 0); return; }
+    } else {
+      pos.x += dx / d * Math.min(d, sp * dt); pos.z += dz / d * Math.min(d, sp * dt);
+      boss.g.rotation.y = Math.atan2(dx, dz);
+    }
+    animWalk(boss, dt, sp);
   }
-  animWalk(boss, dt, sp);
   // the boss looks over your shoulder while you forge
   const behindYou = Math.hypot(pos.x - CHAIR.x, pos.z - (CHAIR.z + 1.5)) < 3.2;
   if (behindYou && P.seated && P.phase === "forging" && !B.warned) {
@@ -2171,7 +2185,7 @@ function bossWatch(dt, now, pos, facing, R, half, walking, rate = LV.susRate) {
     if (B.sus >= 1) {
       B.sus = 0;
       if (youSeen) {
-        B.busted = true;
+        B.busted = true; B.bustedAt = now; // lan.js tells the owner, so he stops on everyone's screen
         if (walking) { B.pauseUntil = now + 2800; P.frozenUntil = now + 2800; }
         say(boss, "What's in the envelope?! …Fine. Get back to work.", 2800);
         wtoast("Spotted by the boss with the envelope! +10 heat", "bad");
@@ -2367,13 +2381,19 @@ function buildViewArm(sx) {
 const viewHands = { right: buildViewArm(1), left: buildViewArm(-1) };
 
 // apply (and save) a new look for the player: the 3D body and the first-person arms
+// what you wear on screen, first-person arm included, without changing your saved look
+// (lan.js dresses you in your room colour this way)
+function dressPlayer(look) {
+  const L = Object.assign({}, DEFAULT_LOOK, look);
+  restyleChar(player, L);
+  for (const v of Object.values(viewHands)) {
+    v.mats.shirt.color.set(L.shirt); v.mats.skin.color.set(L.skin);
+    v.mats.trim.color.set(L.tie ? "#ffffff" : shade(L.shirt, .12));
+  }
+}
 function setPlayerLook(look, save = true) {
   playerLook = Object.assign({}, DEFAULT_LOOK, look);
-  restyleChar(player, playerLook);
-  for (const v of Object.values(viewHands)) {
-    v.mats.shirt.color.set(playerLook.shirt); v.mats.skin.color.set(playerLook.skin);
-    v.mats.trim.color.set(playerLook.tie ? "#ffffff" : shade(playerLook.shirt, .12));
-  }
+  dressPlayer(playerLook);
   if (save) { try { localStorage.setItem(LOOK_KEY, JSON.stringify(playerLook)); } catch (e) { /* kept for this visit */ } }
 }
 
@@ -2482,7 +2502,8 @@ const UPDATERS = [], MSG_HOOKS = [];
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  if (P.paused) { renderer.render(scene, camera); renderViewArms(); requestAnimationFrame(loop); return; } // Game Menu open: freeze
+  // Game Menu open: freeze (in a LAN game the office is shared, so it keeps going and only you stop)
+  if (P.paused && !P.live) { renderer.render(scene, camera); renderViewArms(); requestAnimationFrame(loop); return; }
   updatePlayer(dt, now);
   updateBoss(dt, now);
   // idle life: coworkers type, inspector bobs, printer blinks
@@ -2531,16 +2552,16 @@ window.FW = {
   THREE, scene, camera, renderer,
   // building blocks
   M, mats, box, cyl, sphere, outline, collide, walls, EXIT_X, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
-  makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses, restyleChar,
+  makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses, restyleChar, setTag,
   // the player's look (customize.js): getLook() → current look, setLook(look) applies and saves it
-  getLook: () => ({ ...playerLook }), setLook: setPlayerLook, DEFAULT_LOOK,
+  getLook: () => ({ ...playerLook }), setLook: setPlayerLook, dressPlayer, DEFAULT_LOOK,
   // state
   P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,
   npcs: { kevin, dana, priya, marcus, inspector, clerk, boss },
   // desks: DESKS[i] = { n, x, z, npc, player }; assignDesks({ 1: "Ana", 3: "Ben" }, myDeskNumber); onDeskChange(fn)
   DESKS, assignDesks, setMyDesk, onDeskChange: fn => deskChangeHooks.push(fn),
   // actions and effects
-  say, wtoast, sfx, toOS, setPhase, sit, stand, grab, deliver, near, flashVignette, burstConfetti,
+  say, wtoast, sfx, toOS, setPhase, sit, stand, grab, deliver, near, flashVignette, burstConfetti, pinVerdict,
   rand, pick, clamp, money,
   // hooks
   onUpdate: fn => UPDATERS.push(fn),
