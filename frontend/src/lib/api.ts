@@ -78,6 +78,13 @@ export interface ClerkResponse {
   persuasion_score: number;
 }
 
+export interface ClerkVoiceResponse {
+  transcript: string;
+  reply: string;
+  persuasion_score: number;
+  reply_audio_b64: string | null;
+}
+
 export interface SubmitResponse {
   verdict: "PAID" | "FLAGGED";
   top_tells: Tell[];
@@ -159,6 +166,17 @@ export function clerkChat(
   text: string,
 ): Promise<ClerkResponse> {
   return post("/clerk", { round_id: roundId, text });
+}
+
+/**
+ * Send a voice message to the clerk NPC (Deepgram STT → clerk logic → Deepgram TTS).
+ * The audio should be base64-encoded webm/opus from the browser MediaRecorder API.
+ */
+export function clerkVoiceChat(
+  roundId: string,
+  audioB64: string,
+): Promise<ClerkVoiceResponse> {
+  return post("/clerk/voice", { round_id: roundId, audio_b64: audioB64 });
 }
 
 /** Submit a forged invoice. Replaces computeTells() + submit() in game.js. */

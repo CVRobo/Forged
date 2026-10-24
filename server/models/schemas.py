@@ -92,6 +92,20 @@ class ClerkResponse(BaseModel):
     persuasion_score: int = Field(ge=0, le=100)
 
 
+class ClerkVoiceRequest(BaseModel):
+    round_id: str
+    audio_b64: str = Field(description="Base64-encoded audio (webm/opus from browser MediaRecorder)")
+
+
+class ClerkVoiceResponse(BaseModel):
+    transcript: str = Field(description="What Deepgram heard the player say")
+    reply: str
+    persuasion_score: int = Field(ge=0, le=100)
+    reply_audio_b64: str | None = Field(
+        default=None, description="Base64-encoded audio of the clerk's reply (Deepgram TTS)"
+    )
+
+
 # --- Submit ---
 
 

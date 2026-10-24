@@ -72,6 +72,33 @@ Send a message to the clerk NPC.
 }
 ```
 
+### POST /clerk/voice
+
+Send a voice message to the clerk NPC. Uses Deepgram STT to transcribe, runs through clerk logic, then Deepgram TTS for the reply audio.
+
+**Request:**
+```json
+{
+  "round_id": "uuid-string",
+  "audio_b64": "base64-encoded-webm-opus-audio"
+}
+```
+
+**Response:**
+```json
+{
+  "transcript": "Hey, quick question about this invoice...",
+  "reply": "Oh sure, lemme look at that after lunch.",
+  "persuasion_score": 62,
+  "reply_audio_b64": "base64-encoded-mp3-audio-or-null"
+}
+```
+
+Notes:
+- Audio from browser should be webm/opus (MediaRecorder default)
+- `reply_audio_b64` is mp3, or null if TTS is unavailable / stub mode
+- Falls back to text-only in stub mode (transcript is canned, no audio returned)
+
 ### POST /submit
 
 Submit a forged invoice for inspection.

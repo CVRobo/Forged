@@ -17,6 +17,8 @@ from server.models.schemas import (
     CaseFile,
     ClerkRequest,
     ClerkResponse,
+    ClerkVoiceRequest,
+    ClerkVoiceResponse,
     LeaderboardEntry,
     MemoRule,
     PatchNote,
@@ -254,27 +256,6 @@ def _compute_stub_tells(record) -> list[Tell]:
     return tells
 
 
-def _score_clerk(text: str, level: int = 1) -> tuple[int, str, str]:
-    """Score clerk text and return (score, tier, reply). Reusable by voice endpoint."""
-    clerk = STUB_LEVELS.get(level, STUB_LEVELS[1])["clerk"]
-    keywords = clerk["keywords"]
-    text_lower = text.lower()
-
-    hits = sum(1 for k in keywords if k in text_lower)
-    score = 30 + hits * 25 - max(0, len(text) - 90) * 0.5 + random.randint(-10, 10)
-    score = max(0, min(100, int(score)))
-
-    if score > 60:
-        tier = "good"
-    elif score > 35:
-        tier = "meh"
-    else:
-        tier = "bad"
-
-    reply = random.choice(clerk["replies"][tier])
-    return score, tier, reply
-
-
 # ---------------------------------------------------------------------------
 # Stub routes
 # ---------------------------------------------------------------------------
@@ -300,8 +281,55 @@ async def stub_round_start(req: RoundStartRequest):
 
 @router.post("/clerk", response_model=ClerkResponse)
 async def stub_clerk(req: ClerkRequest):
-    score, _tier, reply = _score_clerk(req.text)
-    return ClerkResponse(reply=reply, persuasion_score=score)
+    # Default to level 1 clerk (we don't track round->level in stubs)
+    clerk = STUB_LEVELS[1]["clerk"]
+    keywords = clerk["keywords"]
+    text_lower = req.text.lower()
+
+    hits = sum(1 for k in keywords if k in text_lower)
+    score = 30 + hits * 25 - max(0, len(req.text) - 90) * 0.5 + random.randint(-10, 10)
+    score = max(0, min(100, int(score)))
+
+    if score > 60:
+        tier = "good"
+    elif score > 35:
+        tier = "meh"
+    else:
+        tier = "bad"
+
+    return ClerkResponse(
+        reply=random.choice(clerk["replies"][tier]),
+        persuasion_score=score,
+    )
+
+
+@router.post("/clerk/voice", response_model=ClerkVoiceResponse)
+async def stub_clerk_voice(req: ClerkVoiceRequest):
+    """Stub voice clerk: ignores audio, uses a canned transcript."""
+    fake_transcript = "Hey, quick question, can you push this through before lunch?"
+
+    # Reuse the text-based clerk scoring logic
+    clerk = STUB_LEVELS[1]["clerk"]
+    keywords = clerk["keywords"]
+    text_lower = fake_transcript.lower()
+
+    hits = sum(1 for k in keywords if k in text_lower)
+    score = 30 + hits * 25 - max(0, len(fake_transcript) - 90) * 0.5 + random.randint(-10, 10)
+    score = max(0, min(100, int(score)))
+
+    if score > 60:
+        tier = "good"
+    elif score > 35:
+        tier = "meh"
+    else:
+        tier = "bad"
+
+    return ClerkVoiceResponse(
+        transcript=fake_transcript,
+        reply=random.choice(clerk["replies"][tier]),
+        persuasion_score=score,
+        reply_audio_b64=None,  # No audio in stub mode
+    )
 
 
 @router.post("/submit", response_model=SubmitResponse)
