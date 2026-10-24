@@ -1,23 +1,30 @@
-"""Typed-checkout submissions: keep the IEEE-CIS rows and answer with the browser's Gus.
+"""Typed-checkout submissions: ML prediction with browser-Gus fallback.
 
 Every order a player sends becomes one row in server/data/ieee_rows.csv (or FORGED_DATA_DIR),
-with the dataset's columns plus the game's own (session_id, verdict, score, ...). The
-verdict comes from the scripted Gus in the browser for now, so the game plays the same
-online and offline; a model trained on these rows can replace it here later.
+with the dataset's columns plus the game's own (session_id, verdict, score, ...).
+
+The server tries its own ML detector first (ml.online). If no model is loaded, it falls
+back to the browser's scripted Gus verdict. Player wins are buffered for retrain.
 """
 
 from __future__ import annotations
 
 import csv
+import logging
 import os
 import threading
 from pathlib import Path
 
 from server.models.schemas import OnlineRecord, GusVerdict, SubmitResponse, Tell
 
+logger = logging.getLogger(__name__)
+
 DATA_DIR = Path(os.environ.get("FORGED_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
 ROWS_CSV = DATA_DIR / "ieee_rows.csv"
 _lock = threading.Lock()
+
+# How many player wins before we attempt a retrain
+RETRAIN_THRESHOLD = 5
 
 # the same columns, in the same order, as the game's CSV export (prototype/orders.js COLUMNS)
 COLUMNS = [
@@ -60,13 +67,109 @@ def save_rows(record: OnlineRecord, verdict: GusVerdict | None, round_id: str, p
 
 def submit_online(record: OnlineRecord, verdict: GusVerdict | None, round_id: str, player: str | None) -> SubmitResponse:
     save_rows(record, verdict, round_id, player)
+
+    # Try ML prediction on the order rows
+    ml_result = _try_ml_predict(record, verdict)
+    if ml_result is not None:
+        return ml_result
+
+    # Fall back: echo browser's scripted Gus
+    return _echo_browser_verdict(verdict)
+
+
+def _try_ml_predict(record: OnlineRecord, browser_verdict: GusVerdict | None) -> SubmitResponse | None:
+    """Run the ML detector on the record's rows. Returns None if no model loaded."""
+    try:
+        from ml.online import predict as ml_predict
+    except Exception:
+        return None
+
+    if not record.rows:
+        return None
+
+    # Score each row, aggregate: caught if ANY row is flagged
+    all_tells: list[Tell] = []
+    worst_score = 0.0
+    worst_suspicion = 0.0
+    caught = False
+    version = 0
+
+    for row_dict in record.rows:
+        result = ml_predict(row_dict)
+        if result is None:
+            return None  # no model loaded
+        version = result["version"]
+        if result["score"] > worst_score:
+            worst_score = result["score"]
+            worst_suspicion = result["suspicion"]
+        if result["flagged"]:
+            caught = True
+        all_tells.extend(result["tells"])
+
+    # Deduplicate tells by tell_type, keeping the strongest
+    tell_map: dict[str, Tell] = {}
+    for t in all_tells:
+        if t.tell_type not in tell_map or t.strength > tell_map[t.tell_type].strength:
+            tell_map[t.tell_type] = t
+    top_tells = sorted(tell_map.values(), key=lambda t: -t.strength)[:3]
+
+    payout = 0
+    if not caught:
+        payout = int(browser_verdict.payout if browser_verdict else 0)
+        # Buffer the winning rows for retrain
+        _buffer_winning_rows(record.rows)
+        new_version = _maybe_retrain()
+        if new_version:
+            version = new_version
+
+    return SubmitResponse(
+        verdict="DECLINED" if caught else "APPROVED",
+        top_tells=top_tells,
+        inspector_line="",
+        payout=payout,
+        new_version=version,
+    )
+
+
+def _buffer_winning_rows(rows: list[dict]) -> None:
+    """Append winning orders to the retrain buffer."""
+    try:
+        from ml.online.store import append_to_buffer
+        append_to_buffer([dict(r) for r in rows])
+    except Exception:
+        logger.warning("Failed to buffer winning rows", exc_info=True)
+
+
+def _maybe_retrain() -> int | None:
+    """If the buffer has enough wins, attempt a retrain. Returns new version or None."""
+    try:
+        from ml.online.store import load_buffer, drain_buffer
+        from ml.online import retrain
+
+        buf = load_buffer()
+        if len(buf) < RETRAIN_THRESHOLD:
+            return None
+
+        fraud_rows = drain_buffer()
+        new_version = retrain(fraud_rows)
+        if new_version:
+            logger.info("Online detector retrained to v%d from %d player wins",
+                        new_version, len(fraud_rows))
+        return new_version
+    except Exception:
+        logger.warning("Retrain attempt failed", exc_info=True)
+        return None
+
+
+def _echo_browser_verdict(verdict: GusVerdict | None) -> SubmitResponse:
+    """Fall back to the browser's scripted Gus verdict."""
     caught = bool(verdict and verdict.caught)
     tells = [Tell(tell_type=str(t[0]), strength=float(t[1]) if len(t) > 1 else 1.0)
              for t in (verdict.tells if verdict else []) if t]
     return SubmitResponse(
         verdict="DECLINED" if caught else "APPROVED",
         top_tells=tells[:3],
-        inspector_line="",  # the game writes Gus's line from the top tell
+        inspector_line="",
         payout=0 if caught else int(verdict.payout if verdict else 0),
-        new_version=0,  # Gus's version lives in the browser (he learns from wins there)
+        new_version=0,
     )

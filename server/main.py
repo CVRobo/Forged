@@ -42,10 +42,21 @@ def _warm_detector() -> None:
         logger.warning("ML detector unavailable, submits will use rule-based tells", exc_info=True)
 
 
+def _warm_online_detector() -> None:
+    """Load (or bootstrap) the online fraud detector for typed-checkout mode."""
+    try:
+        from ml.online import warm
+
+        logger.info("Online detector v%d ready", warm())
+    except Exception:
+        logger.warning("Online detector unavailable, typed checkouts will use browser Gus", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not config.USE_STUBS:
         threading.Thread(target=_warm_detector, daemon=True).start()
+        threading.Thread(target=_warm_online_detector, daemon=True).start()
     yield
 
 
