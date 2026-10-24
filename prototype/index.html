@@ -5,228 +5,58 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forged</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Caveat:wght@600&family=Space+Mono:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="world.css">
 </head>
 <body>
-<div id="viewport">
-<div id="stage" data-level="1">
+<div id="world"></div>
 
-  <!-- ================= TITLE ================= -->
-  <section id="screen-title" class="screen active">
-    <div class="title-mess" aria-hidden="true">
-      <div class="prop-ring" style="left:180px;top:140px"></div>
-      <div class="prop-ring" style="left:1290px;top:600px"></div>
-      <div class="prop-sticky" style="left:1240px;top:150px;transform:rotate(6deg)">Don't<br>get<br>caught :)</div>
-      <div class="prop-paper" style="left:140px;top:560px;transform:rotate(-9deg)">INVOICE #0042<br>━━━━━━━━<br>Dave's Discount Anvils<br>$1,250.00</div>
-    </div>
-    <div class="title-card">
-      <div class="logo">FORGED</div>
-      <div class="logo-stamp">PAID</div>
-      <p class="tagline">Sneak fake invoices past an inspector who learns from every trick you pull.</p>
-      <div class="title-buttons">
-        <button class="btn btn-big" data-go="levels">▶ Play Solo</button>
-        <button class="btn btn-big btn-ghost" disabled>⚔ Duel <span class="tag">soon</span></button>
-        <button class="btn btn-ghost" data-open="howto">How to play</button>
-      </div>
-      <p class="fineprint">Fictional companies. Cartoon paperwork. A game about outsmarting a detector, not a how-to.</p>
-    </div>
-  </section>
-
-  <!-- ================= LEVEL SELECT ================= -->
-  <section id="screen-levels" class="screen">
-    <div class="screen-head">
-      <button class="btn btn-ghost" data-go="title">← Back</button>
-      <h1>Choose a client</h1>
-      <span></span>
-    </div>
-    <div id="level-cards" class="level-cards"></div>
-  </section>
-
-  <!-- ================= DESK ================= -->
-  <section id="screen-desk" class="screen">
-    <div id="desk-mess" aria-hidden="true"></div>
-
-    <!-- top bar -->
-    <header id="topbar">
-      <div class="tb-logo">FORGED</div>
-      <div class="tb-chip"><span class="tb-label">Client</span><span id="tb-level">Sunny Diner Supply</span></div>
-      <div class="tb-chip"><span class="tb-label">Round</span><span id="tb-round">1</span></div>
-      <div class="tb-heat">
-        <span class="tb-label">Heat 🔥</span>
-        <div class="heat-track"><div id="heat-fill"></div></div>
-        <span id="heat-num">0%</span>
-      </div>
-      <div class="tb-chip tb-perks" id="tb-perks" title="Active perks"></div>
-      <div class="tb-money"><span class="tb-label">Siphoned</span><span id="tb-money">$0</span></div>
-    </header>
-
-    <!-- memo -->
-    <div class="win memo-win" id="win-memo" style="left:16px;top:76px;width:360px;height:262px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Leaked Memo<span class="win-hint">1 rule is fake</span></div>
-      <div class="win-body memo-body">
-        <div class="memo-from">FROM: the Boss → TO: <b id="memo-to">Inspector</b></div>
-        <ol id="memo-rules"></ol>
-        <div class="memo-foot">Click a rule to mark it <b>real</b> / <b>fake</b>.</div>
-      </div>
-    </div>
-
-    <!-- case file -->
-    <div class="win" id="win-case" style="left:16px;top:352px;width:360px;height:434px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Case File<span class="win-hint" id="case-client"></span></div>
-      <div class="win-body case-body" id="case-body"></div>
-    </div>
-
-    <!-- invoice -->
-    <div id="invoice-wrap">
-      <div id="scheme-banner"></div>
-      <div id="invoice" class="paper"></div>
-      <div id="newspaper"><div class="np-head">THE DAILY LEDGER</div><div class="np-sub">Local diner wins pie contest, again</div><div class="np-lines"></div></div>
-    </div>
-
-    <!-- inspector + outbox -->
-    <div class="win" id="win-inspector" style="left:1032px;top:76px;width:552px;height:322px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Accounts Payable Scanner<span class="win-hint" id="insp-version">v1</span></div>
-      <div class="win-body insp-body">
-        <div class="insp-left">
-          <div class="insp-face" id="insp-face"><span id="insp-emoji">😴</span><span class="insp-prop" id="insp-prop">📎</span></div>
-          <div class="insp-name" id="insp-name">Gus</div>
-          <div class="insp-title" id="insp-title">Sleepy Intern</div>
-        </div>
-        <div class="insp-right">
-          <div class="bubble" id="insp-line">Mmm… pie. Oh! Send me whatever.</div>
-          <div id="outbox">
-            <div class="slot"></div>
-            <div class="outbox-label">OUTBOX — drop the envelope here</div>
-            <div class="scan-bar"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- clerk chat -->
-    <div class="win" id="win-clerk" style="left:1032px;top:412px;width:552px;height:374px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Cover Email<span class="win-hint" id="clerk-quirk"></span></div>
-      <div class="win-body clerk-body">
-        <div class="clerk-head">
-          <div class="clerk-avatar" id="clerk-avatar">🥪</div>
-          <div><div class="clerk-name" id="clerk-name">Brenda</div><div class="clerk-sub" id="clerk-sub">Accounts clerk</div></div>
-          <div class="persuade"><span class="tb-label">Convinced</span><div class="persuade-track"><div id="persuade-fill"></div></div></div>
-        </div>
-        <div class="chat" id="chat"></div>
-        <form class="chat-input" id="chat-form" autocomplete="off">
-          <input id="chat-text" maxlength="180" placeholder="Write a short note to the clerk…">
-          <button class="btn btn-small" type="submit">Send</button>
-        </form>
-      </div>
-    </div>
-
-    <!-- dock / toolbox -->
-    <footer id="dock">
-      <div class="dock-label">TOOLBOX<span id="edits-left">Edits 0/4</span></div>
-      <div id="tools"></div>
-      <div class="dock-sep"></div>
-      <button class="btn btn-ghost btn-small" id="btn-debug" title="What the detector sees (D)">🔍 Detector view</button>
-      <div id="envelope" title="Drag me into the outbox"><div class="env-flap"></div><span class="env-label">DRAG TO OUTBOX</span></div>
-    </footer>
-
-    <div id="tool-hint"></div>
-
-    <!-- boss shadow -->
-    <div id="boss-shadow"><div class="boss-body">🕴️</div></div>
-    <div id="boss-prompt">FOOTSTEPS! Press <kbd>SPACE</kbd> to hide the invoice</div>
-
-    <!-- popover used by scissors / stamps / pen -->
-    <div id="popover"></div>
-
-    <!-- detector debug -->
-    <aside id="debug-panel">
-      <div class="debug-head">What the detector sees <span>(mock record — press D to close)</span></div>
-      <pre id="debug-json"></pre>
-    </aside>
-  </section>
-
-  <!-- ================= OVERLAYS ================= -->
-  <div id="overlay-briefing" class="overlay">
-    <div class="modal briefing">
-      <div class="modal-kicker" id="brief-kicker">ROUND 1 · BRIEFING</div>
-      <h2>Pick your scheme</h2>
-      <p class="modal-sub">Read the case file and the memo. Each scheme has different weak points — repeating one raises heat.</p>
-      <div id="scheme-cards" class="scheme-cards"></div>
-    </div>
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-card">
+    <div class="hud-logo">FORGED</div>
+    <div class="hud-obj"><span class="hud-k">Objective</span><span id="objective">Sit at your computer and open FORGED.exe</span></div>
   </div>
-
-  <div id="overlay-inspect" class="overlay">
-    <div class="inspect-stage">
-      <div class="inspect-paper" id="inspect-paper">
-        <div class="ip-lines"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="ip-scan"></div>
-      </div>
-      <div class="big-stamp" id="big-stamp">PAID</div>
-      <div class="inspect-bubble bubble" id="inspect-line">…</div>
-      <div class="cash-pop" id="cash-pop">+$0</div>
-      <button class="btn btn-big" id="btn-after-inspect">Continue</button>
-    </div>
+  <div class="hud-card hud-row">
+    <span class="hud-k">Siphoned</span><b id="hud-money">$0</b>
+    <span class="hud-k">Heat</span><div class="hud-heat"><div id="hud-heat"></div></div>
+    <span class="hud-k">Inspector</span><b id="hud-insp">v1</b>
   </div>
-
-  <div id="overlay-cork" class="overlay">
-    <div class="cork">
-      <div class="cork-pins" id="cork-pins"></div>
-      <svg class="cork-string" id="cork-string" viewBox="0 0 1100 560" preserveAspectRatio="none"></svg>
-      <div class="cork-inspector">
-        <div class="insp-face big"><span id="cork-emoji">😴</span></div>
-        <div class="bubble" id="cork-line">Never again.</div>
-        <div class="version-tick"><span id="ver-old">v1</span> → <span id="ver-new">v2</span></div>
-      </div>
-      <button class="btn btn-big" id="btn-after-cork">See patch notes</button>
-    </div>
-  </div>
-
-  <div id="overlay-between" class="overlay">
-    <div class="modal between">
-      <div class="between-grid">
-        <div class="patch">
-          <div class="modal-kicker">PATCH NOTES</div>
-          <h2 id="patch-title">Inspector v2</h2>
-          <ul id="patch-list"></ul>
-          <div class="round-stats" id="round-stats"></div>
-          <div class="card-row" id="card-row"></div>
-        </div>
-        <div class="shop">
-          <div class="modal-kicker">BACK-ALLEY SHOP <span id="shop-money">$0</span></div>
-          <div class="shop-sub">Perks (max 3 per run)</div>
-          <div id="shop-perks" class="shop-items"></div>
-          <div class="shop-sub">Unlocks</div>
-          <div id="shop-unlocks" class="shop-items"></div>
-        </div>
-      </div>
-      <div class="between-foot">
-        <button class="btn btn-ghost" id="btn-quit">Leave the office</button>
-        <button class="btn btn-big" id="btn-next-round">Next round →</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="overlay-howto" class="overlay">
-    <div class="modal howto">
-      <div class="modal-kicker">HOW TO PLAY</div>
-      <h2>One round, about 90 seconds</h2>
-      <ol class="howto-steps">
-        <li><b>Briefing.</b> Read the leaked memo and the case file. One memo rule is a lie.</li>
-        <li><b>Pick a scheme.</b> Changed bank details, duplicate bill, phantom supplier…</li>
-        <li><b>Forge.</b> Click a tool in the toolbox, then click the invoice. 2–4 edits per round.</li>
-        <li><b>Pitch.</b> Sweet-talk the clerk in the cover email.</li>
-        <li><b>Submit.</b> Drag the envelope into the outbox. Watch out for the boss.</li>
-        <li><b>Inspection.</b> PAID or FLAGGED. Either way, the inspector learns.</li>
-      </ol>
-      <div class="between-foot"><span class="fineprint">Hotkeys: 1–6 tools · Esc drop tool · D detector view · Space hide invoice</span><button class="btn btn-big" data-close>Got it</button></div>
-    </div>
-  </div>
-
-  <div id="toasts"></div>
 </div>
+
+<div id="prompt"></div>
+<div id="bubbles"></div>
+<div id="wtoasts"></div>
+<div id="controls"><kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Mouse</kbd> look · <kbd>E</kbd> interact · <kbd>Esc</kbd> stand up / free mouse</div>
+
+<!-- the player's computer screen: the desk UI runs inside it -->
+<div id="monitor">
+  <div class="bezel">
+    <div class="screen"><iframe id="os" src="os.html" title="Your computer"></iframe></div>
+    <div class="bezel-bottom">
+      <span class="brand">FORGED OS</span>
+      <span class="led"></span>
+      <button id="btn-stand">⏏ Stand up <kbd>Esc</kbd></button>
+    </div>
+  </div>
 </div>
-<div id="tool-cursor"></div>
-<script src="game.js"></script>
+
+<div id="start">
+  <div class="start-card">
+    <div class="start-logo">FORGED</div>
+    <p>Your desk. Your computer. Your inspector down the hall.<br>Forge it on screen, print it, and walk it over yourself.</p>
+    <ol>
+      <li><b>Sit</b> at your computer and forge an invoice.</li>
+      <li><b>Print</b> it, grab it from the printer.</li>
+      <li><b>Drop it</b> in the inspector's IN tray and act natural.</li>
+      <li>Watch out for <b>the boss</b> walking behind your desk.</li>
+    </ol>
+    <button id="btn-start">Clock in ▶</button>
+    <div class="start-fine">Click to capture the mouse · Esc to free it</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="world.js"></script>
 </body>
 </html>

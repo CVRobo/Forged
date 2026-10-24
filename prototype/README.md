@@ -1,19 +1,45 @@
-# Forged: UI/UX prototype
+# Forged: playable prototype
 
-A playable mockup of the desk, with no AI and no backend. Open `index.html` in a browser, or serve the folder:
+A third-person office game. The forging desk is the operating system of your in-game computer. There's no AI and no backend yet.
 
 ```
 python -m http.server 8765
 ```
 
-## What works
+Then open http://localhost:8765. It needs to be served over http (not opened as a file) so the office and the computer can talk to each other.
 
-- Title screen, level select (Sunny Diner and St. Mercy are playable; levels 3 and 4 are shown as locked), and a separate color palette for each level
-- Round flow: briefing and scheme pick → forging → cover email → drag the envelope into the outbox → PAID/FLAGGED stamp → corkboard "Never again" scene with the version going up → patch notes and shop
-- Six tools with per-round caps and a shared edit budget: whiteout, coffee, photocopier, scissors and tape, stamp rack, and burner pen (unlocked in the shop)
-- Leaked memo with three rules, one of them a decoy, plus real/fake marking
-- Heat meter, the "boss walks by" event (Space to hide), perks and unlocks, scheme cards, and a desk that gets messier each round
-- **Detector view** (press `D`): the structured record the model would receive (design doc, section 5)
+## Files
+
+| File | What it is |
+| --- | --- |
+| `index.html`, `world.js`, `world.css` | The 3D office (Three.js r128 from a CDN): your character, desks, printer, inspector booth, clerk, boss, corkboard |
+| `os.html`, `game.js`, `style.css` | The computer screen: FORGED OS with the desk, tools, memo, clerk chat, verdicts and shop. It also runs on its own if you open `os.html` directly |
+
+## How a round plays
+
+1. Walk to your desk and press **E** to sit. The camera moves in and the computer takes over the screen.
+2. Pick a scheme and forge the invoice with the tools. Drag the envelope onto the outbox to **print** it. You stand up automatically.
+3. Grab the invoice at the **printer** (E), carry it across the office, and drop it in the inspector's **IN tray** (E).
+4. The inspector reads it and stamps PAID or FLAGGED above his head. Your trick gets pinned to the **corkboard** on the wall.
+5. Sit back down to see the corkboard scene, patch notes and the shop on your computer.
+
+**The boss** patrols out of his office. If he walks behind your chair while you're forging, the computer tells you to press **Space** to hide the invoice; miss it and you get +15 heat.
+
+Controls: `WASD` move · `Shift` run · mouse look (click to capture it) · mouse wheel zoom · `E` interact · `Esc` stand up or free the mouse. On the computer: `1`–`6` tools · `D` detector view · `Space` hide the invoice.
+
+## How the two halves talk
+
+Both pages use `postMessage`:
+
+| Direction | Message | Meaning |
+| --- | --- | --- |
+| Computer → office | `hud` | Money, heat, inspector version and face, level (the office recolors to the level's palette) |
+| Computer → office | `phase` | `briefing` or `forging`, which drives the objective text |
+| Computer → office | `print` | The envelope was dropped on the outbox; the printer starts |
+| Computer → office | `verdict` | PAID or FLAGGED, the inspector's line, payout; shown in the inspector's bubble and on the corkboard |
+| Computer → office | `stand` | `Esc` was pressed on the computer |
+| Office → computer | `deliver` | The envelope reached the IN tray; the computer runs the inspection |
+| Office → computer | `boss-near` | The boss is behind your chair; the computer starts the hide-the-invoice prompt |
 
 ## What is mocked (the backend team replaces these)
 
@@ -22,4 +48,4 @@ python -m http.server 8765
 - Memo rules: a fixed pool per level instead of the detector's top features
 - Inspector lines: a cached pool for each level
 
-Hotkeys: `1`–`6` select tools · `Esc` drops the current tool · `D` opens the detector view · `Space` hides the invoice
+In the browser console, `forged` (in the office page) exposes the player and the boss state for quick testing.

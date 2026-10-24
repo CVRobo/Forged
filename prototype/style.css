@@ -332,6 +332,7 @@ kbd { background: var(--win); color: var(--ink); border: 2px solid var(--ink); b
   animation: wiggle 2.5s infinite;
 }
 #envelope.ready { background: #ffe9a6; }
+#envelope.printed { opacity: .35; animation: none; cursor: default; }
 .env-label { position: relative; z-index: 1; background: var(--ink); color: #fff; padding: 1px 6px; border-radius: 3px; }
 .env-flap { position: absolute; top: -40px; left: 50%; width: 104px; height: 104px; background: #e6cf93; border: 3px solid var(--ink); transform: translateX(-50%) rotate(45deg); }
 @keyframes wiggle { 0%, 90%, 100% { rotate: 0deg; } 93% { rotate: -4deg; } 96% { rotate: 4deg; } }

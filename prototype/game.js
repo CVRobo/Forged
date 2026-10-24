@@ -14,6 +14,12 @@ const shuffle = arr => arr.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[
 const money = n => "$" + Math.round(n).toLocaleString("en-US");
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+/* When this page runs inside the 3D office (index.html), it is the screen of
+ * the player's computer: submitting prints the envelope in the world, and the
+ * world tells us when it was delivered or when the boss walks behind us. */
+const EMBED = window.parent !== window;
+const post = (type, data = {}) => { if (EMBED) parent.postMessage({ src: "forged-os", type, ...data }, "*"); };
+
 /* ======================= Content ======================= */
 
 const ATTACKER_ACCOUNTS = [
@@ -213,6 +219,10 @@ function fit() {
   stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
 }
 addEventListener("resize", fit); fit();
+if (EMBED) {
+  document.body.classList.add("embedded");
+  $(".outbox-label").textContent = "PRINT — drop the envelope here, then deliver it";
+}
 function toStage(cx, cy, el = stage) {
   const r = el.getBoundingClientRect();
   return { x: (cx - r.left) / scale, y: (cy - r.top) / scale };
@@ -287,13 +297,16 @@ function nextRound() {
   S.round++;
   S.heat = Math.round(S.heat * 0.6);
   Object.assign(S, { scheme: null, inv: null, uses: {}, edits: 0, stains: [], stamps: [], copyGen: 0,
-    altered: new Set(), legibility: {}, persuasion: 0, tool: null, pendingStamp: null, submitted: false });
+    altered: new Set(), legibility: {}, persuasion: 0, tool: null, pendingStamp: null, submitted: false,
+    printed: false, delivered: false });
+  post("phase", { phase: "briefing" });
   S.maxEdits = 4 + (S.unlocks.includes("budget") ? 1 : 0);
   TOOLS.forEach(t => S.uses[t.id] = 0);
   $("#tb-round").textContent = S.round;
   $("#invoice").innerHTML = ""; $("#invoice").className = "paper";
   $("#scheme-banner").textContent = "";
   $("#chat").innerHTML = "";
+  $("#envelope").classList.remove("printed");
   dealMemo();
   renderInspector();
   renderTools(); updateHud();
@@ -378,6 +391,7 @@ function beginForge(schemeId) {
   inspectorSay(pick(L.lines.idle));
   scheduleBoss();
   updateHud();
+  post("phase", { phase: "forging" });
 }
 
 function renderInvoice() {
@@ -622,6 +636,9 @@ function updateHud() {
   $("#edits-left").textContent = `Edits ${S.edits}/${S.maxEdits}`;
   $("#envelope").classList.toggle("ready", S.edits >= 2);
   updateDebug();
+  const st = stageFor(S.version);
+  post("hud", { level: S.level, money: S.money, heat: S.heat, version: S.version, round: S.round,
+    inspector: LEVELS[S.level].inspector.name, emoji: st.emoji, clerk: LEVELS[S.level].clerk });
 }
 
 function stageFor(v) { return INSPECTOR_STAGES.find(s => v <= s.upTo); }
@@ -711,8 +728,23 @@ function trySubmit() {
   // validity gate (MOCK rule check): the money must go to you
   if (!ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank)) { sfx("bad"); toast("The money still goes to the real vendor! ✂️ Tape in your account.", "bad"); return; }
   if (!S.inv.vendor.trim()) { sfx("bad"); toast("The invoice needs a vendor name", "bad"); return; }
+  if (EMBED) {
+    // in the office the envelope is printed, then carried to the inspector by hand
+    S.submitted = S.printed = true; clearTimeout(S.bossTimer); dropTool();
+    sfx("chunk"); toast("🖨️ Printing… grab it at the printer and drop it in the inspector's tray", "good");
+    $("#envelope").classList.add("printed");
+    post("print");
+    return;
+  }
   submit();
 }
+
+window.addEventListener("message", e => {
+  const m = e.data;
+  if (!m || m.src !== "forged-world") return;
+  if (m.type === "deliver" && S.printed && !S.delivered) { S.delivered = true; submit(); }
+  if (m.type === "boss-near") bossWalk();
+});
 
 /* ======================= Inspection (MOCK verdict) ======================= */
 
@@ -772,7 +804,9 @@ function submit() {
       sfx("stamp");
       st.classList.add("done");
       const L = LEVELS[S.level];
-      $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${pick(L.lines[caught ? "catch" : "pass"])}"`;
+      const said = pick(L.lines[caught ? "catch" : "pass"]);
+      $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
+      post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor });
       $("#inspect-line").classList.add("show");
       if (caught) {
         sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
@@ -902,6 +936,7 @@ function messUpDesk() {
 
 function scheduleBoss() {
   clearTimeout(S.bossTimer);
+  if (EMBED) return; // in the office the boss is a real NPC on patrol
   if (Math.random() < .35 && S.round > 1 || S.round === 2) {
     S.bossTimer = setTimeout(bossWalk, rand(9000, 20000));
   }
@@ -956,6 +991,7 @@ document.addEventListener("keydown", e => {
   const typing = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable;
   if (e.code === "Space" && S.bossWindow) { e.preventDefault(); document.activeElement.blur?.(); hideInvoice(); return; }
   if (typing) { if (e.key === "Escape" || e.key === "Enter" && document.activeElement.isContentEditable) { e.preventDefault(); document.activeElement.blur(); } return; }
+  if (e.key === "Escape" && EMBED && !S.tool && !$("#popover.show")) { post("stand"); return; }
   if (!$("#screen-desk").classList.contains("active") || $(".overlay.show")) return;
   if (e.key === "Escape") { dropTool(); hidePopover(); }
   if (e.key >= "1" && e.key <= "6") selectTool(TOOLS[+e.key - 1].id);
