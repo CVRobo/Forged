@@ -1,105 +1,122 @@
-# Forged: the next 24 hours
+# Forged
 
-You are a fraudster in a third-person office. You sit at your computer to build fake online orders with stolen cards, print the order slip, and carry it past the boss to **Gus**, the shop's risk engine. Every time you beat Gus, he retrains on your trick and comes back smarter.
+A browser-based 3D office game about online-order fraud. You sit at your desk, build fake orders on your in-game computer, and sneak them past Gus, a live LightGBM fraud model trained on 100k+ real transactions. Every time you fool him, he retrains on your trick and comes back smarter. The game gets harder because of how you play.
 
-Gus is a real fraud model: LightGBM trained on the IEEE-CIS dataset (590K real transactions). He checks every buyer's identity with the CRS Credit API, explains every verdict in game terms, and a new version only goes live if it stays fair to honest customers.
+The twist: while players think they're gaming, every order they send is a labeled row in the IEEE-CIS fraud dataset format. Forged turns adversarial red-teaming into a game loop -- the same idea behind reCAPTCHA (labeling books), Pokemon Go (mapping the world), and Duolingo (translating the web).
 
-- Playable game: [prototype/](prototype/) (controls and the full round in [prototype/README.md](prototype/README.md))
-- The fraud model: [ml/online/README.md](ml/online/README.md), and the model report at `/report` on the backend
-- Why the game moved from invoices to online orders: [docs/online-fraud-redesign.md](docs/online-fraud-redesign.md)
-- Which model and why: [docs/ml-model-choice.md](docs/ml-model-choice.md)
-- API contracts: [docs/contracts.md](docs/contracts.md)
-- Original design: [Forged Game Design Doc (v0.1).md](Forged%20Game%20Design%20Doc%20(v0.1).md)
+- **Playable prototype and LAN/online multiplayer:** [prototype/](prototype/) ([prototype README](prototype/README.md))
+- **Design document:** [Forged Game Design Doc (v1.0).md](<Forged%20Game%20Design%20Doc%20(v1.0).md>)
 
 ---
 
-## Team
+## What it is
 
-| | Role | Owns | Name |
-| --- | --- | --- | --- |
-| **A** | Backend / lead | `server/`, `deploy/`, `Dockerfile`, `render.yaml`, Claude and Cartesia integration | |
-| **B** | ML (invoice detector), multiplayer, hosting | `ml/*.py` (invoice detector), LAN rooms (`prototype/lan*`), hosted backend, "Gus is learning" panel | |
-| **C** | Computer UI ("FORGED OS") and office features | `prototype/os.html`, `game.js`, `style.css`, desks, customization, doors | |
-| **D** | 3D office, then the online fraud model | `prototype/index.html`, `world.js`, `world.css`; `ml/online/` | |
+A third-person office where you walk around, sit at your desk, forge checkout orders on a fake e-commerce site, print them, carry the slip past your boss, and hand it to Gus the inspector. Gus is backed by a real fraud model. Beat him and he retrains. Get caught and he tells you why.
 
-The plan had the game rebuilt in Next.js (`frontend/`). We kept the prototype instead: it already played well, and plain JS let everyone ship without a build step. `frontend/` is still the empty scaffold.
+Everything you see is built from Three.js boxes, cylinders and spheres -- no art assets, no 3D models, no textures. All sound is synthesized in real-time with the WebAudio API -- no audio files. NPCs talk back using Web Speech synthesis, and you can talk to them with your microphone. Up to 4 players share one office over WebSockets.
 
 ---
 
 ## Tech stack
 
-| Layer | Technology | Sponsor track |
-| --- | --- | --- |
-| Game client | Plain HTML, CSS and JavaScript (no build step) + **Three.js r128** from a CDN | |
-| Game server and multiplayer | Python standard library: `prototype/serve.py` (static files, caching off), a WebSocket server for rooms of 4, and a pass-through to the backend | |
-| Backend | **FastAPI** 0.162 + Uvicorn + Pydantic 2 | |
-| State | **Redis**: rounds, sessions, leaderboard (sorted sets), NPC conversations, retrain queue, inspector memory | |
-| Fraud model | **LightGBM** 4.7 + pandas, NumPy, scikit-learn, joblib, on the **IEEE-CIS** dataset; Node.js runs the game's own code for simulated shoppers | **Hyphenate** |
-| Identity check | **CRS Credit API** sandbox: TransUnion TruValidate + AtData Fraud Finder, as model inputs | **CRS** |
-| LLM | **Claude API** (`anthropic` SDK): `claude-haiku-4-5` for the clerk, NPCs, Gus's lines, the memo decoy and the validity check; `claude-opus-5-5` for the model report's analyst briefing | **Anthropic** |
-| Voice | **Cartesia** speech-to-text + text-to-speech for the clerk and the office NPCs; the browser's Web Speech API when there's no key | **Cartesia** |
-| Error tracking | **Sentry** (backend), when `SENTRY_DSN` is set | |
-| Deploy | **Docker**, one container (game server + backend + Redis) on **Render** (free plan, Blueprint) | |
-
-### Why these choices
-
-**Plain JS over Next.js:** The prototype proved the game works, and porting it to Next.js would have cost the hours we spent on the game itself. The office and the computer are still separate pages that only talk through `postMessage`, so C and D never touch each other's files, which is what the Next.js routes were for.
-
-**FastAPI over Express:** The fraud model (Python) and the Claude API run in the same process. FastAPI gives Pydantic validation, OpenAPI docs at `/docs`, and async calls to Claude, Cartesia and CRS.
-
-**Redis beyond caching:** game state hashes, leaderboard sorted sets, the retrain queue, version tracking, inspector memory and NPC conversations. Vector search over past invoices belonged to the invoice game and was dropped with it.
-
-**Cartesia for voice (instead of Deepgram):** One API for both directions (speech-to-text and text-to-speech) over plain `httpx`, which keeps the hosted image small. The NPCs and the clerk talk through it; without a key, the browser's own voice speaks, so the game never goes silent.
-
-**LightGBM on IEEE-CIS:** A real fraud dataset makes Gus a real fraud model, not a game rule. LightGBM is what wins on this data, trains in seconds (so Gus can retrain during play), and explains every score per feature, which becomes Gus's reasons in the game.
-
-**CRS for identity:** Gus's blind spot is who the buyer really is. The CRS sandbox answers exactly that, and every victim in the game is a CRS test person.
-
-**Not used anymore:** Deepgram (replaced by Cartesia; `server/services/deepgram_service.py` is no longer called), Arize Phoenix (in `server/requirements.txt`, never imported), the Next.js `frontend/`, and the invoice detector in `ml/*.py` (the original invoice game; the server still serves it for invoice submissions, but the game now sends online orders).
+| Layer | Technology |
+| --- | --- |
+| 3D office | Three.js r128 (CDN), all geometry from primitives |
+| Audio | WebAudio API (all synthesized: footsteps, doors, printer, heartbeat, ambient) |
+| Voice | Web Speech API (SpeechSynthesis for NPC replies, SpeechRecognition for player mic input) |
+| In-game computer | Vanilla HTML/CSS/JS, runs in an iframe, communicates via postMessage |
+| Multiplayer | WebSocket server in `serve.py` (Python stdlib), up to 4 players per room |
+| Backend | FastAPI (Python 3.12), serves fraud model predictions and round state |
+| Fraud model | LightGBM (500 estimators, 0.04 learning rate, 63 leaves), trained on IEEE-CIS Kaggle data |
+| Identity check | TransUnion TruValidate IDV + AtData Fraud Finder via CRS sandbox API |
+| State | Redis (in-memory, embedded in the Docker container) |
+| NPC dialogue | Claude API (Anthropic) for clerk scoring and inspector lines, with canned fallbacks |
+| Error tracking | Sentry |
+| Deploy | Docker on Render (free tier), one container runs the game server, FastAPI, and Redis |
 
 ---
 
-## Project structure
+## Architecture
 
 ```
-Forged/
-├── prototype/                # The game (plain JS, no build)
-│   ├── index.html, world.js  # 3D office: player, desks, printer, boss, Gus's booth, NPCs (D)
-│   ├── os.html, game.js      # FORGED OS: the typed checkout, Gus's gut feeling, verdicts, shop (C)
-│   ├── orders.js             # Shops, stolen cards (CRS test people), checkout → IEEE-CIS rows, scripted Gus
-│   ├── serve.py              # Local server + pass-through to the backend (API_UPSTREAM)
-│   ├── lan.js, lan_ws.py, lan_room.py   # Multiplayer rooms of 4 (B)
-│   ├── voice.js, voice-server.js        # Talk to the NPCs: browser speech, or the backend's Cartesia voice
-│   └── learning.html/js      # "Gus is learning": the model's versions (B)
-│
-├── server/                   # FastAPI backend (A)
-│   ├── main.py               # App entry, CORS, Sentry, /health, /report
-│   ├── config.py             # Env vars
-│   ├── stubs.py              # Canned responses (USE_STUBS=true)
-│   ├── models/schemas.py     # Pydantic models
-│   ├── routes/
-│   │   ├── round.py          # POST /round/start, /submit, /preview
-│   │   ├── clerk.py          # POST /clerk, /clerk/voice
-│   │   ├── npc.py            # POST /npc/chat, /npc/voice, /npc/speak
-│   │   └── meta.py           # GET /patch-notes, /metrics, /leaderboard
-│   └── services/
-│       ├── online_data.py    # The fraud model behind /submit and /preview, background retrains
-│       ├── game_state.py     # Redis state
-│       ├── claude_service.py, npc_voice.py   # Claude: clerk, NPCs, lines, memo, validity
-│       └── cartesia_service.py               # Speech-to-text / text-to-speech
-│
-├── ml/
-│   ├── online/               # The fraud model (D): features, training, retrain gate, CRS check,
-│   │                         # red-team harness, report, shipped versions models/v1–v4
-│   └── *.py                  # The invoice detector (B), from the invoice game
-│
-├── frontend/                 # Next.js scaffold (unused)
-├── deploy/                   # Hosted image: requirements + start script
-├── docs/                     # Design notes, contracts, specs
-├── Dockerfile, render.yaml   # The hosted game in one container, on Render
-├── docker-compose.yml        # Local Redis
-└── .env.example              # Env vars, documented
+Browser
+  +---------------------+    postMessage    +-------------------+
+  | index.html          | <===============> | os.html           |
+  | Three.js office     |                   | FORGED OS         |
+  | world.js (144 KB)   |                   | game.js (94 KB)   |
+  | player, boss, Gus,  |                   | checkout, memo,   |
+  | printer, corkboard,  |                   | orders.js, clerk  |
+  | multiplayer (lan.js) |                   | chat, shop, ranks |
+  +----------+----------+                   +---------+---------+
+             |                                        |
+             | WebSocket (lan.js)                     | fetch (/submit, /preview, /round/start)
+             v                                        v
+  +---------------------+             +------------------------------+
+  | serve.py            |  proxies    | FastAPI (server/)            |
+  | static files + WS   | ---------> | /submit    -> ml.detector    |
+  | LAN room logic      |  /api/*    | /preview   -> ml.online      |
+  | (lan_room.py)       |            | /clerk     -> Claude API     |
+  +---------------------+            | /health    -> model status   |
+                                     +-------------+----------------+
+                                                   |
+                              +--------------------+--------------------+
+                              v                    v                    v
+                        +-----------+     +--------------+     +--------+
+                        | Redis     |     | ml/online/   |     | Claude |
+                        | rounds,   |     | LightGBM v4  |     | API    |
+                        | sessions  |     | CRS identity |     |        |
+                        +-----------+     +--------------+     +--------+
 ```
+
+---
+
+## The fraud model
+
+Two ML systems live in `ml/`:
+
+### Online fraud model (`ml/online/`) -- the live one
+
+A LightGBM classifier trained on the IEEE-CIS Kaggle fraud dataset (100,963 real credit card transactions) plus simulated and real player orders. This is the model that judges every order in the game.
+
+**Training data mix:**
+- 100,963 real transactions from IEEE-CIS (the foundation)
+- ~7,300 honest simulated shoppers (so the model doesn't learn "all game orders are fraud")
+- ~5,500 simulated attackers with varied strategies
+- ~2,300 real player orders collected during playtesting
+
+**Model specs:**
+- LightGBM with 500 estimators, learning rate 0.04, max 63 leaves
+- Features: transaction amount, time-of-day, card type, device fingerprint, shipping distance, email domain age, CRS identity risk score, and ~40 more
+- Evasion weight 3x (player tricks that got through are weighted triple during retraining)
+- Per-player cap of 300 rows (prevents one player from dominating the training set)
+
+**Identity verification (v3+):**
+- TransUnion TruValidate IDV: checks if the name, address, SSN and DOB belong to a real person
+- AtData Fraud Finder: email-based risk score
+- 228 cached sandbox answers in `crs_cache.json`; falls back to an offline mirror when the API is down
+
+**Benchmarks (v4, current live version):**
+
+| Metric | Value |
+| --- | --- |
+| Real fraud recall (IEEE-CIS test set) | 64.3% at 3.6% FPR |
+| Simulated attacker catch rate | 96.3% |
+| Real player catch rate | 97.2% |
+| Game false positive rate | 2.0% |
+
+The model catches 97% of player attacks while only falsely flagging 2% of honest orders. Real-world recall on unseen IEEE-CIS fraud is 64% -- competitive for a model that also has to handle creative human attacks it has never seen before.
+
+**Retrain loop and promotion gates:**
+
+When a player fools Gus, the order is queued. After enough wins, the model retrains. A new version is only promoted if it passes all gates:
+- Real recall must not drop more than 5% from the current version
+- Real FPR must stay at or below 4%
+- Game FPR must stay at or below 5%
+- Player catch rate must improve on 30+ held-out orders
+
+### Invoice fraud model (`ml/detector.py`) -- the original
+
+A logistic regression classifier with 34 features and Platt calibration, plus a kNN memory system (K=10, cosine similarity) that adds 3 memory features per session. This was the first model, trained on synthetic invoice data for the Sunny Diner level. It is not included in the Docker image; the hosted version uses the online model exclusively. When running locally without the online model, the game falls back to a scripted rule-based Gus.
 
 ---
 
@@ -107,265 +124,183 @@ Forged/
 
 ### Prerequisites
 
-- Python 3.12+
-- Docker (for Redis), only to run the backend
-- Node.js 18+, only to train the model
+- Python 3.11+
 
-### Quick start
+### Quick start (game only, no backend)
 
 ```bash
-# Just the game: a scripted Gus in the browser judges the orders
-python prototype/serve.py
-# Opens at http://localhost:8765
+cd prototype
+python serve.py
+# Open http://localhost:8765
 ```
 
-With the real fraud model:
+This runs the game with the scripted Gus (rule-based, no ML). Add `?lan` for multiplayer.
+
+### With the real fraud model
 
 ```bash
-# 1. Copy env file. Every key is optional.
-cp .env.example .env
-
-# 2. Start Redis (the backend keeps rounds there; starting a round fails without it)
-docker compose up -d
-
-# 3. Install and start the backend with the real model
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+# 1. Install Python dependencies
 pip install -r deploy/requirements.txt
-USE_STUBS=false uvicorn server.main:app --port 8000
 
-# 4. In another terminal, start the game pointed at the backend
-API_UPSTREAM=http://127.0.0.1:8000 python prototype/serve.py
-# Opens at http://localhost:8765
+# 2. Start the backend
+USE_STUBS=false uvicorn server.main:app --reload --port 8000
+
+# 3. In another terminal, start the game server pointing at the backend
+cd prototype
+python serve.py
+# Open http://localhost:8765/?api=http://localhost:8000
 ```
 
-Everything in one container (what Render runs):
+Or connect the game directly: open `http://localhost:8765/?api=http://localhost:8000`.
+
+### With Docker (full stack, same as production)
 
 ```bash
 docker build -t forged .
 docker run -p 10000:10000 forged
-# Opens at http://localhost:10000
+# Open http://localhost:10000
 ```
 
-The trained versions ship in `ml/online/models/`, so playing never needs the Kaggle dataset. Training does: see [ml/online/README.md](ml/online/README.md).
+This runs the game server, FastAPI backend, Redis, and the live fraud model in one container.
 
-### What each env var does
+### Environment variables
 
 | Variable | Required? | What it does |
 | --- | --- | --- |
-| `USE_STUBS` | — | `false` = the real model and services, `true` (default) = canned responses |
-| `REDIS_URL` | No | Redis connection (defaults to `redis://localhost:6379`) |
-| `ANTHROPIC_API_KEY` | No | Claude for the clerk, NPCs, Gus's lines, memo decoy, validity gate, report briefing |
-| `CARTESIA_API_KEY` | No | Cartesia voices for the clerk and NPCs; without it, the browser's voice |
-| `CRS_USERNAME`, `CRS_PASSWORD` | No | Live CRS sandbox calls; without them, the saved answers in `ml/online/crs_cache.json`. Keep the quotes |
-| `SENTRY_DSN` | No | Error tracking (backend) |
-| `API_UPSTREAM` | No | Makes `prototype/serve.py` pass API calls to this backend and point the game at it |
-| `PORT` | No | The game server's port (default 8765; Render sets it) |
-| `FORGED_RETRAIN_EVERY` | No | Wins between background retrains (default 25) |
-| `FORGED_DATA_DIR` | No | Where player orders are saved (default `server/data/ieee_rows.csv`) |
-| `FORGED_CRS` | No | `off` never calls the CRS sandbox, even with keys |
-| `RETRAIN_THRESHOLD` | No | Invoice game only: submissions before a retrain (default 5) |
+| `USE_STUBS` | No | `true` = stub responses (default), `false` = real ML model |
+| `REDIS_URL` | No | Redis connection (default: `redis://localhost:6379`) |
+| `ANTHROPIC_API_KEY` | No | Claude API for clerk scoring and inspector dialogue |
+| `SENTRY_DSN` | No | Error tracking |
+| `RETRAIN_THRESHOLD` | No | Submissions before auto-retrain (default 5) |
 
-**The game needs zero API keys.** Every service has a fallback, so a missing key never breaks a round.
+No API keys are required. Without them, the game falls back to canned clerk replies, scripted inspector lines, and the rule-based Gus.
 
-### Verifying everything works
+---
 
-```bash
-# Health: the live model version, whether it can learn here, where CRS answers come from
-curl http://localhost:8000/health
+## Deployment
 
-# Start a round (needs Redis): leaked memo from the live model, version
-curl -s -X POST http://localhost:8000/round/start \
-  -H 'Content-Type: application/json' \
-  -d '{"level":1}' | python -m json.tool
+The `Dockerfile` at the repo root bundles everything into one container:
+- `prototype/serve.py` on `$PORT` (default 10000) -- the game and WebSocket multiplayer
+- FastAPI on `127.0.0.1:8000` -- the fraud model and round API
+- `redis-server` -- in-memory state for rounds and sessions
 
-# Gus's gut feeling on one order: a quiet order on Harold Pettigrew, a deceased CRS test person
-curl -s -X POST http://localhost:8000/preview \
-  -H 'Content-Type: application/json' \
-  -d '{"record":{"mode":"online","level":1,"scheme":"typed","rank":5,"rows":[{"TransactionAmt":50,"ProductCD":"W","crs_id":"P14","buyer_is_holder":true}]}}' | python -m json.tool
-# → a high score, with "identity" as the top reason
+`render.yaml` is a Render Blueprint that deploys from this Dockerfile on the free tier. Auto-deploys on every push. The free plan sleeps after 15 idle minutes; waking takes about a minute.
 
-# Talk to the clerk (text)
-curl -s -X POST http://localhost:8000/clerk \
-  -H 'Content-Type: application/json' \
-  -d '{"round_id":"test","text":"Hey quick question about my order"}' | python -m json.tool
+A lighter game-only image is at `prototype/Dockerfile` -- just the game with the scripted Gus, no backend.
 
-# The model report page, and the interactive API docs
-open http://localhost:8000/report
-open http://localhost:8000/docs
+---
 
-# Tests
-python -m pytest ml/online/tests server/tests prototype/tests -q
+## Project structure
+
+```
+Forged/
++-- prototype/               # The game (all client-side)
+|   +-- index.html           # Entry point
+|   +-- world.js             # 3D office: player, boss, Gus, furniture, collisions
+|   +-- world.css            # Office HUD, monitor bezel, start screen, minimap
+|   +-- os.html              # In-game computer (runs in iframe)
+|   +-- game.js              # Computer UI: checkout, memo, chat, verdicts, shop
+|   +-- style.css            # Computer screen styles
+|   +-- orders.js            # Order content, IEEE-CIS row builder, scripted Gus
+|   +-- audio.js             # All game audio (WebAudio synthesis)
+|   +-- voice.js             # Voice chat with NPCs (Web Speech API)
+|   +-- customize.js/css     # Character customization screen
+|   +-- menu.js/css          # Esc menu, options, controls, dossier
+|   +-- keys.js              # Rebindable keybindings
+|   +-- features.js          # Feature display for orders
+|   +-- lan.js/css           # WebSocket multiplayer client
+|   +-- serve.py             # Static server + WebSocket room host
+|   +-- lan_room.py          # Room rules (boss sync, shared Gus, shirts)
+|   +-- lan_ws.py            # WebSocket frame handler (stdlib)
+|   +-- Dockerfile           # Game-only container
+|   +-- README.md            # Prototype docs, LAN/online multiplayer guide
+|
++-- server/                  # FastAPI backend
+|   +-- main.py              # App entry, CORS, Sentry, model warming
+|   +-- config.py            # Environment variables
+|   +-- stubs.py             # Hardcoded stub responses for offline dev
+|   +-- routes/
+|   |   +-- round.py         # POST /round/start, /submit, /preview
+|   |   +-- clerk.py         # POST /clerk, /clerk/voice
+|   |   +-- meta.py          # GET /patch-notes, /metrics, /leaderboard
+|   +-- services/
+|       +-- game_state.py    # Redis state management
+|       +-- online_data.py   # Fraud model interface
+|
++-- ml/                      # ML models
+|   +-- detector.py          # Invoice fraud model (logistic regression + kNN)
+|   +-- online/              # Online fraud model (LightGBM on IEEE-CIS)
+|       +-- model.py         # Model loading, prediction, versioning
+|       +-- features.py      # Feature engineering from checkout data
+|       +-- train.py         # Train v1 from scratch
+|       +-- retrain.py       # Retrain on player orders with promotion gates
+|       +-- crs.py           # CRS identity verification (TransUnion, AtData)
+|       +-- report.py/html   # Attack analysis and model report
+|       +-- briefing.py      # Claude-generated analyst briefing
+|       +-- robustness.py    # Red-team testing and hardening
+|       +-- models/          # Saved model versions (v1-v4.joblib)
+|
++-- deploy/
+|   +-- requirements.txt     # Pinned Python dependencies for production
+|   +-- start.sh             # Container entrypoint (starts all 3 services)
+|
++-- Dockerfile               # Full stack: game + backend + Redis
++-- render.yaml              # Render Blueprint for one-click deploy
++-- docs/                    # API contracts and design specs
 ```
 
 ---
 
-## API endpoints (summary)
+## How the game works
 
-Full shapes in `server/models/schemas.py` and at `/docs`.
+1. Walk to your desk, press E to sit. The camera moves in and the computer takes over.
+2. Fill in a checkout order one field at a time: what you buy, who you pretend to be, what device you use, where you ship. Gus's gut-feeling face reacts as you type.
+3. Print the order slip. You stand up automatically.
+4. Grab the slip at the printer (E), carry it across the office past the boss, drop it in Gus's IN tray (E).
+5. Gus stamps it APPROVED or DECLINED, circles the rows that gave you away, and tells you why in plain words.
+6. Your trick gets pinned to the corkboard. If you fooled Gus, his version ticks up and he retrains.
+
+The boss patrols the office with a vision cone. Get caught forging or carrying the slip and your heat goes up. Fire drills happen randomly -- everyone evacuates for a coffee run and comes back.
+
+Ranks unlock checkout fields progressively (Rookie sees 2 fields, Mastermind sees all 8), so new players aren't overwhelmed.
+
+### Multiplayer
+
+Up to 4 players share one office over WebSockets. The boss, Gus, verdicts, and the corkboard are shared. Everyone sees each other walking around in their customized character. One player's trick that fools Gus makes him harder for everyone.
+
+### Voice chat
+
+Hold the mic key to talk to NPCs. They hear you through the Web Speech API, process what you said, and reply with synthesized voices. The clerk NPC scores your pitch for how convincing it sounds.
+
+---
+
+## API endpoints
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| `POST` | `/round/start` | Start a round: leaked memo (two of the live model's real rules + a decoy), Gus's version |
-| `POST` | `/preview` | Gus's gut feeling while you type: the verdict's own score and threshold, nothing saved |
-| `POST` | `/submit` | Judge the orders: verdict and reasons per order, payout; saves the rows for retraining |
-| `POST` | `/clerk` | Text to the support clerk, get reply + persuasion score |
-| `POST` | `/clerk/voice` | Voice to the clerk (Cartesia STT → Claude → Cartesia TTS) |
-| `POST` | `/npc/chat`, `/npc/voice`, `/npc/speak` | Talk to the office NPCs, by text or voice |
-| `GET` | `/patch-notes?since=v` | What each Gus version learned |
-| `GET` | `/metrics` | Per-version real fraud caught, honest customers blocked, held-out attacks caught |
+| `POST` | `/round/start` | Start a round: get memo rules, case file, inspector version |
+| `POST` | `/submit` | Submit an order, get verdict + tells + payout |
+| `POST` | `/preview` | Preview: get Gus's gut feeling without committing |
+| `POST` | `/clerk` | Text chat with the clerk, get reply + persuasion score |
+| `POST` | `/clerk/voice` | Voice chat (STT -> scoring -> TTS) |
+| `GET` | `/patch-notes` | What each model version learned |
+| `GET` | `/metrics` | Per-version catch rate, FP rate |
 | `GET` | `/leaderboard` | Player rankings |
-| `GET` | `/health` | Server status, live model version, stubs on or off |
-| `GET` | `/report` | The model report page |
+| `GET` | `/health` | Server status + model version |
+| `GET` | `/report` | Fraud model analysis report |
 
 ---
 
-## How the pieces connect
+## Version history
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Browser                                                     │
-│  ┌───────────────────┐   postMessage   ┌──────────────────┐  │
-│  │  index.html       │ ◄─────────────► │  os.html (iframe) │  │
-│  │  3D office (D)    │                 │  FORGED OS (C)    │  │
-│  │  Three.js, voice  │                 │  checkout, Gus    │  │
-│  └─────────┬─────────┘                 └────────┬─────────┘  │
-└────────────┼────────────────────────────────────┼────────────┘
-             │ WebSocket (rooms of 4)             │ fetch
-             ▼                                    ▼
-   ┌──────────────────────────────────────────────────────┐
-   │  prototype/serve.py :8765   game files, rooms,        │
-   │                             pass-through to the API   │
-   └───────────────────────────┬──────────────────────────┘
-                               ▼
-                 ┌────────────────────────────┐
-                 │  FastAPI :8000              │
-                 │  /round/start /preview      │
-                 │  /submit /clerk /npc/*      │
-                 │  /patch-notes /metrics      │
-                 └──┬──────┬────────┬───────┬──┘
-                    ▼      ▼        ▼       ▼
-               ┌──────┐ ┌──────┐ ┌───────┐ ┌──────────────────────┐
-               │Redis │ │Claude│ │Cartesia│ │ ml/online            │
-               │state │ │lines │ │ voices │ │ LightGBM fraud model │
-               │board │ │clerk │ └───────┘ │  ├─ CRS sandbox       │
-               │queue │ │NPCs  │           │  └─ retrain + gate    │
-               └──────┘ └──────┘           └──────────────────────┘
-```
+### v4 (current, live)
+Retrained on live CRS sandbox answers. Fixed v3's over-blocking of honest shoppers (28.4% false block rate down to 2.0%). Player catch rate 97.2%.
 
-The key architectural rule still holds: **the office and the computer only talk through `postMessage`.** The full message table is in [prototype/README.md](prototype/README.md#how-the-two-halves-talk).
+### v3
+Added CRS identity verification (TransUnion TruValidate + AtData Fraud Finder). Player catch rate jumped from 54% to 97%.
 
----
+### v2
+First retrain on 300 real player orders. Learned `new_address`, `gift_card`, `far_ship` patterns.
 
-## Where each area stands
-
-### A: Backend
-
-**Done:** real routes for rounds, `/submit` and `/preview` on the fraud model, the clerk and NPCs on Claude, Cartesia voices, Sentry, Redis state, the one-container deploy on Render with the real model behind the game.
-
-**Next:** check the Render deploy serves v4 (`/health`), set `ANTHROPIC_API_KEY` and `CARTESIA_API_KEY` there for the demo, warm the service before judging (the free plan sleeps after 15 minutes).
-
-### ML: the fraud model (`ml/online/`)
-
-**Done:** LightGBM on the real IEEE-CIS data (v1), the retrain loop with the safety gate, the red-team harness that hardened v2 (held-out attacks caught 9% → 54%), the CRS identity check (v4, live sandbox), the model report with an AI analyst briefing, and the "Gus is learning" panel. Details in [ml/online/README.md](ml/online/README.md).
-
-**How the server calls it:**
-```python
-from ml.online import model as M
-v = M.load()                      # the newest promoted version
-scores = v.scores(rows)           # rows: the game's IEEE-CIS rows
-reasons = v.explain(rows)         # per order: [[tell, weight], ...]
-```
-
-**Next:** collect real player orders at the event and retrain on them (so far the attack orders came from the red-team search and simulated players), refresh `prototype/gus-versions.json` after each retrain, and test how sensitive the honest-shopper numbers are to the simulated shoppers. Account takeover on a clean identity is still the open weakness, and the report says so.
-
-### C: Computer UI ("FORGED OS")
-
-**Done:** the typed checkout (one question per screen), Gus's gut feeling from the model while you type, verdicts with Gus's reasons, the leaked memo, the support chat, the shop and perks, ranks that unlock the checkout one blank at a time, desks, customization, doors.
-
-**How it talks to the backend** (`game.js`, with `?api=<url>` or `API_UPSTREAM`): `POST /round/start`, `POST /preview` while typing, `POST /submit` with `record.mode = "online"` and one IEEE-CIS row per order. If a call fails or times out, the scripted Gus in `orders.js` answers and a "playing offline" toast shows once.
-
-**Next:** playtest fixes, and test at the demo laptop's and projector's resolution.
-
-### D: 3D Office
-
-**Done:** the office with the boss's patrol and vision cone, the printer and IN tray, Gus's booth close-up ("why I caught you"), the inspector's gear by version, the DETECTOR LIVE TV, NPCs you can talk to, level 2's glass office.
-
-**postMessage: how the office talks to the computer (C):**
-```javascript
-// Send to the computer (always include src)
-osFrame.contentWindow.postMessage({ type: "deliver", src: "forged-world" }, "*");
-osFrame.contentWindow.postMessage({ type: "boss-near", src: "forged-world" }, "*");
-
-// Receive from the computer
-window.addEventListener("message", (e) => {
-  if (e.data.src !== "forged-os") return;
-  if (e.data.type === "print") { /* printer starts, slip appears */ }
-  if (e.data.type === "verdict") { /* Gus reacts: e.data.caught, e.data.line, e.data.tells */ }
-  if (e.data.type === "stand") { /* player stood up from the computer */ }
-  if (e.data.type === "hud") { /* money, heat, Gus's version, level */ }
-});
-```
-
-**Do not add new message types without telling C first.**
-
-**Next:** record the backup demo video, and time a full round (the walk should take 15 seconds or less).
-
----
-
-## Branch rules
-
-- **Branches:** `a/…`, `b/…`, `c/…`, `d/…` (or `feat/…`). Merge to `main` through small PRs. `main` must always run.
-- **Ownership:** Don't edit someone else's files without asking. See the ownership table above.
-- **Blocked for more than 30 minutes?** Say so in the group chat. Use the scripted Gus or the stubs while you wait.
-- **Sleep:** each person takes one 3-hour block, staggered. Put yours here: A ___ · B ___ · C ___ · D ___
-
----
-
-## Sponsor checklist
-
-The Cal Hacks 13 tracks we're targeting. Each needs evidence in the demo.
-
-| Track | What we use it for | Evidence needed | Status |
-| --- | --- | --- | --- |
-| **Hyphenate**: Autonomous Systems for Finance ($8K / $5K / $3K) | A fraud model on real data that retrains itself from attacks behind a safety gate and explains every decision | A demo video that opens with the moment Gus catches a trick he missed before; "what's real, what's simulated, how we know" (`ml/online/README.md`) | Model and report done; video to record |
-| **CRS**: Best Identity / Fraud Innovation (interviews) | Gus checks every order's identity with the CRS sandbox, as model inputs | CRS working **live** in the demo: run the backend on the laptop that has the keys in `.env` | Done (v4, live sandbox) |
-| **Anthropic** ($5K in credits) | Claude writes Gus's and the NPCs' lines, scores the clerk chat, writes the report's analyst briefing | A named community and a real problem in the pitch: small online shops that can't afford a fraud team | Done; pitch to write |
-| **Cartesia** | The clerk and the office NPCs speak and listen through Cartesia | Voice is core, not tacked on; README lists the Cartesia features used | Done; needs `CARTESIA_API_KEY` on the demo machine |
-| General: Most Technically Complex, overall | The whole loop: game → real model → learns from players → safety gate | A live demo | — |
-
-Redis, Sentry, Arize and Deepgram were in the first plan's checklist. They aren't Cal Hacks 13 sponsors. Redis and Sentry are still used; Deepgram was replaced by Cartesia; Arize was dropped.
-
----
-
-## Timeline
-
-### Done
-
-- **Contracts** ([docs/contracts.md](docs/contracts.md)) and the playable prototype.
-- **The redesign** from forged invoices to online orders in the IEEE-CIS format ([docs/online-fraud-redesign.md](docs/online-fraud-redesign.md)).
-- **One order through every layer:** typed checkout → IEEE-CIS row → the real model's verdict → saved for retraining.
-- **The game:** ranks, memo, support chat, perks, corkboard, boss, Gus's booth, level 2, desks, customization, doors.
-- **Multiplayer** (rooms of 4, LAN or online) and **hosting** on Render.
-- **The fraud model:** v1 on real data, the retrain gate, the red-team harness (v2), the CRS identity check (v4), the model report, "Gus is learning".
-- **Voices:** Claude for the NPCs and Cartesia for speech.
-
-### What's next (submission Sunday 9:00 AM, judging 10:30 AM – 12:30 PM)
-
-| | Tasks |
-| --- | --- |
-| **Everyone** | Draft the Devpost submission tonight and keep editing it until 9 AM. Add every teammate on Devpost. The whole team must be at the table for judging. |
-| **A** | Render deploy with v4, `ANTHROPIC_API_KEY` and `CARTESIA_API_KEY` set; warm it before judging. Freeze the backend. |
-| **ML** | Retrain on real player orders from playtests. Keep `prototype/gus-versions.json` in sync. Run the CRS demo order live. |
-| **C** | Final visual polish. Test at the demo laptop's and projector's resolution. |
-| **D** | Record the backup demo video (Hyphenate wants it to open with the moment Gus catches what he missed). Run the 2-minute pitch with a live demo 3 times with the whole team. |
-
-**Branches not merged yet:** `b/ml-generator` (defender mode), `f/changing-room-customizer`. `ML-alt` stays unmerged: it conflicts with `ml/online` and catches 7% of game attacks against 92% ([docs/ml-model-choice.md](docs/ml-model-choice.md)).
-
----
-
-## Cut line (drop in this order if behind)
-
-Support chat → perks → extra chaos events → level 2 → NPC voices (the browser's voice takes over) → multiplayer → **the 3D office** (`os.html` still plays the whole game on its own, so the demo survives).
-
-**Never cut:** the checkout-to-row pipeline, the real model's verdicts, the memo, Gus's evolution, the held-out evaluation and the safety gate.
+### v1
+Baseline trained on IEEE-CIS data + simulated shoppers. Real recall 64.8% at 3.6% FPR.
