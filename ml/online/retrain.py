@@ -21,7 +21,6 @@ import time
 import numpy as np
 import pandas as pd
 
-from ml.online import features as F
 from ml.online import game_rows as G
 from ml.online import model as M
 from ml.online import train as T
@@ -59,11 +58,7 @@ def _capped(df: pd.DataFrame) -> pd.DataFrame:
 
 def learned(old: M.Version, new: M.Version) -> list[str]:
     """The tells whose share of the model's attention grew most: the patch notes."""
-    def share(v):
-        g = pd.Series(v.model.booster_.feature_importance("gain"), index=F.FEATURES)
-        g = g.groupby(g.index.map(lambda f: M.TELL_OF.get(f, f))).sum()
-        return g / g.sum()
-    d = (share(new) - share(old)).sort_values(ascending=False)
+    d = (new.attention() - old.attention()).sort_values(ascending=False)
     return [t for t, x in d.items() if x > 0.005][:3]
 
 

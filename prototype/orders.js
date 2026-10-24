@@ -361,6 +361,7 @@ const TELL_LABELS = {
   amount_unusual: "way more than people spend here",
   amount_jump: "$1 tests, then a big buy",
   name_mismatch: "the name isn't the one on the card",
+  new_account: "a brand-new account",
   odd_domain: "an email from a weird website",
   copycat: "the same trick that fooled me before",
   velocity: "too many orders, too fast",
@@ -371,7 +372,7 @@ const TELL_LABELS = {
   yahoo: "a Yahoo email",
 };
 const TELL_BOX = {
-  email_risky: "buyer", email_mismatch: "buyer", yahoo: "buyer", new_card: "card", foreign_card: "card", velocity: "card",
+  email_risky: "buyer", email_mismatch: "buyer", yahoo: "buyer", new_account: "buyer", new_card: "card", foreign_card: "card", velocity: "card",
   ip_far: "device", proxy: "device", emulator: "device", new_device: "device", device_reuse: "device", device_mobile: "device",
   far_ship: "ship", new_address: "ship", name_mismatch: "buyer", odd_domain: "buyer", gift_card: "cart", amount_unusual: "cart", amount_jump: "cart", night: "cart", friday: "cart",
 };

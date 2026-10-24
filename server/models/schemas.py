@@ -33,6 +33,7 @@ class CaseFile(BaseModel):
 class MemoRule(BaseModel):
     text: str
     real: bool
+    tell: str | None = Field(default=None, description="the tell the rule is about (online: prototype/orders.js TELL_LABELS)")
 
 
 class Tell(BaseModel):
@@ -139,6 +140,7 @@ class SubmitRequest(BaseModel):
     record: OnlineRecord | InvoiceRecord
     player: str | None = None
     gus: GusVerdict | None = None
+    perks: list[str] = Field(default_factory=list, description="the player's shop perks (online: patience, shred, ...)")
 
 
 class PreviewRequest(BaseModel):

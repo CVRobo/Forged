@@ -92,7 +92,10 @@ else:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "stubs": config.USE_STUBS}
+    from server.services.online_data import model_status
+
+    # model: the live fraud-model version, why it's off if it is, and whether it can learn here
+    return {"status": "ok", "stubs": config.USE_STUBS, "model": model_status()}
 
 
 # The fraud-model report page (ml/online/report.html + report.js), served from the API the game

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query
 
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
 from server.services.detector import TELL_DESCRIPTIONS
-from server.services.online_data import preview, submit_online
+from server.services.online_data import model_memo, model_metrics, model_patch_notes, model_version, preview, submit_online
 from server.models.schemas import (
     CaseFile,
     ClerkRequest,
@@ -96,12 +96,13 @@ async def stub_round_start(req: RoundStartRequest):
     level = req.level if req.level in STUB_LEVELS else 1
     data = STUB_LEVELS[level]
     session_id = req.session_id or str(uuid.uuid4())
+    model_rules = model_memo()  # the fraud model's own memo, while it's live
 
     return RoundStartResponse(
         round_id=f"stub-{uuid.uuid4().hex[:8]}",
         session_id=session_id,
-        memo=_pick_memo(level),
-        inspector_version=1,
+        memo=[MemoRule(**m) for m in model_rules] if model_rules is not None else _pick_memo(level),
+        inspector_version=model_version() or 1,  # the fraud model's, when it's live: the one judging
         case_file=CaseFile(
             company=data["company"],
             vendors=data["vendors"],
@@ -167,7 +168,7 @@ async def stub_clerk_voice(req: ClerkVoiceRequest):
 @router.post("/submit", response_model=SubmitResponse)
 async def stub_submit(req: SubmitRequest):
     if isinstance(req.record, OnlineRecord):  # the typed checkout
-        return submit_online(req.record, req.gus, req.round_id, req.player)
+        return submit_online(req.record, req.gus, req.round_id, req.player, req.perks)
     tells = _compute_stub_tells(req.record)
     suspicion = sum(t.strength for t in tells) * 0.67  # v1 skill factor
     suspicion -= random.randint(-12, 12)
@@ -193,6 +194,9 @@ async def stub_submit(req: SubmitRequest):
 
 @router.get("/patch-notes", response_model=list[PatchNote])
 async def stub_patch_notes(since: int = Query(default=0)):
+    learned = model_patch_notes(since)  # the fraud model's own notes, when it's live
+    if learned is not None:
+        return [PatchNote(**n) for n in learned]
     notes = [
         PatchNote(
             version=2,
@@ -210,6 +214,9 @@ async def stub_patch_notes(since: int = Query(default=0)):
 
 @router.get("/metrics", response_model=list[VersionMetrics])
 async def stub_metrics():
+    live = model_metrics()  # the fraud model's own test results, when it's live
+    if live is not None:
+        return [VersionMetrics(**m) for m in live]
     return [
         VersionMetrics(version=1, catch_rate=0.35, false_positive_rate=0.08, held_out_catch_rate=0.30),
         VersionMetrics(version=2, catch_rate=0.52, false_positive_rate=0.10, held_out_catch_rate=0.45),
