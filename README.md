@@ -130,6 +130,7 @@ npm run dev
 | `DEEPGRAM_API_KEY` | No | Voice clerk chat (STT + TTS) |
 | `ARIZE_SPACE_KEY` | No | Arize Phoenix LLM tracing |
 | `ARIZE_API_KEY` | No | Arize Phoenix LLM tracing |
+| `CRS_USERNAME`, `CRS_PASSWORD` | No | CRS sandbox for Gus's identity check (`ml/online/crs.py`); without them, an offline mirror of the sandbox answers |
 | `SENTRY_DSN` | No | Error tracking (backend) |
 | `NEXT_PUBLIC_SENTRY_DSN` | No | Error tracking (frontend) |
 | `NEXT_PUBLIC_API_URL` | No | Backend URL (defaults to `http://localhost:8000`) |

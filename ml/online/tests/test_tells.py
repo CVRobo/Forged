@@ -88,7 +88,7 @@ def test_every_feature_has_a_rule():
 
 
 def _js_keys(path: Path, const: str) -> set[str]:
-    body = re.search(rf"const {const} = \{{(.*?)\}};", path.read_text(), re.S).group(1)
+    body = re.search(rf"const {const} = \{{(.*?)\}};", path.read_text(encoding="utf-8"), re.S).group(1)
     return set(re.findall(r"(\w+):", body))
 
 

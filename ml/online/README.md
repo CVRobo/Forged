@@ -17,6 +17,33 @@ The fraud model behind the typed checkout. It starts from the real IEEE-CIS data
 | `robustness.py` | Red-teams the project's own model to harden it: searches the game's checkout answers for orders Gus misses, then retrains on them (through the gate). |
 | `rows.js` | Batch converter: turns a list of typed checkouts into scored rows via the game's own code, for the robustness search. |
 | `probe.js` | Turns hand-written checkouts into rows, to test specific tricks. |
+| `crs.py` + `crs_personas.json` | The CRS identity check: two model inputs from the CRS Credit API (sandbox), see below. |
+| `crs_ablation.py` | The same retrain with and without the CRS inputs, to measure what they add. |
+
+## The CRS identity check (`crs.py`)
+
+Gus asks [CRS](https://calhacks.crscreditapi.com) who the buyer is, and uses the answers as two model inputs (v3 onward):
+
+- **`crs_idv`**: TransUnion TruValidate on the cardholder (name, SSN, DOB, address): `PASS`, `FAIL` (deceased, synthetic, an SSN issued to someone else) or `STEP_UP` (a fraud alert on file).
+- **`crs_risk`**: AtData Fraud Finder (0-100) on what the checkout presents: the buyer's email and name against the cardholder's phone and billing address.
+
+Every victim in the game is a CRS sandbox persona (`crs_personas.json`, all fake people). Five verify cleanly, one has a fraud alert, and three are ghost identities whose cards are for sale but who never shop themselves. Rows name their victim and buyer (`crs_id`, `buyer_email`, `buyer_name`, `buyer_is_holder`), and `features.frame` asks CRS for any row that does.
+
+**Where the answers come from.** With `CRS_USERNAME` and `CRS_PASSWORD` set, from the CRS sandbox (cached in `data/crs_cache.json`; login happens once and is never retried, because CRS locks accounts after failed logins). Without them, from an offline mirror: the sandbox's published answers for each persona's own identity, and a rule of thumb for any other email (an unknown mailbox about 60, an anonymous one 85). `FORGED_CRS=off` forces the mirror. v3 was trained on the mirror.
+
+**What's real and what isn't.** The real IEEE-CIS rows predate CRS, so their CRS inputs are blank: the model learns the inputs' weight only from game-format rows (simulated shoppers and players). That ghost identities never shop honestly is our simulation's assumption, which is why v3 treats an identity that fails CRS as near-certain fraud.
+
+**What it adds** (`python -m ml.online.crs_ablation`: the same retrain from v2, same rows and weights, tested on 841 held-out simulated careful-player orders):
+
+| | without CRS | with CRS |
+| --- | --- | --- |
+| Honest game shoppers blocked | 4.2% | **3.2%** |
+| Real fraud caught / real customers blocked | 64.4% / 3.6% | 64.2% / 3.4% |
+| Attacks caught, ghost identities (285) | 98.3% | **100%** |
+| Attacks caught, fraud-alert victim (82) | 96.3% | 96.3% |
+| Attacks caught, clean victims (474) | 98.3% | 96.8% |
+
+So the identity check mostly makes Gus fairer to honest shoppers and closes stolen-identity fraud. It can't help with account takeover on a clean identity: the identity is the victim's, and it verifies. In the game, an order on a ghost identity that v2 let through (score 0.23, cut 0.25) is flagged by v3 with "CRS says that identity doesn't check out" as the top reason.
 
 ## Adversarial robustness (`robustness.py`)
 

@@ -3,7 +3,7 @@
     python ml/online/tests/fixtures/make_orders.py
 
 Unset answers take the Rookie starter kit, like the game: the cardholder's login, phone and city.
-Holders and cards index prototype/orders.js HOLDERS (0 = Pat Miller, Columbus) and CARDS
+Holders and cards index prototype/orders.js HOLDERS (0 = Angela Morrissey, Columbus) and CARDS
 (0 fresh_visa, 1 aged_mc, 2 amex, 3 foreign_visa).
 """
 import json
@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-CAREFUL = {"item": "Flour, 50 lb sack", "name": "Pat Miller", "email": "pat.miller1@gmail.com", "device": "iPhone 12",
+CAREFUL = {"item": "Flour, 50 lb sack", "name": "Angela Morrissey", "email": "angela.morrissey1@gmail.com", "device": "iPhone 12",
            "where": "next door", "ship": "Cousin's garage in Columbus", "when": "2 PM"}
 CHECKOUTS = {
     "rookie_kit": {"card": 1, "input": {"item": "Flour, 50 lb sack", "ship": "Cousin's garage in Columbus"}},
