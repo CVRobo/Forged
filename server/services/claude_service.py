@@ -15,7 +15,7 @@ from server.models.schemas import InvoiceRecord
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "claude-haiku-4-20250514"
+_MODEL = "claude-haiku-4-5"  # no extended thinking by default, so the small max_tokens below hold the whole reply
 _CALL_CAP = 50  # hard cap on total Claude API calls per process
 _call_count = 0
 

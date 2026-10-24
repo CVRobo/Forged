@@ -1,7 +1,7 @@
 """Cartesia STT/TTS wrapper for voice-powered NPC chat.
 
-Requires CARTESIA_API_KEY in env. Falls back gracefully when the key is missing
-(the stub server never calls these functions).
+Requires CARTESIA_API_KEY in env and the httpx package. Without either, the calls raise
+and every route falls back gracefully (no audio, so the browser's own voice speaks).
 
 Uses Cartesia REST APIs via httpx (no SDK needed):
 - STT: POST https://api.cartesia.ai/stt  (multipart form, model ink-whisper)
@@ -13,10 +13,12 @@ from __future__ import annotations
 import base64
 import logging
 import re
-
-import httpx
+from typing import TYPE_CHECKING
 
 from server import config
+
+if TYPE_CHECKING:
+    import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,9 @@ def _get_client() -> httpx.AsyncClient:
     if _client is None:
         if not config.CARTESIA_API_KEY:
             raise RuntimeError("CARTESIA_API_KEY not set")
+        # imported here, like the Claude and Deepgram SDKs: a missing package turns voice off, not the backend
+        import httpx
+
         _client = httpx.AsyncClient(
             base_url=_CARTESIA_BASE,
             headers={

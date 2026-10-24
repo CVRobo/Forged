@@ -276,13 +276,13 @@ async def score_npc_interaction(
 
     # Try Claude first
     try:
-        from server.services.claude_service import _get_client
+        from server.services.claude_service import _MODEL, _get_client
 
         client = _get_client()
         system = _build_system_prompt(npc_info, history)
 
         response = await client.messages.create(
-            model="claude-haiku-4-20250514",
+            model=_MODEL,
             max_tokens=128,
             system=system,
             messages=[{"role": "user", "content": text}],
