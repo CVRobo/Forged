@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Caveat:wght@600&family=Space+Mono:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
 <!-- the ?v= stamp makes the browser fetch the newest style.css and game.js on every load, whatever server is used -->
-<script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '"><link rel="stylesheet" href="menu.css?v=' + Date.now() + '">');</script>
-<noscript><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="menu.css"></noscript>
+<script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '"><link rel="stylesheet" href="menu.css?v=' + Date.now() + '"><link rel="stylesheet" href="defend.css?v=' + Date.now() + '">');</script>
+<noscript><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="menu.css"><link rel="stylesheet" href="defend.css"></noscript>
 </head>
 <body>
 <div id="viewport">
@@ -28,6 +28,7 @@
       <p class="tagline">Sneak fake invoices past an inspector who learns from every trick you pull.</p>
       <div class="title-buttons">
         <button class="btn btn-big" data-go="levels">▶ Play Solo</button>
+        <button class="btn btn-big btn-ghost" id="btn-defend" title="Swap sides: work the AP desk and catch the fakes">🛡 Defend the desk</button>
         <button class="btn btn-big btn-ghost" disabled>⚔ Duel <span class="tag">soon</span></button>
         <button class="btn btn-ghost" data-menu="howto">How to play</button>
         <button class="btn btn-ghost" data-menu="board">🏆 Leaderboard</button>
@@ -173,6 +174,49 @@
     </aside>
   </section>
 
+  <!-- ================= DEFEND (role swap: you are the AP clerk) ================= -->
+  <section id="screen-defend" class="screen">
+    <header class="df-top">
+      <div class="tb-logo">FORGED</div>
+      <div class="tb-chip"><span class="tb-label">AP desk</span>Sunny Diner Supply</div>
+      <div class="tb-chip"><span class="tb-label">Shift</span><span id="df-shift">1</span></div>
+      <div class="tb-chip"><span class="tb-label">Reviewed</span><span id="df-reviewed">0/8</span></div>
+      <div class="tb-chip" title="Calls to a number you trust: the vendor's number on file, or the owner"><span class="tb-label">Callbacks</span><span id="df-calls"></span></div>
+      <div class="df-insp"><div class="df-insp-face" id="df-insp-face"></div><span id="df-insp-name">Inspector v1</span><span class="df-insp-sub">judges the same pile</span></div>
+      <button class="btn btn-ghost btn-small" id="df-quit">← Title</button>
+    </header>
+
+    <div class="win" id="df-inbox" style="left:16px;top:76px;width:330px;height:810px">
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Inbox<span class="win-hint">ap@sunnydiner.example</span></div>
+      <div class="win-body df-inbox-list" id="df-inbox-list"></div>
+    </div>
+
+    <div class="win" id="df-mail" style="left:360px;top:76px;width:640px;height:258px">
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Email<span class="win-hint" id="df-mail-hint"></span></div>
+      <div class="win-body df-mail-body" id="df-mail-body"></div>
+    </div>
+
+    <div class="df-paper-wrap" id="df-paper-wrap">
+      <div class="paper" id="df-paper"></div>
+    </div>
+
+    <div class="win" id="df-case" style="left:1014px;top:76px;width:570px;height:380px">
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Case File<span class="win-hint">as of this invoice</span></div>
+      <div class="df-tabs" id="df-tabs">
+        <button class="df-tab active" data-tab="vendors">Vendors</button>
+        <button class="df-tab" data-tab="orders">Open POs</button>
+        <button class="df-tab" data-tab="changes">Bank changes</button>
+        <button class="df-tab" data-tab="paid">Recently paid</button>
+      </div>
+      <div class="win-body case-body" id="df-case-body"></div>
+    </div>
+
+    <div class="win" id="df-desk" style="left:1014px;top:470px;width:570px;height:416px">
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Your call<span class="win-hint"><b>P</b> pay · <b>F</b> flag · <b>C</b> call · <b>↑↓</b> inbox</span></div>
+      <div class="win-body df-desk-body" id="df-desk-body"></div>
+    </div>
+  </section>
+
   <!-- ================= OVERLAYS ================= -->
   <div id="overlay-briefing" class="overlay">
     <div class="modal briefing">
@@ -245,10 +289,35 @@
     </div>
   </div>
 
+  <div id="overlay-defend-brief" class="overlay">
+    <div class="modal df-brief">
+      <div class="modal-kicker"><span id="df-brief-kicker">SHIFT 1 · AP DESK</span><span>ROLE SWAP</span></div>
+      <h2>You're the clerk today</h2>
+      <p class="modal-sub" id="df-brief-text"></p>
+      <ul class="df-brief-list">
+        <li><b>Read</b> each email, the invoice and the case file.</li>
+        <li><b>PAY</b> the real ones, <b>FLAG</b> the fakes. Every call is final.</li>
+        <li><b>☎ Call back</b> twice per shift: the number on file always tells the truth.</li>
+        <li>After each call you see the truth, and what <b id="df-brief-insp">the inspector</b> decided.</li>
+      </ul>
+      <div class="between-foot"><button class="btn btn-ghost" id="df-brief-back">← Title</button><button class="btn btn-big" id="df-brief-go">Open the inbox →</button></div>
+    </div>
+  </div>
+
+  <div id="overlay-defend-end" class="overlay">
+    <div class="modal df-end">
+      <div class="modal-kicker"><span id="df-end-kicker">SHIFT 1 · REPORT</span><span>YOU VS THE INSPECTOR</span></div>
+      <h2 id="df-end-title">Shift over</h2>
+      <div class="df-tally" id="df-tally"></div>
+      <table class="case-table df-recap" id="df-recap"></table>
+      <div class="between-foot"><button class="btn btn-ghost" id="df-end-quit">Back to title</button><button class="btn btn-big" id="df-end-next">Next shift →</button></div>
+    </div>
+  </div>
+
   <div id="toasts"></div>
 </div>
 </div>
 <div id="tool-cursor"></div>
-<script>document.write(['keys.js', 'menu.js', 'game.js'].map(f => '<script src="' + f + '?v=' + Date.now() + '"><\/script>').join(''));</script>
+<script>document.write(['keys.js', 'menu.js', 'game.js', 'defend.js'].map(f => '<script src="' + f + '?v=' + Date.now() + '"><\/script>').join(''));</script>
 </body>
 </html>

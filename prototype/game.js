@@ -1846,4 +1846,7 @@ document.addEventListener("pointerdown", e => {
   if (!e.target.closest("#popover") && !e.target.closest("#invoice") && !e.target.closest(".tool")) hidePopover();
 });
 
+// defend.js (the role-swap mode) builds on these
+window.ForgedOS = { show, overlay, toast, sfx, api, offline, hasApi: !!API, faceSVG, LOOKS, stageIndex, stageFor, money };
+
 })();

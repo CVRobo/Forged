@@ -1,0 +1,99 @@
+/* Defender mode (defend.js): the AP desk screen, its briefing and its end-of-shift report.
+ * Reuses style.css's windows, paper, tells and buttons; everything here is prefixed df-. */
+
+.df-top {
+  position: absolute; left: 16px; right: 16px; top: 12px; height: 52px; display: flex; align-items: center; gap: 12px;
+  background: var(--win); border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 4px 4px 0 var(--ink); padding: 0 14px;
+}
+.df-phone { font-size: 18px; margin-left: 2px; }
+.df-phone.used { opacity: .25; filter: grayscale(1); }
+.df-insp { margin-left: auto; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.df-insp-face { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--ink); background: var(--soft); overflow: hidden; line-height: 0; display: grid; place-items: end center; }
+.df-insp-face .portrait { width: 36px; height: 36px; }
+.df-insp-sub { font-size: 11px; font-weight: 400; opacity: .65; }
+
+/* inbox */
+.df-inbox-list { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.df-msg {
+  text-align: left; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 8px 10px; cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink); font-size: 12px; color: var(--ink);
+}
+.df-msg:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+.df-msg.active { background: var(--soft); outline: 3px solid var(--accent-2); outline-offset: 1px; }
+.df-msg.done { opacity: .72; }
+.df-msg-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.df-msg-top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.df-msg-sub { margin: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
+.df-msg-foot { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: .8; }
+.df-msg-foot > span:first-child { margin-right: auto; }
+.df-chip { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; border: 2px solid currentColor; }
+.df-chip.pay { color: var(--paid); } .df-chip.flag { color: var(--flag); } .df-chip.call { color: var(--accent-2); }
+.df-mark { font-weight: 700; font-size: 14px; }
+.df-mark.ok { color: var(--paid); } .df-mark.bad { color: var(--flag); }
+
+/* email */
+.df-mail-body { font-size: 13px; padding: 10px 14px; }
+.df-subject { font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+.df-warn { background: #fff4c2; border: 2px solid #c99a00; border-radius: 6px; padding: 3px 8px; margin-bottom: 6px; font-size: 12px; }
+.df-hdr { display: flex; gap: 8px; margin: 1px 0; word-break: break-all; }
+.df-hdr > span:first-child { width: 64px; flex: none; opacity: .55; font-size: 11px; text-transform: uppercase; padding-top: 2px; }
+.df-thread { margin-left: auto; font-size: 11px; opacity: .7; white-space: nowrap; }
+.df-link { background: none; border: none; padding: 0; margin: 4px 0; color: var(--accent-2); text-decoration: underline; cursor: pointer; font-size: 12px; }
+.df-raw { background: #1b1b1b; color: #d6f5d6; font-size: 11px; padding: 6px 10px; border-radius: 6px; margin: 2px 0 6px; white-space: pre-wrap; user-select: text; }
+.df-text { margin-top: 6px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,.3); line-height: 1.5; font-family: var(--type); user-select: text; }
+.df-post { padding: 30px; text-align: center; font-size: 15px; opacity: .8; }
+#df-mail.df-tell { outline: 4px solid var(--flag); outline-offset: 2px; }
+
+/* paper: the forger's sheet (560 × 676), scaled to fit under the email */
+.df-paper-wrap { position: absolute; left: 360px; top: 348px; width: 640px; height: 538px; }
+#df-paper { left: 97px; top: 0; transform: scale(.795); transform-origin: top left; }
+.df-vendor { cursor: default; }
+.df-amount { font-family: var(--type); font-size: 22px; font-weight: 700; }
+#df-paper.forensic [data-tell] { animation: blink 1s 3; }
+
+/* case file */
+.df-tabs { display: flex; gap: 4px; padding: 8px 12px 0; border-bottom: 2px solid var(--ink); background: var(--win); }
+.df-tab { border: 2px solid var(--ink); border-bottom: none; border-radius: 6px 6px 0 0; background: var(--soft); padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer; opacity: .7; }
+.df-tab.active { background: #fff; opacity: 1; }
+.df-hit td { background: rgba(31,138,138,.12); }
+.df-note { font-size: 12px; background: #fff4c2; border: 2px solid #c99a00; border-radius: 6px; padding: 6px 8px; }
+.case-body small { opacity: .6; }
+
+/* your call */
+.df-desk-body { font-size: 13px; display: flex; flex-direction: column; gap: 10px; }
+.df-ask { font-size: 15px; line-height: 1.4; }
+.df-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.df-pay { background: #c9f2d4; } .df-flag { background: #ffd0cc; }
+.df-callbtn { align-self: flex-start; }
+.df-call-who { font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--accent-2); }
+.df-call.ringing .df-call-who { animation: blink .5s infinite; }
+.df-call .bubble { font-family: var(--type); font-weight: 400; min-height: 0; }
+.df-verdict { display: flex; align-items: center; gap: 12px; font-size: 16px; }
+.df-verdict.ok b { color: var(--paid); } .df-verdict.bad b { color: var(--flag); }
+.df-stamp { font-family: var(--display); font-size: 22px; border: 4px solid; border-radius: 6px; padding: 0 8px; transform: rotate(-6deg); }
+.df-stamp.paid { color: var(--paid); } .df-stamp.flagged { color: var(--flag); }
+.df-truth { border: 2px solid var(--ink); border-radius: 8px; padding: 8px 10px; line-height: 1.4; }
+.df-truth.fraud { background: #ffe1de; } .df-truth.real { background: #dcf5e3; }
+.df-insp-says { border: 2px dashed var(--ink); border-radius: 8px; padding: 8px 10px; }
+.df-insp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.df-score { margin-left: auto; font-size: 11px; opacity: .7; }
+.df-meter { position: relative; height: 8px; border: 2px solid var(--ink); border-radius: 5px; margin: 6px 0; background: #fff; }
+.df-meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 3px; }
+.df-meter b { position: absolute; top: -5px; bottom: -5px; width: 3px; background: var(--flag); }
+.df-why-head { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; opacity: .7; margin-top: 4px; }
+.df-why { margin: 4px 0 0; padding-left: 18px; }
+.df-why li { margin-bottom: 2px; }
+.df-next { margin-left: auto; }
+
+/* briefing and report */
+.df-brief { width: 720px; }
+.df-brief-list { margin: 0 0 8px; padding-left: 22px; line-height: 1.8; font-size: 15px; }
+.df-end { width: 1000px; max-height: 860px; overflow: auto; }
+.df-vs { border-collapse: collapse; margin: 10px 0 18px; font-size: 16px; }
+.df-vs th, .df-vs td { padding: 6px 22px 6px 0; text-align: left; border-bottom: 2px dashed rgba(0,0,0,.2); }
+.df-vs th { font-size: 12px; text-transform: uppercase; opacity: .7; }
+.df-vs td.df-better { color: var(--paid); font-weight: 700; }
+.df-recap { font-size: 13px; }
+.df-recap td { vertical-align: middle; }
+.df-recap .df-chip { margin-right: 4px; }
+.df-fraud { color: var(--flag); }

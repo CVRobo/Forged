@@ -419,3 +419,56 @@ realize_email(identity, vendor_id_or_None, *, from_name, subject, body, sent_at,
 log_attempt(record_or_None, prediction_or_None, *, verdict, session_id, round_id, consent, email=None,
             change_request=None, bank_changes=None, persuasion=None, perks=(), noise=None, stream=None)
 ```
+
+---
+
+## 7. Defender mode (role swap)
+
+From `docs/superpowers/specs/2026-10-24-defender-mode-design.md`. The player works the AP desk: an inbox of 8 invoices to PAY or FLAG, with 2 callbacks per shift, and after each decision a reveal of the truth and the inspector's call. Nothing is logged.
+
+### POST /defend/shift
+
+Request: `{"seed": 1}`. `seed` is optional; leave it out for a random shift. The same seed and detector version always give the same shift. Built by `ml.defender.build_shift(seed)` and scored by the live detector at Sunny Diner's threshold, with memory off. It's registered only on the real app; in stub mode the computer falls back to the bundled `prototype/defend-shifts.json` (`python -m ml.defender --export prototype/defend-shifts.json`).
+
+Response (abridged):
+
+```json
+{
+  "shift_id": "shift-1", "seed": 1, "level": 1, "callbacks": 2,
+  "inspector": {"version": 2, "threshold": 0.2994},
+  "approval_limit": 2500.0,
+  "paid_before": [{"invoice_id": "PP-0119", "vendor_name": "Pancake Pete's Flour Co.", "vendor_id": "petes",
+                   "amount": 1234.0, "issue_date": "2026-10-03"}],
+  "items": [{
+    "id": "shift-1-3",
+    "email": {"from_name": "…", "from_addr": "billing@petesfl0ur.com", "reply_to": null, "cc": [], "subject": "…",
+              "body": "…", "sent_at": "2026-10-14T10:05:00", "in_thread": false, "spf": "pass", "dkim": "pass",
+              "dmarc": "pass", "domain_age_days": 12, "first_time_sender": true},
+    "invoice": {"invoice_id": "PP-0231", "vendor_name": "Pancake Pete's Flour Co.", "vendor_id": "petes",
+                "issue_date": "2026-10-14", "due_date": "2026-11-13", "order_number": "PO-4012",
+                "bank_account": "7781", "sender_domain": "petesfl0ur.com", "letterhead": "vendor",
+                "line_items": [{"description": "Flour, 50lb sack", "quantity": 12, "unit_price": 62.0}],
+                "amount": 1262.0, "stamps": ["RECEIVED"],
+                "paper": {"taped": ["bank"], "whiteout": [], "stains": {"items": 0.35}, "copies": 1}},
+    "case": {"vendors": [{"vendor_id": "petes", "name": "…", "domain": "petesflour.com", "bank_on_file": "3321",
+                          "phone": "(510) 555-0142", "usual_amount": 1230.0, "cadence_days": 14, "uses_po": true}],
+             "open_orders": [{"order_number": "PO-4012", "vendor_id": "petes", "amount": 1120.0}],
+             "bank_changes": [{"vendor_id": "…", "old_account": "…", "new_account": "…", "changed_at": "…",
+                               "channel": "email", "verified": false, "offered_phone": true}]},
+    "callback": {"who": "Pancake Pete's Flour Co. · (510) 555-0142",
+                 "says": "That's not our account. We're still at the one ending 3321."},
+    "truth": {"fraud": true, "scheme": "bank_switcheroo", "scheme_name": "Bank switcheroo",
+              "schemes": ["bank_switcheroo"], "why": "The account ending 7781 is a mule account, not …'s."},
+    "verdict": {"flagged": true, "score": 0.72,
+                "reasons": [{"feature": "bank_changed", "text": "bank details that don't match the vendor on file",
+                             "region": "bank"}]}
+  }]
+}
+```
+
+- `case` is the case file as it stood before that item, so a bank change made during the shift shows up from the next invoice on. The computer adds the invoices the player paid this shift to `paid_before` itself.
+- `letterhead` is `vendor` (matches the file), `generic`, or `other` (a redesign, or a vendor not on file).
+- `paper.whiteout` and `paper.taped` name fields (`items`, `amount`, `issue_date`, `invoice_id`, `bank`); `paper.stains` is keyed by region.
+- `callback.who` is the vendor's number on file, or the owner (`ml.defender.OWNER`) for a vendor not on file.
+- `reasons` are the top 3 pushes toward FLAGGED in plain words, with the tell's region (`header`, `meta`, `items`, `bank`, `footer`, `email`, or null). They're there whether or not the inspector flagged the invoice.
+- The truth and the callback are in the payload, so the reveal works offline. That's fine for a single-player mode.

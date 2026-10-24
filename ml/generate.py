@@ -123,6 +123,7 @@ class Run:
     hijacked: dict[str, tuple] = field(default_factory=dict)  # vendor_id -> (levers, act 1 email, origin, asked at,
                                                               #             the first day act 2 can come)
     usual: dict[str, dict[str, str]] = field(default_factory=dict)  # vendor_id -> its other usual sending domains
+    snapshots: list[CaseFile] | None = None  # when kept: the case file as it stood before each row (defender mode)
 
     def last_paid(self, vendor_id: str) -> Invoice | None:
         paid = [p for p in self.case_file.paid_invoices if p.vendor_id == vendor_id]
@@ -202,11 +203,12 @@ def simulate_run(seed: int, index: int, attack_rate: float, levers: Levers | Non
 
 
 def simulate(seed: int, index: int, attack_rate: float, levers: Levers | None = None,
-             origin: str = "scripted_attacker") -> Run:
+             origin: str = "scripted_attacker", snapshots: bool = False) -> Run:
+    """snapshots: also keep a copy of the case file before each row (no RNG draws, so the rows don't change)."""
     rng = random.Random(f"{seed}:{index}")
     start = business_day(date(2026, 1, 5) + timedelta(days=rng.randint(0, 240)))
     run = Run(rng=rng, session_id=f"gen{seed}-{index}", case_file=new_case_file(rng), truth=Truth(), clock=start,
-              created_base=datetime(2026, 1, 1) + timedelta(hours=index))
+              created_base=datetime(2026, 1, 1) + timedelta(hours=index), snapshots=[] if snapshots else None)
     _seed_history(run, start)
     if attack_rate and rng.random() < EARLIER_ACT1_RATE:  # act 1 of a two-act attack from an earlier session
         lv = levers if levers and levers.scheme_id == "bank_change_fraud" else \
@@ -265,6 +267,8 @@ def _attack_round(run: Run, levers: Levers, origin: str) -> None:
 def _submit(run: Run, inv: Invoice, origin: str, scheme_id: str | None) -> None:
     run.round_no += 1
     history = SessionHistory(session_id=run.session_id, round_no=run.round_no, entries=list(run.entries))
+    if run.snapshots is not None:
+        run.snapshots.append(run.case_file.model_copy(deep=True))
     features = compute_features(inv, run.case_file, history)
     hits = payload_schemes(inv, run.case_file, run.truth)
     if (scheme_id is None) == bool(hits) or (scheme_id and scheme_id not in hits):
