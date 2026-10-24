@@ -14,24 +14,35 @@ Only rows logged with consent are exported, in the formats real tools read:
 The paper tools (whiteout, mug, photocopier, stamps) are game flavour, so their record keys and
 features are left out, as is the server's noise draw. The world-simulated mail checks go where a
 receiving server writes them (Authentication-Results, RFC 8601) or in X-Forged- headers.
-sender_identity, how the attacker got the address, is ground truth: attempts.jsonl only.
+sender_identity, how the attacker got the address, is ground truth: attempts.jsonl only. The game
+world's Message-IDs hash it in, so the export re-hashes every id with a secret salt made per run.
+
+Each run is written to a temporary folder next to --out and moved in only once complete, replacing
+the previous export's four entries above (anything else in the folder is left alone). The model
+folder itself is refused, since its attempts.jsonl is the event log.
 """
 import argparse
 import hashlib
 import json
+import os
 import re
+import secrets
+import shutil
+import tempfile
 from collections import Counter
 from datetime import date, datetime
 from email import policy
 from email.headerregistry import Address
 from email.message import EmailMessage as MailMessage
-from email.utils import format_datetime, formataddr
+from email.utils import format_datetime, getaddresses, unquote
 from pathlib import Path
 from typing import get_args, get_origin
 
+from pydantic import ValidationError
+
 from ml import store
 from ml.adapter import YEAR, to_invoice
-from ml.eventlog import CONSENT_TEXT, Attempt, read_attempts
+from ml.eventlog import CONSENT_TEXT, Attempt
 from ml.payloads import PAD_LIMIT, REBILL_AMOUNT_TOL
 from ml.world import ATTACKER_ACCOUNTS, VENDORS
 
@@ -41,6 +52,7 @@ DROPPED_RECORD_KEYS = ("field_altered", "legibility", "scan_quality", "copy_gene
 DROPPED_FEATURES = ("field_altered_count", "max_illegibility", "copy_generation", "scan_quality", "stamp_count",
                     "stamp_matches_vendor")
 DROPPED_ATTEMPT_FIELDS = ("noise",)  # the server's random draw
+OUTPUTS = ("attempts.jsonl", "emails", "invoices", "DATACARD.md")  # replaced each run; the data card last
 
 HONEST_CLAIM = ("Forged collects human-written vendor-impersonation attacks (email, bank-change request, invoice) "
                 "against a detector and a callback policy, with labels players can't poison. It's simulated, not "
@@ -51,6 +63,10 @@ AP_NAME, AP_ADDR = "Sunny Diner Accounts Payable", "ap@sunnydiner.example"
 CUSTOMER = "Sunny Diner"
 CUSTOMIZATION_ID = "urn:forged:simulated-invoice:1"
 AUTH_RESULTS = ("pass", "fail", "none")
+INVALID_DOMAIN = "unknown.invalid"  # RFC 2606; stands in for typed text that isn't one address with a real host
+HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+")
+NAME_LIMIT = 200   # display names in headers: the folder can't split one long word, and a line must stay <= 998
+LOCAL_LIMIT = 64   # RFC 5321's longest local part
 
 LABEL_RULES = {
     "bank_switcheroo": "a known vendor's invoice pays a mule account that differs from the account on file",
@@ -92,26 +108,82 @@ FIELD_NOTES = {
 def export(out_dir: str | Path | None = None, attempts=None) -> dict:
     """attempts: Attempt rows or dicts; read from the event log when None."""
     out = Path(out_dir) if out_dir else store.model_dir() / "export"
-    rows = [a if isinstance(a, Attempt) else Attempt.model_validate(a)
-            for a in (read_attempts() if attempts is None else attempts)]
+    if (out / "attempts.jsonl").resolve() == _log_path().resolve():
+        raise ValueError(f"export --out must not be the model folder ({out}): it would overwrite the event log")
+    if attempts is None:
+        rows, unreadable = _read_log()
+    else:
+        rows, unreadable = [a if isinstance(a, Attempt) else Attempt.model_validate(a) for a in attempts], 0
+    target = out.resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(dir=target.parent, prefix=f".{target.name}."))  # same disk, so os.replace works
+    try:
+        summary = _write(tmp, rows, unreadable, str(out))
+        _swap_in(tmp, target)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return summary
+
+
+def _write(folder: Path, rows: list[Attempt], unreadable: int, out_dir: str) -> dict:
     kept = [a for a in rows if a.consent]
-    (out / "emails").mkdir(parents=True, exist_ok=True)
-    (out / "invoices").mkdir(parents=True, exist_ok=True)
-    (out / "attempts.jsonl").write_text(
+    salt = secrets.token_hex(16)  # per run and never written out, so no exported id can be traced back
+    (folder / "emails").mkdir()
+    (folder / "invoices").mkdir()
+    (folder / "attempts.jsonl").write_text(
         "".join(json.dumps(export_row(a), ensure_ascii=False) + "\n" for a in kept), encoding="utf-8")
-    emails = invoices = 0
+    emails = invoices = skipped = 0
     for a in kept:
         for name, mail, default_date in _emails(a):
-            (out / "emails" / f"{name}.eml").write_bytes(to_eml(mail, a.attempt_id, default_date))
+            try:
+                data = to_eml(mail, a.attempt_id, default_date, salt=salt, name=name)
+            except Exception:  # one odd row never stops the export; the data card counts it
+                skipped += 1
+                continue
+            (folder / "emails" / f"{name}.eml").write_bytes(data)
             emails += 1
         if has_invoice(a.record):
-            (out / "invoices" / f"{a.attempt_id}.json").write_text(
-                json.dumps(to_ubl(a.record), indent=1, ensure_ascii=False), encoding="utf-8")
+            try:
+                text = json.dumps(to_ubl(a.record), indent=1, ensure_ascii=False)
+            except Exception:
+                skipped += 1
+                continue
+            (folder / "invoices" / f"{a.attempt_id}.json").write_text(text, encoding="utf-8")
             invoices += 1
-    summary = {"out_dir": str(out), "rows": len(rows), "exported": len(kept), "no_consent": len(rows) - len(kept),
-               "emails": emails, "invoices": invoices}
-    (out / "DATACARD.md").write_text(datacard(kept, summary), encoding="utf-8")
+    summary = {"out_dir": out_dir, "rows": len(rows), "exported": len(kept), "no_consent": len(rows) - len(kept),
+               "emails": emails, "invoices": invoices, "skipped": skipped, "unreadable": unreadable}
+    (folder / "DATACARD.md").write_text(datacard(kept, summary), encoding="utf-8")
     return summary
+
+
+def _swap_in(tmp: Path, out: Path) -> None:
+    """Move the finished export into out, replacing the previous export's entries and nothing else."""
+    out.mkdir(parents=True, exist_ok=True)
+    for name in OUTPUTS:
+        old = out / name
+        if old.is_symlink():
+            old.unlink()
+        elif old.is_dir():
+            shutil.rmtree(old)
+        os.replace(tmp / name, old)
+
+
+def _read_log() -> tuple[list[Attempt], int]:
+    """The event log, like eventlog.read_attempts(), but a line that doesn't parse (a row the server was still
+    writing when the export ran) is skipped and counted, not fatal."""
+    path, rows, bad = _log_path(), [], 0
+    for line in path.read_bytes().split(b"\n") if path.exists() else []:
+        if not line.strip():
+            continue
+        try:
+            rows.append(Attempt.model_validate_json(line))
+        except ValidationError:
+            bad += 1
+    return rows, bad
+
+
+def _log_path() -> Path:
+    return store.model_dir() / "attempts.jsonl"
 
 
 def export_row(attempt: Attempt) -> dict:
@@ -130,24 +202,25 @@ def has_invoice(record: dict) -> bool:
 
 # --- email -------------------------------------------------------------------------------------
 
-def to_eml(mail: dict, attempt_id: str, default_date: datetime) -> bytes:
-    """An RFC 5322 message as Sunny Diner's mail server received it. default_date: when sent_at is missing."""
-    msg = MailMessage(policy=policy.SMTP)
-    addr = _line(mail.get("from_addr"))
-    domain = _domain(addr)
+def to_eml(mail: dict, attempt_id: str, default_date: datetime, *, salt: str, name: str = "") -> bytes:
+    """An RFC 5322 message as Sunny Diner's mail server received it. default_date: when sent_at is missing.
+    salt: the run's secret for opaque_id(). name: the file name, which seeds the Message-ID when there is none."""
+    sender = mailbox(mail.get("from_name"), mail.get("from_addr"))
+    reply_to, cc = addresses(mail.get("reply_to")), addresses(mail.get("cc"))
+    utf8 = not all(a.username.isascii() for a in (sender, *reply_to, *cc))
+    msg = MailMessage(policy=policy.SMTPUTF8 if utf8 else policy.SMTP)  # RFC 6532 for a non-ASCII local part
     msg["Authentication-Results"] = authentication_results(mail)  # receiving servers prepend it
-    msg["Message-ID"] = _msg_id(mail.get("message_id")) or f"<{_hash(mail)}@{domain}>"
+    msg["Message-ID"] = (opaque_id(mail.get("message_id"), salt)
+                         or opaque_id(f"<{name or attempt_id}@{sender.domain}>", salt))
     msg["Date"] = format_datetime(_when(mail.get("sent_at")) or default_date)
-    msg["From"] = _address(_line(mail.get("from_name")), addr)
+    msg["From"] = sender
     msg["To"] = Address(display_name=AP_NAME, addr_spec=AP_ADDR)
-    if mail.get("reply_to"):
-        msg["Reply-To"] = _line(mail["reply_to"])
-    cc = mail.get("cc") or []
-    cc = [_line(c) for c in ([cc] if isinstance(cc, str) else cc) if c]
+    if reply_to:
+        msg["Reply-To"] = reply_to
     if cc:
-        msg["Cc"] = ", ".join(cc)
+        msg["Cc"] = cc
     msg["Subject"] = _line(mail.get("subject"))
-    parent, thread = _msg_id(mail.get("in_reply_to")), _msg_id(mail.get("thread_id"))
+    parent, thread = opaque_id(mail.get("in_reply_to"), salt), opaque_id(mail.get("thread_id"), salt)
     if parent:
         msg["In-Reply-To"] = parent
     refs = list(dict.fromkeys(r for r in (thread, parent) if r))  # thread root first, then the parent
@@ -156,8 +229,9 @@ def to_eml(mail: dict, attempt_id: str, default_date: datetime) -> bytes:
     # What the game world set for this sender, with no standard header of its own.
     msg["X-Forged-Simulated"] = "true"
     msg["X-Forged-Attempt-Id"] = attempt_id
-    if mail.get("sender_domain_age_days") is not None:
-        msg["X-Forged-Sender-Domain-Age-Days"] = str(int(mail["sender_domain_age_days"]))
+    age = _int(mail.get("sender_domain_age_days"))
+    if age is not None:
+        msg["X-Forged-Sender-Domain-Age-Days"] = str(age)
     msg["X-Forged-First-Time-Sender"] = "true" if mail.get("first_time_sender") else "false"
     msg.set_content(str(mail.get("body") or ""))
     return msg.as_bytes()
@@ -165,12 +239,52 @@ def to_eml(mail: dict, attempt_id: str, default_date: datetime) -> bytes:
 
 def authentication_results(mail: dict) -> str:
     """RFC 8601, e.g. "mx.sunnydiner.example; spf=pass smtp.mailfrom=petesflour.com; dkim=pass
-    header.d=petesflour.com; dmarc=pass header.from=petesflour.com". dkim=none means unsigned: no header.d."""
-    domain = _domain(_line(mail.get("from_addr")))
+    header.d=petesflour.com; dmarc=pass header.from=petesflour.com". dkim=none means unsigned: no header.d.
+    The domain is the checked one from mailbox(), so typed text can't add clauses or a second From domain."""
+    domain = mailbox(None, mail.get("from_addr")).domain
     spf, dkim, dmarc = (_result(mail.get(k)) for k in ("spf", "dkim", "dmarc"))
     return "; ".join([AUTHSERV_ID, f"spf={spf} smtp.mailfrom={domain}",
                       "dkim=none" if dkim == "none" else f"dkim={dkim} header.d={domain}",
                       f"dmarc={dmarc} header.from={domain}"])
+
+
+def mailbox(name, addr) -> Address:
+    """One typed address as a header mailbox. The host is written as its IDNA A-label (xn--...), the form a
+    receiving server logs, and the display name is cut to NAME_LIMIT. Text that isn't exactly one address with
+    a real hostname becomes invalid@unknown.invalid; what was typed is still in attempts.jsonl."""
+    found = getaddresses([_line(addr)])
+    local, at, host = found[0][1].rpartition("@") if len(found) == 1 else ("", "", "")
+    local = unquote(local)
+    host = _host(host) if at and 0 < len(local) <= LOCAL_LIMIT else ""
+    if not host:
+        local, host = "invalid", INVALID_DOMAIN
+    return Address(display_name=_line(name)[:NAME_LIMIT].rstrip(), username=local, domain=host)
+
+
+def addresses(value) -> list[Address]:
+    """Typed Reply-To or Cc text (one string or a list of them) as mailboxes, each checked like From."""
+    texts = [value] if isinstance(value, str) else list(value or [])
+    return [mailbox(name, addr) for text in texts for name, addr in getaddresses([_line(text)]) if name or addr]
+
+
+def opaque_id(value, salt: str) -> str:
+    """A Message-ID re-hashed with the run's secret salt, keeping its host. The game world's ids hash in
+    sender_identity (ml/mail.py), which would give it away; the same id still maps to the same new id, so
+    In-Reply-To and References keep pointing at the right message within one export."""
+    value = _msg_id(value)
+    if not value:
+        return ""
+    host = _host(value.strip("<>").rpartition("@")[2]) or INVALID_DOMAIN
+    return f"<{hashlib.sha256((salt + value).encode()).hexdigest()[:16]}@{host}>"
+
+
+def _host(text: str) -> str:
+    """A typed hostname as its lower-case A-label, or "" when it isn't a hostname."""
+    try:
+        host = text.strip().rstrip(".").encode("idna").decode("ascii").lower()
+    except UnicodeError:
+        return ""
+    return host if len(host) <= 253 and HOSTNAME.fullmatch(host) else ""
 
 
 def _result(value) -> str:
@@ -187,25 +301,21 @@ def _emails(a: Attempt):
         yield f"{a.attempt_id}-change", request["email"], _when(request.get("requested_at")) or a.logged_at
 
 
-def _address(name: str, addr: str):
-    try:
-        return Address(display_name=name, addr_spec=addr)
-    except (ValueError, IndexError, TypeError):  # not a valid address: keep what was typed
-        return formataddr((name, addr))
-
-
 def _line(value) -> str:
     """One header line: player text never adds a header."""
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
-def _domain(addr: str) -> str:
-    return (addr.rpartition("@")[2].lower() if "@" in addr else "") or "unknown.invalid"
-
-
 def _msg_id(value) -> str:
     value = _line(value)
     return value if not value or value.startswith("<") else f"<{value}>"
+
+
+def _int(value) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _when(value) -> datetime | None:
@@ -217,10 +327,6 @@ def _when(value) -> datetime | None:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")) if value else None
     except ValueError:
         return None
-
-
-def _hash(mail: dict) -> str:
-    return hashlib.sha256(json.dumps(mail, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
 # --- invoice -----------------------------------------------------------------------------------
@@ -286,13 +392,20 @@ def datacard(kept: list[Attempt], summary: dict) -> str:
         "", f"Each `.eml` carries the simulated SPF, DKIM and DMARC results in an `Authentication-Results` header "
         f"(RFC 8601, authserv-id `{AUTHSERV_ID}`), and the other world-set values in `X-Forged-Simulated`, "
         "`X-Forged-Attempt-Id`, `X-Forged-Sender-Domain-Age-Days` and `X-Forged-First-Time-Sender`.", "",
+        "Addresses are written the way a receiving server records them: hostnames in their IDNA A-label form "
+        "(`xn--...`), so a lookalike domain shows as punycode; a non-ASCII local part makes that message RFC 6532 "
+        "(UTF-8 headers). Typed address text that isn't exactly one mailbox with a real hostname is written as "
+        f"`invalid@{INVALID_DOMAIN}`, and display names are cut to {NAME_LIMIT} characters to keep header lines "
+        "within RFC 5322's limit. The text as typed is in `attempts.jsonl`.", "",
         "## Counts", "",
         "| | Rows |", "| --- | ---: |",
         f"| Rows logged | {summary['rows']} |",
+        f"| Log lines that could not be read (e.g. cut off mid-write) | {summary['unreadable']} |",
         f"| Rows exported | {summary['exported']} |",
         f"| Rows left out (no consent) | {summary['no_consent']} |",
         f"| `.eml` files | {summary['emails']} |",
-        f"| Invoice files | {summary['invoices']} |", "",
+        f"| Invoice files | {summary['invoices']} |",
+        f"| Files skipped (could not be built) | {summary['skipped']} |", "",
         "Exported rows by verdict:", "",
         "| Verdict | Rows |", "| --- | ---: |",
         *(f"| {v} | {verdicts[v]} |" for v in get_args(Attempt.model_fields["verdict"].annotation)), "",
@@ -333,7 +446,9 @@ def datacard(kept: list[Attempt], summary: dict) -> str:
         "- Their features: " + ", ".join(f"`{k}`" for k in DROPPED_FEATURES) + ".",
         "- The server's random draw: " + ", ".join(f"`{k}`" for k in DROPPED_ATTEMPT_FIELDS) + ".",
         "- From the `.eml` files: `sender_identity` (how the attacker got the address). It is ground truth, so it "
-        "is only in `attempts.jsonl`.", "",
+        "is only in `attempts.jsonl`. The game's own Message-IDs hash it in, so every `Message-ID`, `In-Reply-To` "
+        "and `References` id is re-hashed with a secret salt made for this export: threads still match within the "
+        "export, but the ids don't match `attempts.jsonl` or any other export.", "",
         "## License", "",
         LICENSE, "",
     ]
@@ -351,7 +466,9 @@ def main() -> None:
     args = parser.parse_args()
     summary = export(args.out)
     print(f"Exported {summary['exported']} of {summary['rows']} rows ({summary['no_consent']} without consent) "
-          f"to {summary['out_dir']}: .eml files {summary['emails']}, invoice files {summary['invoices']}")
+          f"to {summary['out_dir']}: .eml files {summary['emails']}, invoice files {summary['invoices']}"
+          + (f", {summary['skipped']} files skipped" if summary["skipped"] else "")
+          + (f", {summary['unreadable']} unreadable log lines" if summary["unreadable"] else ""))
 
 
 if __name__ == "__main__":
