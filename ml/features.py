@@ -38,7 +38,7 @@ CHANGE_WORDS = frozenset((
 
 
 def compute_features(invoice: Invoice, case_file: CaseFile, session_history: SessionHistory) -> dict[str, float]:
-    vendor = _find_vendor(invoice, case_file)
+    vendor = find_vendor(invoice, case_file)
     vendor_paid = [p for p in case_file.paid_invoices if _same_vendor(p, invoice)]
     f = {
         **_money(invoice, vendor, case_file),
@@ -59,7 +59,7 @@ def _money(inv: Invoice, vendor: VendorProfile | None, cf: CaseFile) -> dict:
         mean, std = vendor.amount_mean, vendor.amount_std
     else:
         mean, std = _mean(v.amount_mean for v in cf.vendors), _mean(v.amount_std for v in cf.vendors)
-    order = _open_order(inv, cf)
+    order = open_order(inv, cf)
     catalog = {_norm(k): p for k, p in vendor.catalog.items()} if vendor else {}
     price_ratios = [li.unit_price / catalog[_norm(li.description)]
                     for li in inv.line_items if catalog.get(_norm(li.description), 0) > 0]
@@ -79,7 +79,7 @@ def _identity(inv: Invoice, vendor: VendorProfile | None, cf: CaseFile) -> dict:
         "vendor_unknown": vendor is None,
         "vendor_name_similarity": max((SequenceMatcher(None, name, _norm(v.name)).ratio() for v in cf.vendors), default=0.0),
         "domain_mismatch": vendor is None or domain != _norm(vendor.sender_domain),
-        "domain_edit_distance": min((_edit_distance(domain, _norm(v.sender_domain)) for v in cf.vendors), default=len(domain)),
+        "domain_edit_distance": min((edit_distance(domain, _norm(v.sender_domain)) for v in cf.vendors), default=len(domain)),
         "letterhead_match": vendor is not None and inv.letterhead_id == vendor.letterhead_id,
     }
 
@@ -92,7 +92,7 @@ def _process(inv: Invoice, vendor: VendorProfile | None, cf: CaseFile, vendor_pa
         cadence_z = (days - vendor.cadence_days) / max(CADENCE_CV * vendor.cadence_days, 1.0)
     sent = inv.sent_at
     return {
-        "no_open_order": _open_order(inv, cf) is None,
+        "no_open_order": open_order(inv, cf) is None,
         "dup_similarity": max((_dup_similarity(inv, p) for p in cf.paid_invoices), default=0.0),
         "cadence_z": cadence_z,
         "due_days": (inv.due_date - inv.issue_date).days,
@@ -150,11 +150,11 @@ def _session(inv: Invoice, vendor: VendorProfile | None, hist: SessionHistory, v
 
 # ---------- helpers ----------
 
-def _find_vendor(inv: Invoice, cf: CaseFile) -> VendorProfile | None:
+def find_vendor(inv: Invoice, cf: CaseFile) -> VendorProfile | None:
     return next((v for v in cf.vendors if v.vendor_id == inv.vendor_id), None) if inv.vendor_id else None
 
 
-def _open_order(inv: Invoice, cf: CaseFile):
+def open_order(inv: Invoice, cf: CaseFile):
     # An order only counts for the vendor it was issued to.
     if not inv.order_number:
         return None
@@ -183,7 +183,7 @@ def _dup_similarity(a: Invoice, b: Invoice) -> float:
     return (vendor + amount + lines + when) / 4
 
 
-def _edit_distance(a: str, b: str) -> int:
+def edit_distance(a: str, b: str) -> int:
     prev = list(range(len(b) + 1))
     for i, ca in enumerate(a, 1):
         cur = [i]

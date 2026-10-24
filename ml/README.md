@@ -1,20 +1,43 @@
 # ml/ (Person B)
 
-The detector side of Forged. Built in the order of Model Spec v0.2, section 7. Done so far: step 1, the schema and `compute_features`.
+The detector side of Forged. Built in the order of Model Spec v0.2, section 7. Done so far: steps 1–4 (schema and `compute_features`, the legit generator, the scripted attackers, and a baseline that passes the spec's checks).
 
 | File | What it is |
 | --- | --- |
 | `schema.py` | Pydantic models from design doc v0.1 Appendix A, plus the spec's section 8 changes. Also holds the feature name lists and the per-level settings (spec 5.3). |
 | `features.py` | `compute_features(invoice, case_file, session_history)`: the one function used for training, serving and the generators. |
-| `tests/` | One or more tests per feature. `factories.py` builds a small Sunny Diner world. |
+| `world.py` | The Sunny Diner level: six approved vendors, the name and line-item pools shared by legit and fraud invoices, and the hidden `Truth` (mule accounts, real order amounts). |
+| `payloads.py` | Ground truth. `payload_schemes()` and `is_fraud()` for the five Sunny Diner schemes. Labels come only from here. |
+| `text.py` | Cover-email templates, shared by both classes (spec 3.2). |
+| `generate.py` | Simulated runs (spec 3.1): `build_dataset(seed)` and `clone_attacks(levers, n, seed)` for trick cloning (spec 2.2). |
+| `attackers.py` | One scripted attacker per scheme: `Levers`, `sample_levers()` (random, with a care level) and fixed-lever mode. |
+| `baseline.py` | Stage 1 detector: logistic regression, Platt calibration, threshold at a target FPR, per-feature reasons. |
+| `checks.py` | The gate before the retrain loop: spec checks 2.1, 3.1, 3.2, 4.5 and the v1 recall target. |
+| `tests/` | Unit tests for every feature, payload and check, plus invariants of the generated data. `factories.py` builds a small Sunny Diner world. |
 
-Run the tests from the repo root:
+Set up once, from the repo root (Python 3.10+):
 
 ```bash
-python3 -m pytest ml
+uv venv ml/.venv --python 3.10 && uv pip install --python ml/.venv/bin/python -r ml/requirements.txt
 ```
 
-Needs Python 3.10+ and `pip install -r ml/requirements.txt`.
+Run the tests:
+
+```bash
+ml/.venv/bin/python -m pytest ml
+```
+
+Run the spec gate (about 10 s, three datasets of about 3,300 rows each):
+
+```bash
+ml/.venv/bin/python -m ml.checks
+```
+
+## Where v1 stands
+
+Every check passes on seeds 1–12: v1 catches 63–68% of fresh scripted attacks at 4–6% FPR (target 50–70%). On seeds 1–3, no payload feature alone gets past 49% recall at 5% FPR (target under 60%), and text features alone score AUROC 0.58 (target under 0.75).
+
+By scheme, v1 catches Duplicate Dance most often (about 85%) and Phantom Supplier least (about 50%). Spoofed reprints of a known vendor's invoice get caught 75–97% of the time, against 50–64% for hand-edited originals. That is a game-balance point for C and D: the burner pen is currently the riskier tool.
 
 ## Contract notes for A and C
 
@@ -36,6 +59,12 @@ Needs Python 3.10+ and `pip install -r ml/requirements.txt`.
 - `dup_similarity` is the mean of four 0–1 scores: same vendor, amount closeness, line-item overlap, and date closeness (0 at 30 days apart). A normal recurring invoice scores about 0.88, which matches spec 2.1 (real recurring invoices should look like duplicates).
 - The text features (urgency, vagueness, bank-change wording) are keyword lists at the top of `features.py`.
 
+## How labels and data work (for A)
+
+- **Labels need the hidden `Truth`.** A Bank Switcheroo pays a *mule account*, so a real vendor's bank change is legit even though `bank_changed = 1`. A Padded Invoice beats the *real* order amount, so a real change order is legit. A Duplicate Dance re-bills a paid invoice within half the vendor's cadence. The game server must call `payload_schemes(invoice, case_file, truth)` with the player's mule accounts in `truth.attacker_accounts`.
+- **Scheme ids:** `bank_switcheroo`, `duplicate_dance`, `boss_request`, `phantom_supplier`, `padded_invoice`. The prototype's `changed_bank`, `duplicate` and `phantom` map to the first three's names.
+- **A session is the desk's whole inbox:** the vendors' own invoices *and* the player's, one per round. That is what the model trained on. Between player rounds the server should add a few background legit invoices, and pay them into `case_file.paid_invoices`, so that serving matches training. A small hook in `generate.py` can produce them on request.
+
 ## Next
 
-Step 2: the legit generator, built as simulated runs (spec 3.1). It needs tell base rates of 8–15% (spec 2.1), and the same email style and empty-email rate in both classes (spec 3.2).
+Step 5: the retrain loop. That covers the replay buffer, trick cloning with `clone_attacks`, the retrain guard, the bootstrap promotion gate and `force=true`.
