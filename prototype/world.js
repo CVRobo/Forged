@@ -538,7 +538,8 @@ const BELT_M = M("#3a2a20"), GOLD_M = M("#ffd23f"), SHOE_M = M("#3b2a22"), SOLE_
 const HANDS = {};
 // palm + thumb merged into one mesh per side; sx = -1 left, 1 right (the thumb points at the body)
 const handGeo = sx => HANDS[sx] || (HANDS[sx] = kit().add(RBOXG(.15, .15, .12, .05)).add(RBOXG(.06, .1, .065, .025), -sx * .085, .02, .03, 0, 0, -sx * .4, { line: .02 }).bake());
-function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, name, tagColor, scale = 1 }) {
+// parent/track: the character editor builds a preview character in its own scene, outside `characters`
+function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, name, tagColor, scale = 1, parent = scene, track = true }) {
   const g = new THREE.Group();
   // one material per colour per character; geometry is shared between everyone
   const shirtM = M(shirt), pantsM = M(pants), skinM = M(skin), trimM = M(tie ? "#ffffff" : shade(shirt, .12));
@@ -561,12 +562,13 @@ function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, 
   [-1, 1].forEach(sx => { part(BOXG(.2, .07, .05), trimM, sx * .09, 1.6, .17, g, .02).rotation.z = sx * .45; });
   part(CYLG(.11, .12, .14, 12), skinM, 0, 1.67, 0, g, .02);
   part(BOXG(.14, .12, .02), trimM, .16, 1.42, .185, g, .015);
-  if (tie) {
-    const tm = M(tie);
-    part(BOXG(.13, .09, .05), tm, 0, 1.55, .19, g, .02);
-    part(BOXG(.11, .4, .03), tm, 0, 1.3, .19, g, .02);
-    part(BOXG(.08, .08, .03), tm, 0, 1.1, .19, g, .02).rotation.z = Math.PI / 4;
-  } else [1.42, 1.24, 1.06].forEach(y => part(SPHG(.022, 6), INK, 0, y, .185, g, 0));
+  // tie or shirt buttons: both are built so restyleChar can switch between them
+  const tieM = M(tie || "#1f8a8a"), tieParts = [], buttonParts = [];
+  tieParts.push(part(BOXG(.13, .09, .05), tieM, 0, 1.55, .19, g, .02));
+  tieParts.push(part(BOXG(.11, .4, .03), tieM, 0, 1.3, .19, g, .02));
+  const knot = part(BOXG(.08, .08, .03), tieM, 0, 1.1, .19, g, .02); knot.rotation.z = Math.PI / 4; tieParts.push(knot);
+  [1.42, 1.24, 1.06].forEach(y => buttonParts.push(part(SPHG(.022, 6), INK, 0, y, .185, g, 0)));
+  tieParts.forEach(m => m.visible = !!tie); buttonParts.forEach(m => m.visible = !tie);
   // arms: sleeve, cuff, mitten hand with a thumb on the inside
   const armL = limb(-.4, 1.58), armR = limb(.4, 1.58);
   [[armL, -1], [armR, 1]].forEach(([a, sx]) => {
@@ -581,10 +583,35 @@ function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, 
   const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex })); // walls hide it, so tags no longer show through rooms
   tag.scale.set(1.6, .3, 1); tag.position.y = 2.72; tag.renderOrder = 10; g.add(tag);
   g.scale.setScalar(scale);
-  scene.add(g);
-  const ch = { g, legL, legR, armL, armR, head, face, tag, tagTex: tex, walkT: 0, scale, blinkAt: rand(1, 4) };
-  characters.push(ch);
+  parent.add(g);
+  const ch = { g, legL, legR, armL, armR, head, face, tag, tagTex: tex, walkT: 0, scale, blinkAt: rand(1, 4),
+    mats: { shirt: shirtM, pants: pantsM, skin: skinM, trim: trimM, tie: tieM }, tieParts, buttonParts };
+  if (track) characters.push(ch);
   return ch;
+}
+
+/* Change a character's look in place: colours are recoloured and the head is rebuilt, but the
+ * body, arms and anything held stay where they are (so the envelope, coffee or seal survive).
+ * look = { skin, hair, hairColor, brows, mouth, nose, glasses, earrings, mustache, shirt, pants, tie } (tie: colour or null) */
+function restyleChar(ch, look) {
+  const L = Object.assign({}, look);
+  ch.mats.shirt.color.set(L.shirt); ch.mats.pants.color.set(L.pants); ch.mats.skin.color.set(L.skin);
+  ch.mats.trim.color.set(L.tie ? "#ffffff" : shade(L.shirt, .12));
+  if (L.tie) ch.mats.tie.color.set(L.tie);
+  ch.tieParts.forEach(m => m.visible = !!L.tie); ch.buttonParts.forEach(m => m.visible = !L.tie);
+  const old = ch.head, face = buildHead({ skin: L.skin, hair: L.hair, hairColor: L.hairColor, brows: L.brows, mouth: L.mouth, nose: L.nose,
+    glasses: L.glasses, earrings: L.earrings, mustache: L.mustache });
+  face.head.position.copy(old.position); face.head.visible = old.visible;
+  old.parent.add(face.head); old.parent.remove(old);
+  ch.head = face.head; ch.face = face;
+}
+
+/* the player's look: saved in the browser, edited in customize.js */
+const LOOK_KEY = "forged-look";
+const DEFAULT_LOOK = { skin: "#f1c27d", hair: "spiky", hairColor: "#2b1d14", brows: "raised", mouth: "smirk", nose: "round",
+  glasses: false, earrings: false, mustache: false, shirt: "#e0352b", pants: "#2b2b44", tie: null };
+function loadLook() {
+  try { return Object.assign({}, DEFAULT_LOOK, JSON.parse(localStorage.getItem(LOOK_KEY) || "{}")); } catch (e) { return { ...DEFAULT_LOOK }; }
 }
 
 // everyone's googly eyes follow a target (you); they blink now and then
@@ -1353,7 +1380,10 @@ function messUpDesk() {
 
 /* ======================= Player ======================= */
 
-const player = makeChar({ shirt: "#e0352b", look: { hair: "spiky", hairColor: "#2b1d14", brows: "raised", mouth: "smirk" }, name: "YOU", tagColor: "#e0352b" });
+let playerLook = loadLook();
+const player = makeChar({ shirt: playerLook.shirt, pants: playerLook.pants, skin: playerLook.skin, tie: playerLook.tie, name: "YOU", tagColor: "#e0352b",
+  look: { hair: playerLook.hair, hairColor: playerLook.hairColor, brows: playerLook.brows, mouth: playerLook.mouth, nose: playerLook.nose,
+    glasses: playerLook.glasses, earrings: playerLook.earrings, mustache: playerLook.mustache } });
 player.g.position.set(-5.5, 0, 7);
 player.g.rotation.y = Math.PI;
 // held in the right hand, upright, so it reads from the camera behind you
@@ -1845,6 +1875,7 @@ ForgedMenu.init({
     if (document.pointerLockElement) document.exitPointerLock();
     $("#start").classList.remove("hide");
   },
+  onCustomize: () => window.ForgedCustomizer && ForgedCustomizer.open(),
   canDossier: () => P.seated, // the Dossier lives on the computer
   onDossier: () => toOS("dossier"),
   getStats: () => P.hud ? { money: P.hud.money, patches: P.hud.patches || 0, shame: P.hud.shame || [], round: P.hud.round } : null,
@@ -2104,7 +2135,7 @@ vmScene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", .85));
 const vmCam = new THREE.PerspectiveCamera(60, 1, .01, 10);
 const VM_PITCH = 1.72; // the first-person arm points forward and a little up
 function buildViewArm(sx) {
-  const shirtM = M("#e0352b"), skinM = M("#f1c27d"), trimM = M(shade("#e0352b", .12));
+  const shirtM = M(playerLook.shirt), skinM = M(playerLook.skin), trimM = M(playerLook.tie ? "#ffffff" : shade(playerLook.shirt, .12));
   const root = new THREE.Group(); root.visible = false; root.scale.setScalar(.8); vmScene.add(root);
   const arm = new THREE.Group(); root.add(arm); // shoulder pivot
   const part = (geom, mat, y) => { const m = new THREE.Mesh(geom, mat); m.position.y = y; arm.add(m); outline(m, .02); return m; };
@@ -2112,9 +2143,20 @@ function buildViewArm(sx) {
   part(RBOXG(.18, .08, .2, .03), trimM, -.58);
   place(handGeo(sx), skinM, arm, 0, -.7, 0, 0, false);
   const socket = addSocket(arm, -VM_PITCH); socket.scale.setScalar(.75); // held things look smaller up close
-  return { root, arm, sx, socket };
+  return { root, arm, sx, socket, mats: { shirt: shirtM, skin: skinM, trim: trimM } };
 }
 const viewHands = { right: buildViewArm(1), left: buildViewArm(-1) };
+
+// apply (and save) a new look for the player: the 3D body and the first-person arms
+function setPlayerLook(look, save = true) {
+  playerLook = Object.assign({}, DEFAULT_LOOK, look);
+  restyleChar(player, playerLook);
+  for (const v of Object.values(viewHands)) {
+    v.mats.shirt.color.set(playerLook.shirt); v.mats.skin.color.set(playerLook.skin);
+    v.mats.trim.color.set(playerLook.tie ? "#ffffff" : shade(playerLook.shirt, .12));
+  }
+  if (save) { try { localStorage.setItem(LOOK_KEY, JSON.stringify(playerLook)); } catch (e) { /* kept for this visit */ } }
+}
 
 const heldItems = [];
 const handOf = h => (typeof h.hand === "function" ? h.hand() : h.hand) || "right";
@@ -2257,7 +2299,9 @@ window.FW = {
   THREE, scene, camera, renderer,
   // building blocks
   M, mats, box, cyl, sphere, outline, collide, walls, EXIT_X, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
-  makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses,
+  makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses, restyleChar,
+  // the player's look (customize.js): getLook() → current look, setLook(look) applies and saves it
+  getLook: () => ({ ...playerLook }), setLook: setPlayerLook, DEFAULT_LOOK,
   // state
   P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,
   npcs: { kevin, dana, inspector, clerk, boss },

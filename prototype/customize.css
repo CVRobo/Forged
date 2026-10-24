@@ -1,0 +1,39 @@
+/* Forged — character customization (customize.js) */
+#cz { --cz-ink: #2b1d14; --cz-paper: #fffaf0; --cz-soft: #f9dfb0; --cz-accent: #f4a63a; --cz-teal: #1f8a8a;
+  position: fixed; inset: 0; z-index: 1100; display: none; place-items: center; padding: 16px;
+  background: rgba(12, 8, 4, .72); backdrop-filter: blur(3px); font-family: "Space Mono", ui-monospace, monospace; color: var(--cz-ink); }
+#cz.show { display: grid; }
+.cz-card { width: min(900px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--cz-paper); border: 4px solid var(--cz-ink);
+  border-radius: 16px; box-shadow: 10px 10px 0 var(--cz-ink); padding: 22px 26px 18px; }
+.cz-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.cz-head h2 { font-family: "Bungee", Impact, sans-serif; font-weight: 400; font-size: 28px; margin: 0; }
+.cz-head-btns { display: flex; gap: 8px; }
+.cz-body { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+.cz-stage { position: relative; border: 3px solid var(--cz-ink); border-radius: 12px; background: radial-gradient(ellipse at 50% 70%, #fff3dc, #f3d9a8); min-height: 420px; }
+#cz-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#cz-canvas:active { cursor: grabbing; }
+.cz-hint { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 11px; opacity: .55; pointer-events: none; }
+.cz-opts { display: flex; flex-direction: column; gap: 12px; }
+.cz-group { border: 3px solid var(--cz-ink); border-radius: 10px; background: #fff; padding: 8px 12px 10px; }
+.cz-sub { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--cz-teal); margin-bottom: 4px; }
+.cz-row { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
+.cz-label { font-weight: 700; }
+.cz-step { display: inline-flex; align-items: center; gap: 8px; }
+.cz-step span { min-width: 96px; text-align: center; font-weight: 700; }
+.cz-step button { width: 32px; height: 30px; border: 2px solid var(--cz-ink); border-radius: 8px; background: var(--cz-paper); box-shadow: 2px 2px 0 var(--cz-ink); cursor: pointer; font-size: 12px; }
+.cz-step button:hover, .cz-sw button:hover { background: var(--cz-soft); }
+.cz-sw { display: flex; flex-wrap: wrap; gap: 6px; }
+.cz-sw button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--cz-ink); cursor: pointer; padding: 0; }
+.cz-sw button.on { outline: 3px solid var(--cz-accent); outline-offset: 2px; }
+.cz-sw .cz-none { background: #fff; font-size: 12px; line-height: 1; }
+.cz-togs { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; font-weight: 700; }
+.cz-tog input { width: 16px; height: 16px; accent-color: var(--cz-teal); vertical-align: -3px; }
+.cz-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.cz-btn { font: 700 14px "Space Mono", monospace; color: var(--cz-ink); background: #fff; border: 3px solid var(--cz-ink); border-radius: 10px; padding: 8px 14px; cursor: pointer; box-shadow: 3px 3px 0 var(--cz-ink); }
+.cz-btn:hover { background: var(--cz-soft); }
+.cz-btn.primary { background: var(--cz-accent); padding: 8px 26px; }
+/* Customize button under Clock in */
+#btn-customize { display: block; margin: 12px auto 0; font: 700 15px "Space Mono", monospace; color: var(--ink, #2b1d14); background: #fff; border: 3px solid var(--ink, #2b1d14);
+  border-radius: 10px; padding: 8px 18px; box-shadow: 3px 3px 0 var(--ink, #2b1d14); cursor: pointer; }
+#btn-customize:hover { background: #f9dfb0; }
+@media (max-width: 720px) { .cz-body { grid-template-columns: 1fr; } .cz-stage { min-height: 300px; } }
