@@ -260,13 +260,18 @@ Direction and message types (unchanged from prototype):
 
 | Direction | type | Payload | Meaning |
 |-----------|------|---------|---------|
-| Computer → Office | `hud` | `{level, money, heat, version, round, inspector, emoji, clerk}` | Update the HUD overlay |
+| Computer → Office | `hud` | `{level, money, heat, version, round, inspector, emoji, clerk, patches, shame}` | Update the HUD overlay (`patches`/`shame` feed the Game Menu leaderboard) |
 | Computer → Office | `phase` | `{phase: "briefing" \| "forging"}` | Current game phase |
 | Computer → Office | `print` | `{}` | Envelope dropped on outbox, start printing |
-| Computer → Office | `verdict` | `{caught, line, payout, scheme, vendor}` | Inspector's judgment |
-| Computer → Office | `stand` | `{}` | Player pressed Esc on the computer |
+| Computer → Office | `verdict` | `{caught, line, payout, scheme, vendor, tells}` | Inspector's judgment (`tells`: top tell names, for the booth close-up) |
+| Computer → Office | `stand` | `{}` | Player pressed the Stand up key (default Left Shift) on the computer |
 | Office → Computer | `deliver` | `{}` | Envelope reached the IN tray |
 | Office → Computer | `boss-near` | `{}` | Boss is behind the player's chair |
+| Office → Computer | `heat` | `{amount}` | The boss caught you carrying the envelope; add heat |
+| Computer → Office | `menu` | `{screen: "pause" \| "howto" \| "board"}` | Esc (or a menu button) on the computer: open the Game Menu, which the office page owns |
+| Office → Computer | `paused` | `{on}` | The Game Menu opened/closed: freeze or resume the computer's timers |
+| Office → Computer | `quit` | `{}` | Game Menu → Quit to Title: reset the computer to its title screen |
+| Office → Computer | `tour` | `{}` | Game Menu → Tutorial: start the desk tutorial |
 
 **Rules:**
 - All messages include `src: "forged-os"` (from computer) or `src: "forged-world"` (from office)

@@ -1,7 +1,7 @@
 /* features.js: see PLUGINS.md. Builds on window.FW from world.js.
  *
  * Gameplay features that make the office feel alive:
- *   1. Minimap (bottom-left, Tab cycles: map -> map + achievements -> hidden)
+ *   1. Minimap (bottom-left, N cycles: map -> map + achievements -> hidden)
  *   2. Office life: Kevin and Dana take coffee runs to the break room (and snitch)
  *   3. Desk phone: rings now and then; E to answer. One caller leaks the boss's schedule.
  *   4. Fire drill: rare chaos event, the boss is busy for ~15 s
@@ -75,7 +75,7 @@ const mapBox = document.createElement("div");
 mapBox.style.cssText = CARD + "padding:6px 6px 4px;width:fit-content;";
 const mapHead = document.createElement("div");
 mapHead.style.cssText = "display:flex;justify-content:space-between;font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;margin:0 2px 3px;";
-mapHead.innerHTML = "<span>Office map</span><span>Tab</span>";
+mapHead.innerHTML = "<span>Office map</span><span>N</span>";
 const MW = 230, MH = 146, MS = 5, MX0 = -23, MZ0 = -11;          // metres -> minimap pixels
 const dpr = Math.min(2, window.devicePixelRatio || 1);
 const mapCv = document.createElement("canvas");
@@ -97,10 +97,10 @@ renderAch();
 
 let hudMode = clamp(store.get("hudMode", 0), 0, 2) | 0;     // 0 map, 1 map + achievements, 2 hidden
 addEventListener("keydown", e => {
-  if (e.code !== "Tab" || !P.started || P.seated) return;
+  if (e.code !== "KeyN" || !P.started || P.seated) return; // Tab is the leaderboard (keys.js)
   e.preventDefault();
   hudMode = (hudMode + 1) % 3; store.set("hudMode", hudMode);
-  if (hudMode === 2) FW.wtoast("Map hidden — Tab to show it again");
+  if (hudMode === 2) FW.wtoast("Map hidden — N to show it again");
 });
 
 const mx = x => (x - MX0) * MS, mz = z => (z - MZ0) * MS;

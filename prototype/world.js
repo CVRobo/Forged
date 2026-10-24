@@ -18,6 +18,9 @@ let osLoaded = false;
 OS.addEventListener("load", () => { osLoaded = true; });
 try { const d = OS.contentDocument; if (d && d.readyState === "complete" && d.URL !== "about:blank") osLoaded = true; } catch (e) { osLoaded = true; }
 const toOS = (type, data = {}) => OS.contentWindow && OS.contentWindow.postMessage({ src: "forged-world", type, ...data }, "*");
+// key bindings (keys.js): is a bound key or mouse button for this action held right now?
+const K = window.ForgedKeys;
+const held = action => K.get(action).some(c => c && P.keys.has(c));
 
 /* ======================= Palettes (match style.css levels) ======================= */
 
@@ -1178,6 +1181,7 @@ addEventListener("message", e => {
   osLoaded = true; // any message means the computer is up
   for (const fn of MSG_HOOKS) { try { fn(m); } catch (err) { console.error("[forged] plugin message failed", err); } }
   if (m.type === "stand") stand();
+  if (m.type === "menu") ForgedMenu.open(m.screen || "pause");
   if (m.type === "phase") {
     if (m.phase === "briefing" && !["pickup", "carrying", "judging"].includes(P.phase)) setPhase("briefing");
     if (m.phase === "forging") setPhase("forging");
@@ -1282,7 +1286,7 @@ function updatePrompt() {
   current = P.seated || !P.started || CINE.active ? null : INTERACTIONS.find(i => i.can());
   const el = $("#prompt");
   el.classList.toggle("show", !!current);
-  if (current) el.innerHTML = `<kbd>E</kbd>${current.label()}`;
+  if (current) el.innerHTML = `<kbd>${K.label("interact")}</kbd>${current.label()}`;
 }
 
 function sit() {
@@ -1472,15 +1476,37 @@ function flashVignette() { const v = $("#vignette"); v.classList.remove("flash")
 /* ======================= Input ======================= */
 
 addEventListener("keydown", e => {
-  if (!P.started) return;
-  if (e.code === "Escape" && P.seated) { stand(); return; }
+  if (!P.started || P.paused) return;
+  if (e.code === "Escape") { e.preventDefault(); ForgedMenu.open("pause"); return; }
   if (P.seated || CINE.active) return;
+  if (["Tab", "F3", "F5", "Space"].includes(e.code)) e.preventDefault(); // focus jumps, reload, scrolling
+  if (K.is("playerList", e.code)) { ForgedMenu.showPlayerList(true); return; }
   P.keys.add(e.code);
-  if (e.code === "KeyE" && current) current.act();
-  if (e.code === "KeyV") setFirstPerson(!P.fp);
+  if (e.repeat) return;
+  if (K.is("interact", e.code) && current) current.act();
+  if (K.is("camera", e.code)) setFirstPerson(!P.fp);
 });
-addEventListener("keyup", e => P.keys.delete(e.code));
-addEventListener("blur", () => P.keys.clear());
+addEventListener("keyup", e => {
+  P.keys.delete(e.code);
+  if (K.is("playerList", e.code)) ForgedMenu.showPlayerList(false);
+});
+addEventListener("blur", () => { P.keys.clear(); ForgedMenu.showPlayerList(false); });
+
+// mouse buttons can be bound like keys: right-click interacts by default (Minecraft's "use")
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+addEventListener("mousedown", e => {
+  if (!P.started || P.paused || P.seated || e.button === 0) return;
+  const code = "Mouse" + e.button;
+  P.keys.add(code);
+  if (K.is("interact", code) && current) { e.preventDefault(); current.act(); }
+  if (K.is("camera", code)) setFirstPerson(!P.fp);
+});
+addEventListener("mouseup", e => P.keys.delete("Mouse" + e.button));
+
+// Esc while the mouse is captured: the browser releases it and swallows the key, so open the menu here
+document.addEventListener("pointerlockchange", () => {
+  if (!document.pointerLockElement && P.started && !P.seated && !P.paused && !ForgedMenu.isOpen()) ForgedMenu.open("pause");
+});
 
 // some browsers (and embedded previews) refuse pointer lock: that's fine, drag-to-look still works
 function lockMouse() { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
@@ -1506,7 +1532,7 @@ function setFirstPerson(on) {
   P.fp = on;
   player.head.visible = player.tag.visible = !on;
   document.body.classList.toggle("fp", on);
-  if (on) { P.pitch = .05; wtoast("First person — scroll out (or press V) to go back"); }
+  if (on) { P.pitch = .05; wtoast(`First person — scroll out (or press ${K.label("camera")}) to go back`); }
   else { P.pitch = clamp(P.pitch, .3, 1.15); P.dist = MIN_DIST; }
 }
 
@@ -1516,7 +1542,44 @@ $("#btn-start").onclick = () => {
   lockMouse();
   say(player, "Another day at the office…", 2500);
 };
-$("#btn-stand").onclick = stand;
+/* ======================= Game Menu (menu.js) =======================
+ * Esc pauses everything: the office freezes (player, boss, camera) and the
+ * computer is told so its own timers stop. */
+
+ForgedMenu.init({
+  office: true,
+  onPause(on) {
+    P.paused = on; P.keys.clear(); ForgedMenu.showPlayerList(false);
+    toOS("paused", { on });
+    if (on && document.pointerLockElement) document.exitPointerLock();
+  },
+  onResume() {
+    if (!P.started) return;
+    if (P.seated) { OS.focus(); OS.contentWindow && OS.contentWindow.focus(); }
+    else { try { const r = canvas.requestPointerLock(); r && r.catch && r.catch(() => {}); } catch (e) { /* click the office to capture the mouse */ } }
+  },
+  onQuit() {
+    P.started = false;
+    stand();
+    Object.assign(P, { carrying: false, envelopeReady: false, printing: false });
+    carryEnv.visible = envelope.visible = false;
+    setPhase("idle"); toOS("quit");
+    if (document.pointerLockElement) document.exitPointerLock();
+    $("#start").classList.remove("hide");
+  },
+  canTour: () => P.seated && P.phase === "forging",
+  onTour: () => toOS("tour"),
+  getStats: () => P.hud ? { money: P.hud.money, patches: P.hud.patches || 0, shame: P.hud.shame || [], round: P.hud.round } : null,
+});
+
+// on-screen key hints follow the player's bindings
+function paintHints() {
+  const move = ["forward", "left", "back", "right"].map(a => K.label(a)).join("");
+  $("#controls").innerHTML = `<kbd>${move}</kbd> move · <kbd>${K.label("sprint")}</kbd> sprint · <kbd>Mouse</kbd> look · ` +
+    `<kbd>${K.label("camera")}</kbd> camera · <kbd>${K.labels("interact")}</kbd> interact · <kbd>${K.label("playerList")}</kbd> leaderboard · <kbd>Esc</kbd> menu`;
+  $("#bezel-hint").innerHTML = `<kbd>${K.label("standUp")}</kbd> stand up · <kbd>Esc</kbd> menu`;
+}
+paintHints(); K.onChange(paintHints);
 
 /* ======================= Simulation ======================= */
 
@@ -1539,13 +1602,13 @@ function updatePlayer(dt, now) {
   if (P.seated) return;
   if (now < P.frozenUntil) { animWalk(player, dt, 0); return; }
   const k = P.keys;
-  const f = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
-  const s = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
+  const f = (held("forward") ? 1 : 0) - (held("back") ? 1 : 0);
+  const s = (held("right") ? 1 : 0) - (held("left") ? 1 : 0);
   const dir = _dir.set(-Math.sin(P.yaw) * f + Math.cos(P.yaw) * s, 0, -Math.cos(P.yaw) * f - Math.sin(P.yaw) * s);
   let speed = 0;
   if (dir.lengthSq() > 0) {
     dir.normalize();
-    speed = k.has("ShiftLeft") || k.has("ShiftRight") ? 7 : 4;
+    speed = held("sprint") ? 7 : 4;
     const pos = player.g.position;
     pos.addScaledVector(dir, speed * dt);
     collidePlayer(pos);
@@ -1672,6 +1735,7 @@ const UPDATERS = [], MSG_HOOKS = [];
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (P.paused) { renderer.render(scene, camera); requestAnimationFrame(loop); return; } // Game Menu open: freeze
   updatePlayer(dt, now);
   updateBoss(dt, now);
   // idle life: coworkers type, inspector bobs, printer blinks
