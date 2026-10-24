@@ -520,13 +520,18 @@ function isTyping(e) {
   const el = e.target;
   return !!(el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable));
 }
+// the keys come from keys.js, so they show in Esc → Controls and can be rebound
+const K = window.ForgedKeys;
+const isKey = (action, code, fallback) => K ? K.is(action, code) : code === fallback;
 addEventListener("keydown", e => {
   if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.code === "KeyM" && !e.repeat) {
+  if ((K && K.isOpen && K.isOpen()) || (window.ForgedMenu && ForgedMenu.isOpen())) return; // rebinding / menu owns the keys
+  const up = isKey("volumeUp", e.code, "BracketRight"), down = isKey("volumeDown", e.code, "BracketLeft");
+  if (isKey("mute", e.code, "KeyM") && !e.repeat) {
     S.muted = !S.muted; save(); applyVolume();
-    FW.wtoast(S.muted ? "🔇 Sound off (M)" : `🔊 Sound on · ${Math.round(S.vol * 100)}%`);
-  } else if (e.code === "BracketLeft" || e.code === "BracketRight") {
-    S.vol = clamp(Math.round((S.vol + (e.code === "BracketRight" ? .1 : -.1)) * 10) / 10, 0, 1);
+    FW.wtoast(S.muted ? `🔇 Sound off (${K ? K.label("mute") : "M"})` : `🔊 Sound on · ${Math.round(S.vol * 100)}%`);
+  } else if (up || down) {
+    S.vol = clamp(Math.round((S.vol + (up ? .1 : -.1)) * 10) / 10, 0, 1);
     S.muted = false; save(); applyVolume();
     FW.wtoast(`🔊 Volume ${Math.round(S.vol * 100)}%`);
   }
@@ -539,8 +544,6 @@ FW.sound = {
   ensure,
 };
 
-const controls = document.getElementById("controls");
-if (controls) controls.insertAdjacentHTML("beforeend", " · <kbd>M</kbd> mute · <kbd>[</kbd><kbd>]</kbd> volume");
 
 /* ======================= Per frame ======================= */
 
