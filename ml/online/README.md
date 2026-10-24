@@ -42,6 +42,16 @@ Then run the server from the same environment, and the game with `?api=http://lo
 USE_STUBS=true ml/.venv/Scripts/python -m uvicorn server.main:app --port 8000
 ```
 
+## Tests
+
+The unit tests need neither the Kaggle dataset nor a trained model, so they run fast:
+
+```bash
+PYTHONPATH=. ml/.venv/Scripts/python -m pytest ml/online/tests -q
+```
+
+They cover feature framing and encoding (unknown categories → `other`, rare values dropped), the time-ordered split and the rank thresholds, the attack-family labelling, the per-player cap and the simulated-attack weighting, and — when Node is installed — that the game's own row builder produces well-formed fraud rows.
+
 `/submit` scores each order with the live version. `/preview` gives the checkout's gut feeling from the same score and threshold (nothing is saved), so the face and the verdict always agree: 😠 means the order would be caught. Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background. Without a trained model the server answers with the browser's scripted Gus.
 
 ## How it learns
