@@ -299,3 +299,123 @@ Direction and message types (unchanged from prototype):
 | `frontend/src/app/page.tsx`, 3D office components | D | |
 | `frontend/lib/api.ts` | A (C uses it) | |
 | `docs/contracts.md` | Everyone (changes need team sign-off) | |
+
+---
+
+## 6. Realistic channel: email, bank-change requests, consent
+
+From `docs/realistic-data-plan.md` sections 1–3. Everything here is additive: a client that sends none of the new fields gets today's behaviour.
+
+### Sessions and consent
+
+The browser makes a random session id once (`crypto.randomUUID()`), keeps it in `localStorage` (`forged.session.v1`), and sends it with every `/round/start`. Before round 1 it shows `ml.eventlog.CONSENT_TEXT` and keeps the answer in `localStorage` (`forged.consent.v1`, `"yes"` or `"no"`). The server stores both on the session.
+
+### POST /round/start (new fields)
+
+Request adds `consent` (bool, optional; default false) and `player` (display name, optional). Response adds:
+
+```json
+{
+  "session_id": "uuid",
+  "consent": true,
+  "directory": [
+    {
+      "vendor_id": "petes", "name": "Pancake Pete's Flour Co.", "domain": "petesflour.com",
+      "phone": "(510) 555-0142", "bank_last4": "3321", "bank_on_file_last4": "3321",
+      "uses_po": true, "cadence_days": 14,
+      "last_thread": {"thread_id": "<thread-petes@petesflour.com>", "message_id": "<petes-last@petesflour.com>",
+                      "subject": "Invoice PP-0193", "from_name": "Pancake Pete's Flour Co. Billing",
+                      "from_addr": "billing@petesflour.com", "sent_at": "2026-09-30T10:15:00"}
+    }
+  ],
+  "pending_changes": [{"vendor_id": "petes", "new_account_last4": "7781", "changed_at": "..."}]
+}
+```
+
+`directory` is `ml.mail.vendor_directory()` with `bank_on_file_last4` set from this session's vendor master. `pending_changes` lists the vendors whose account on file is one of the player's accounts because a change request went through (act 2 is open for them).
+
+### The email composer (shared by /change-request and /submit)
+
+```json
+{
+  "identity": "lookalike_domain",
+  "from_name": "Pancake Pete's Billing",
+  "local_part": "billing",
+  "domain": "petesfl0ur.com",
+  "reply_to": "",
+  "cc": [],
+  "reply_in_thread": false,
+  "subject": "Invoice PP-0201",
+  "body": "Please find this period's invoice attached.",
+  "aged_domain": false
+}
+```
+
+`identity` is one of `lookalike_domain`, `free_mail`, `spoofed_domain`, `compromised_mailbox` (an unlock), or `new_domain` (for a vendor that isn't on the approved list). `domain` is only read for `lookalike_domain`, `new_domain` and `free_mail` (gmail.com, outlook.com or yahoo.com). `reply_in_thread` replies into the vendor's `last_thread`. The server never trusts client values for SPF/DKIM/DMARC, domain age or first contact: `ml.mail.realize_email()` sets them.
+
+### POST /change-request (act 1)
+
+```json
+{
+  "round_id": "uuid",
+  "vendor_id": "petes",
+  "new_bank_account": "7781",
+  "channel": "email",
+  "email": { "...": "the composer above, when channel is email" },
+  "phone_script": "Hi, this is Pete's accounts team ...",
+  "phone_number_given": "(415) 555-0199"
+}
+```
+
+The server realizes the email, builds a `VendorChangeRequest`, and calls `ml.changes.assess_change_request(request, level)`. When it's applied, the server appends `ml.changes.to_event(...)` to the session's change log and sets the vendor's account on file. It logs the attempt (`log_attempt(None, ..., verdict="APPLIED"|"BLOCKED", change_request=..., email=...)`). Response:
+
+```json
+{
+  "request_id": "uuid", "applied": true, "callback": "number_from_request",
+  "callback_result": "attacker_confirmed", "score": 0.42,
+  "reason": "random callback check",
+  "message": "AP called the number in your email. You picked up and confirmed the change.",
+  "bank_on_file_last4": "7781"
+}
+```
+
+`callback` is `none`, `number_on_file` or `number_from_request`; `callback_result` is `not_called`, `vendor_confirmed`, `vendor_denied` or `attacker_confirmed`.
+
+### POST /submit (new fields)
+
+Request adds `email` (the composer, optional) and `player`. Record `scheme` may be `bank_change` (act 2: the vendor's own untouched invoice, paying the account now on file). The server passes the realized email and the session's change log to `predict(record, ..., email=, bank_changes=)`, takes the verdict from `prediction.flagged` (no random noise), logs every submit and every rejection with `log_attempt`, and queues PAID player attacks for a real `retrain()`. Response adds `score`, `threshold`, `model_version` and `heat`, and `top_tells` can include the new tell names:
+
+| tell | meaning |
+| --- | --- |
+| `reply_to` | replies go to another domain |
+| `free_mail` | sent from a free mailbox |
+| `display_spoof` | a vendor's name on someone else's address |
+| `lookalike_cc` | a CC a letter or two off a vendor's domain |
+| `auth_fail` | fails SPF or DMARC |
+| `new_domain` | the sending domain was registered recently |
+| `first_contact` | first email from this address |
+| `new_thread` | starts a new thread instead of replying |
+| `recent_bank_change` | pays into an account changed recently, or changed without a callback |
+
+`region` is `"email"` for the email tells and `"bank"` for `recent_bank_change`.
+
+### GET /metrics
+
+Served from `ml.detector.versions()`: one row per promoted version, `catch_rate` = frozen-set recall, `false_positive_rate` = frozen-set FPR, `held_out_catch_rate` = trick recall (0 for v1).
+
+### ML calls the server makes (B's side)
+
+```python
+from ml.detector import predict, retrain, versions
+from ml.changes import assess_change_request, to_event
+from ml.mail import realize_email, vendor_directory
+from ml.eventlog import log_attempt, CONSENT_TEXT
+from ml.schema import VendorChangeRequest, BankChangeEvent, EmailMessage
+
+predict(record, version, memo, history=(), *, email: dict | None = None, bank_changes: list[dict] = ())
+retrain(records)  # each record may carry "email", "bank_changes", "features", "session_id", "round_id", "verdict"
+realize_email(identity, vendor_id_or_None, *, from_name, subject, body, sent_at, local_part, domain, reply_to, cc,
+              thread_id, in_reply_to, aged_domain, vendor_name=None)  # vendor_id None: a vendor not on the list
+log_attempt(record_or_None, prediction_or_None, *, verdict, session_id, round_id, consent, email=None,
+            change_request=None, bank_changes=None, persuasion=None, perks=(), noise=None, stream=None)
+```
