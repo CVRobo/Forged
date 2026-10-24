@@ -86,7 +86,7 @@
 
     <!-- inspector + outbox -->
     <div class="win" id="win-inspector" style="left:1032px;top:76px;width:552px;height:322px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Accounts Payable Scanner<span class="win-hint" id="insp-version">v1</span></div>
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span><span id="insp-win-title">Accounts Payable Scanner</span><span class="win-hint" id="insp-version">v1</span></div>
       <div class="win-body insp-body">
         <div class="insp-left">
           <div class="insp-face" id="insp-face"><span id="insp-emoji">😴</span><span class="insp-prop" id="insp-prop">📎</span></div>
@@ -210,16 +210,17 @@
   <div id="overlay-howto" class="overlay">
     <div class="modal howto">
       <div class="modal-kicker">HOW TO PLAY</div>
-      <h2>One round, about 90 seconds</h2>
-      <ol class="howto-steps">
-        <li><b>Briefing.</b> Read the leaked memo and the case file. One memo rule is a lie.</li>
-        <li><b>Pick a scheme.</b> Changed bank details, duplicate bill, phantom supplier…</li>
-        <li><b>Forge.</b> Click a tool in the toolbox, then click the invoice. 2–4 edits per round.</li>
+      <h2 id="howto-title">One round, about 90 seconds</h2>
+      <!-- standalone version; game.js swaps in the office version when embedded -->
+      <ol class="howto-steps" id="howto-steps">
+        <li><b>Briefing.</b> Read the leaked memo and the case file. One memo rule is fake: click a rule to mark it real or fake.</li>
+        <li><b>Pick a scheme.</b> Changed bank details, duplicate bill, phantom supplier, boss request. Repeating one raises heat.</li>
+        <li><b>Forge.</b> Click a tool in the toolbox, then click the invoice. Use at least 2 edits (4 max), and make sure the money goes to your account.</li>
         <li><b>Pitch.</b> Sweet-talk the clerk in the cover email.</li>
         <li><b>Submit.</b> Drag the envelope into the outbox. Watch out for the boss.</li>
-        <li><b>Inspection.</b> PAID or FLAGGED. Either way, the inspector learns.</li>
+        <li><b>Inspection.</b> PAID or FLAGGED. Either way, the inspector learns. Spend your money in the shop between rounds.</li>
       </ol>
-      <div class="between-foot"><span class="fineprint">Hotkeys: 1–6 tools · Esc drop tool · D detector view · Space hide invoice</span><button class="btn btn-big" data-close>Got it</button></div>
+      <div class="between-foot"><span class="fineprint" id="howto-keys">Hotkeys: 1–6 tools · Esc drop tool · D detector view · Space hide invoice</span><button class="btn btn-big" data-close>Got it</button></div>
     </div>
   </div>
 

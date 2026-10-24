@@ -19,6 +19,32 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  * world tells us when it was delivered or when the boss walks behind us. */
 const EMBED = window.parent !== window;
 const post = (type, data = {}) => { if (EMBED) parent.postMessage({ src: "forged-os", type, ...data }, "*"); };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ======================= Backend API =======================
+ * Point the game at a server with ?api=http://localhost:8000 on os.html or on
+ * index.html (the office passes it through). With no API set, or if a call
+ * fails or times out, every feature falls back to the offline mocks below.
+ * The adapters (adaptVerdict, the clerk and round handlers) accept a few
+ * field-name variants until docs/contracts.md is final. */
+const API = (() => {
+  const from = loc => { try { return new URLSearchParams(loc.search).get("api") || ""; } catch (e) { return ""; } };
+  return (from(location) || (EMBED ? from(parent.location) : "") || window.FORGED_API || "").replace(/\/$/, "");
+})();
+async function api(method, path, body, ms = 6000) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(API + path, { method, signal: ctl.signal,
+      headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    if (!r.ok) throw new Error(`${method} ${path} → HTTP ${r.status}`);
+    return await r.json();
+  } finally { clearTimeout(timer); }
+}
+let offlineWarned = false;
+function offline(err) {
+  console.warn("[forged] API call failed, using the offline mock:", err && err.message || err);
+  if (!offlineWarned) { offlineWarned = true; toast("Inspector server unreachable — playing offline", "bad"); }
+}
 
 /* ======================= Content ======================= */
 
@@ -139,6 +165,15 @@ const INSPECTOR_STAGES = [
   { upTo: 99, emoji: "🤖", prop: "🧿", title: "Cyborg with a Monocle" },
 ];
 
+/* which invoice region to highlight in the forensic replay, per tell or feature name */
+const TELL_REGION = {
+  bank_changed: "bank", bank_account: "bank", domain_mismatch: "header", sender_domain: "header", unknown_vendor: "header",
+  vendor: "header", letterhead: "header", letterhead_match: "header", copy_gen: "header", copy_generation: "header", scan_quality: "header",
+  amount_unusual: "items", amount: "items", total_mismatch: "items", line_items: "items", low_legibility: "items", legibility: "items",
+  altered: "meta", field_altered: "meta", bad_po: "meta", po_number: "meta", dup_number: "meta", invoice_no: "meta", date: "meta",
+  stamp_wrong: "footer", stamp_type: "footer", stamp_position: "footer",
+};
+
 const TELL_LABELS = {
   bank_changed: "bank account doesn't match the vendor on file",
   domain_mismatch: "sender domain doesn't match the vendor",
@@ -166,6 +201,7 @@ const S = {
   scheme: null, vendorRef: null, inv: null, uses: {}, edits: 0, maxEdits: 4,
   stains: [], stamps: [], copyGen: 0, altered: new Set(), legibility: {}, persuasion: 0,
   memo: [], tool: null, pendingStamp: null, submitted: false, bossTimer: null, bossWindow: false,
+  roundId: null, // from POST /round/start; null when offline
 };
 
 /* ======================= Sound (tiny WebAudio synth) ======================= */
@@ -220,8 +256,23 @@ function fit() {
 }
 addEventListener("resize", fit); fit();
 if (EMBED) {
+  // inside the 3D office: the outbox is a printer and the inspector is down the hall
   document.body.classList.add("embedded");
   $(".outbox-label").textContent = "PRINT — drop the envelope here, then deliver it";
+  $("#insp-win-title").textContent = "Printer · Inspector down the hall";
+  $(".env-label").textContent = "DRAG TO PRINT";
+  $("#envelope").title = "Drag me onto PRINT";
+  $("#btn-quit").textContent = "Quit to title";
+  $("#howto-title").textContent = "One round, about 90 seconds";
+  $("#howto-steps").innerHTML = `
+    <li><b>Briefing.</b> At your desk, read the leaked memo and the case file. One memo rule is fake: click a rule to mark it real or fake.</li>
+    <li><b>Pick a scheme.</b> Changed bank details, duplicate bill, phantom supplier, boss request. Repeating one raises heat.</li>
+    <li><b>Forge.</b> Click a tool, then click the invoice. Use at least 2 edits (4 max), and make sure the money goes to your account.</li>
+    <li><b>Pitch.</b> Sweet-talk the clerk in the cover email.</li>
+    <li><b>Print.</b> Drag the envelope onto PRINT. You stand up automatically.</li>
+    <li><b>Deliver.</b> Grab it at the printer (<kbd>E</kbd>) and drop it in the inspector's IN tray (<kbd>E</kbd>). If the boss walks behind your chair while you forge, press <kbd>Space</kbd>.</li>
+    <li><b>Verdict.</b> PAID or FLAGGED, either way the inspector learns. Sit back down for the corkboard, patch notes and shop.</li>`;
+  $("#howto-keys").textContent = "On the computer: 1–6 tools · Esc drop tool / stand up · D detector view · Space hide invoice";
 }
 function toStage(cx, cy, el = stage) {
   const r = el.getBoundingClientRect();
@@ -298,7 +349,7 @@ function nextRound() {
   S.heat = Math.round(S.heat * 0.6);
   Object.assign(S, { scheme: null, inv: null, uses: {}, edits: 0, stains: [], stamps: [], copyGen: 0,
     altered: new Set(), legibility: {}, persuasion: 0, tool: null, pendingStamp: null, submitted: false,
-    printed: false, delivered: false });
+    printed: false, delivered: false, lastResult: null });
   post("phase", { phase: "briefing" });
   S.maxEdits = 4 + (S.unlocks.includes("budget") ? 1 : 0);
   TOOLS.forEach(t => S.uses[t.id] = 0);
@@ -311,6 +362,29 @@ function nextRound() {
   renderInspector();
   renderTools(); updateHud();
   showBriefing();
+  startRoundOnServer();
+}
+
+/* POST /round/start: real memo (decoy hidden) and inspector version. The mock
+ * memo stays on screen until (and unless) the server answers. */
+async function startRoundOnServer() {
+  S.roundId = null;
+  if (!API) return;
+  const round = S.round;
+  try {
+    const r = await api("POST", "/round/start", { level: S.level });
+    if (S.round !== round) return; // the player already moved on
+    S.roundId = r.round_id ?? r.roundId ?? null;
+    if (Array.isArray(r.memo) && r.memo.length) {
+      // the server never says which rule is the decoy, so `real` stays unknown
+      S.memo = r.memo.map(m => typeof m === "string" ? { text: m } : { text: m.text ?? m.rule, tell: m.tell ?? m.feature })
+        .map(m => ({ ...m, real: undefined, mark: null }));
+      renderMemo();
+    }
+    const v = +(r.inspector_version ?? r.version);
+    if (Number.isFinite(v) && v > 0) { S.version = v; renderInspector(); updateHud(); }
+    if (r.case_file) S.serverCaseFile = r.case_file; // TODO: render once the case file shape is in docs/contracts.md
+  } catch (e) { offline(e); }
 }
 
 function dealMemo() {
@@ -324,7 +398,7 @@ function dealMemo() {
 function renderMemo() {
   const reveal = S.dossier;
   $("#memo-rules").innerHTML = S.memo.map((m, i) => `
-    <li data-i="${i}" class="${m.mark || ""} ${reveal && !m.real ? "revealed-decoy" : ""}">${m.text}${m.mark ? `<span class="mark">${m.mark.toUpperCase()}</span>` : ""}</li>`).join("");
+    <li data-i="${i}" class="${m.mark || ""} ${reveal && m.real === false ? "revealed-decoy" : ""}">${m.text}${m.mark ? `<span class="mark">${m.mark.toUpperCase()}</span>` : ""}</li>`).join("");
   $$("#memo-rules li").forEach(li => li.onclick = () => {
     const m = S.memo[li.dataset.i];
     m.mark = m.mark === null ? "real" : m.mark === "real" ? "fake" : null;
@@ -641,6 +715,7 @@ function updateHud() {
     inspector: LEVELS[S.level].inspector.name, emoji: st.emoji, clerk: LEVELS[S.level].clerk });
 }
 
+const tellLabel = name => TELL_LABELS[name] || String(name).replace(/_/g, " ");
 function stageFor(v) { return INSPECTOR_STAGES.find(s => v <= s.upTo); }
 function renderInspector() {
   const L = LEVELS[S.level], st = stageFor(S.version);
@@ -661,25 +736,40 @@ function addMsg(who, text) {
 }
 function clerkSay(text) { addMsg("them", text); sfx("msg"); }
 
-$("#chat-form").addEventListener("submit", e => {
+// MOCK: short + matches the clerk's quirk = convincing. The server scores this with an LLM.
+function mockClerk(text) {
+  const L = LEVELS[S.level];
+  const hits = L.clerk.keywords.filter(k => text.toLowerCase().includes(k)).length;
+  const score = clamp(30 + hits * 25 - Math.max(0, text.length - 90) * .5 + rand(-10, 10), 0, 100);
+  return { score, reply: pick(L.clerk.replies[score > 60 ? "good" : score > 35 ? "meh" : "bad"]) };
+}
+
+$("#chat-form").addEventListener("submit", async e => {
   e.preventDefault();
   const input = $("#chat-text"), text = input.value.trim();
   if (!text || !S.inv || S.submitted) return;
   input.value = ""; addMsg("me", text); sfx("click");
   S.inv.coverEmail = ((S.inv.coverEmail || "") + " " + text).trim();
-  // MOCK: short + matches the clerk's quirk = convincing. The real game scores this with an LLM.
-  const L = LEVELS[S.level];
-  const hits = L.clerk.keywords.filter(k => text.toLowerCase().includes(k)).length;
-  let score = 30 + hits * 25 - Math.max(0, text.length - 90) * .5 + (S.perks.includes("smooth") ? 20 : 0);
-  score = clamp(score + rand(-10, 10), 0, 100);
-  S.persuasion = clamp(Math.max(S.persuasion, score), 0, 100);
+  const round = S.round, av = $("#clerk-avatar"); av.classList.add("typing");
+  let res = null;
+  if (API && S.roundId) {
+    try {
+      const r = await api("POST", "/clerk", { round_id: S.roundId, text });
+      const score = +(r.persuasion ?? r.persuasion_score ?? r.score);
+      const reply = r.reply ?? r.text;
+      if (Number.isFinite(score) && reply) res = { score, reply, fromServer: true };
+      else throw new Error("unexpected /clerk response");
+    } catch (err) { offline(err); }
+  }
+  res = res || mockClerk(text);
+  await sleep(res.fromServer ? 0 : 700 + rand(0, 600));
+  av.classList.remove("typing");
+  if (S.round !== round) return;
+  const score = clamp(res.score + (S.perks.includes("smooth") ? 20 : 0), 0, 100);
+  S.persuasion = Math.max(S.persuasion, score);
   $("#persuade-fill").style.width = S.persuasion + "%";
-  const av = $("#clerk-avatar"); av.classList.add("typing");
-  setTimeout(() => {
-    av.classList.remove("typing");
-    clerkSay(pick(L.clerk.replies[score > 60 ? "good" : score > 35 ? "meh" : "bad"]));
-    updateDebug();
-  }, 700 + rand(0, 600));
+  clerkSay(res.reply);
+  updateDebug();
 });
 
 /* ======================= Draggable windows ======================= */
@@ -775,10 +865,8 @@ function computeTells() {
   return t.filter(x => x[1] > 0.5).sort((a, b) => b[1] - a[1]);
 }
 
-function submit() {
-  S.submitted = true; clearTimeout(S.bossTimer);
-  sfx("chunk");
-  const ob = $("#outbox"); ob.classList.add("scanning");
+// MOCK verdict: rule-based stand-in for the detector
+function mockJudge() {
   const tells = computeTells();
   const skill = .55 + .12 * (S.version - 1);
   let suspicion = tells.reduce((a, t) => a + t[1], 0) * skill;
@@ -786,45 +874,81 @@ function submit() {
   if (S.stamps.some(s => s.type === "APPROVED")) suspicion -= 6;
   suspicion += rand(-12, 12);
   const caught = suspicion > 38;
-  const sc = SCHEMES[S.scheme];
-  const payout = Math.round(S.inv.amount * sc.pay * (S.perks.includes("night") ? 2 : 1));
-  S.lastResult = { caught, tells, payout, suspicion };
-  updateDebug();
+  const payout = Math.round(S.inv.amount * SCHEMES[S.scheme].pay * (S.perks.includes("night") ? 2 : 1));
+  return { caught, tells, payout, suspicion, line: null, newVersion: null, source: "mock" };
+}
 
-  setTimeout(() => {
-    ob.classList.remove("scanning");
-    const st = $(".inspect-stage");
-    st.classList.remove("done");
-    $("#big-stamp").className = "big-stamp"; $("#inspect-line").classList.remove("show"); $("#cash-pop").classList.remove("show");
-    overlay("inspect"); sfx("scan");
-    setTimeout(() => {
-      const bs = $("#big-stamp");
-      bs.textContent = caught ? "FLAGGED" : "PAID";
-      bs.classList.add("show", caught ? "flagged" : "paid");
-      sfx("stamp");
-      st.classList.add("done");
-      const L = LEVELS[S.level];
-      const said = pick(L.lines[caught ? "catch" : "pass"]);
-      $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
-      post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor });
-      $("#inspect-line").classList.add("show");
-      if (caught) {
-        sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
-        S.streak = 0; S.caughtCount++; addHeat(12);
-      } else {
-        S.money += payout; S.streak++;
-        $("#cash-pop").textContent = "+" + money(payout); $("#cash-pop").classList.add("show");
-        setTimeout(() => sfx("cash"), 250);
-        $("#tb-money").classList.remove("bump"); void $("#tb-money").offsetWidth; $("#tb-money").classList.add("bump");
-        S.cards.push({ scheme: S.scheme, payout, round: S.round, isNew: true });
-      }
-      S.history.push({ round: S.round, scheme: S.scheme, caught, payout: caught ? 0 : payout, version: S.version, tells: tells.map(t => t[0]) });
-      // forensic replay: show what tipped them off on the desk invoice
-      tells.slice(0, 2).forEach(t => t[2] && $(`#invoice [data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
-      $("#invoice").classList.toggle("forensic", caught);
-      updateHud();
-    }, 1500);
-  }, 900);
+/* turn a POST /submit response into the shape the UI uses; tells are [name, weight, region] */
+function adaptVerdict(r, mock) {
+  const verdict = String(r.verdict ?? "").toUpperCase();
+  const caught = verdict ? verdict === "FLAGGED" : !!r.caught;
+  const raw = r.top_tells ?? r.tells ?? [];
+  const tells = raw.map(t => {
+    const name = typeof t === "string" ? t : t.feature ?? t.name ?? t.tell;
+    const weight = typeof t === "string" ? 1 : +(t.weight ?? t.score ?? t.contribution ?? 1);
+    return [name, weight, TELL_REGION[name] ?? null];
+  }).filter(t => t[0]);
+  const v = +(r.new_version ?? r.version);
+  return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)),
+    line: r.inspector_line ?? r.line ?? null, newVersion: Number.isFinite(v) && v > 0 ? v : null, source: "api" };
+}
+
+async function judge() {
+  const mock = mockJudge();
+  if (!API || !S.roundId) return mock;
+  try {
+    const { verdict, ...rec } = record(); // the verdict is what we're asking for
+    const r = await api("POST", "/submit", { round_id: S.roundId, record: rec, perks: S.perks }, 10000);
+    return adaptVerdict(r, mock);
+  } catch (e) { offline(e); return mock; }
+}
+
+async function submit() {
+  S.submitted = true; clearTimeout(S.bossTimer);
+  sfx("chunk");
+  const L = LEVELS[S.level];
+  const ob = $("#outbox"); ob.classList.add("scanning");
+  inspectorSay(`Reading your invoice…`);
+  const pending = judge(); // start the request now, the animation covers the wait
+
+  await sleep(900);
+  ob.classList.remove("scanning");
+  const st = $(".inspect-stage");
+  st.classList.remove("done");
+  $("#big-stamp").className = "big-stamp"; $("#cash-pop").classList.remove("show");
+  $("#inspect-line").textContent = `${L.inspector.name} v${S.version} is reading it…`;
+  $("#inspect-line").classList.add("show", "reading");
+  overlay("inspect"); sfx("scan");
+
+  const [res] = await Promise.all([pending, sleep(1500)]);
+  S.lastResult = res; updateDebug();
+  const { caught, tells, payout } = res;
+  const bs = $("#big-stamp");
+  bs.textContent = caught ? "FLAGGED" : "PAID";
+  bs.classList.add("show", caught ? "flagged" : "paid");
+  sfx("stamp");
+  st.classList.add("done");
+  const said = res.line || pick(L.lines[caught ? "catch" : "pass"]);
+  $("#inspect-line").classList.remove("reading");
+  $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
+  inspectorSay(said);
+  post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor });
+  $("#inspect-line").classList.add("show");
+  if (caught) {
+    sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
+    S.streak = 0; S.caughtCount++; addHeat(12);
+  } else {
+    S.money += payout; S.streak++;
+    $("#cash-pop").textContent = "+" + money(payout); $("#cash-pop").classList.add("show");
+    setTimeout(() => sfx("cash"), 250);
+    $("#tb-money").classList.remove("bump"); void $("#tb-money").offsetWidth; $("#tb-money").classList.add("bump");
+    S.cards.push({ scheme: S.scheme, payout, round: S.round, isNew: true });
+  }
+  S.history.push({ round: S.round, scheme: S.scheme, caught, payout: caught ? 0 : payout, version: S.version, tells: tells.map(t => t[0]) });
+  // forensic replay: show what tipped them off on the desk invoice
+  tells.slice(0, 2).forEach(t => t[2] && $(`#invoice [data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
+  $("#invoice").classList.toggle("forensic", caught);
+  updateHud();
 }
 
 $("#btn-after-inspect").onclick = () => { sfx("click"); overlay("inspect", false); showCorkboard(); };
@@ -836,7 +960,8 @@ function showCorkboard() {
   const shredded = r.caught && S.perks.includes("shred") && !S.shredUsed;
   if (shredded) S.shredUsed = true;
   const oldV = S.version;
-  if (!shredded) S.version++;
+  if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
+  else if (!shredded) S.version++;
   const top = r.tells.slice(0, 3);
   const pos = [[120, 60], [80, 330], [430, 300]];
   $("#cork-pins").innerHTML = `
@@ -847,7 +972,7 @@ function showCorkboard() {
     </div>` +
     (top.length ? top : [["heat", 0, null]]).map((t, i) => `
     <div class="cork-card" style="left:${pos[i][0]}px;top:${pos[i][1]}px;transform:rotate(${rand(-5, 5)}deg)">
-      <b>Clue #${i + 1}</b>${TELL_LABELS[t[0]] || t[0]}</div>`).join("");
+      <b>Clue #${i + 1}</b>${tellLabel(t[0])}</div>`).join("");
   const cx = 510, cy = 130;
   $("#cork-string").innerHTML = (top.length ? top : [0]).map((_, i) =>
     `<path d="M${cx},${cy} Q${(cx + pos[i][0] + 100) / 2},${(cy + pos[i][1]) / 2 + 60} ${pos[i][0] + 105},${pos[i][1] + 10}"/>`).join("");
@@ -864,7 +989,7 @@ $("#btn-after-cork").onclick = () => { sfx("click"); overlay("cork", false); sho
 
 function showBetween() {
   const r = S.lastResult;
-  const learned = r.tells.slice(0, 2).map(t => TELL_LABELS[t[0]]).filter(Boolean);
+  const learned = r.tells.slice(0, 2).map(t => tellLabel(t[0])).filter(Boolean);
   const n = 40 + S.round * 17 + Math.floor(rand(0, 30));
   $("#patch-title").textContent = `Inspector v${S.version}`;
   const items = learned.length
