@@ -688,7 +688,9 @@ function parseShip(text, item, holder, email) {
     return { id: "billing", dist1: 0, toYou: false, physical: true, label: "Their home, " + holder.city };
   }
   const city = findCity(t) || (/garage|cousin|friend|mule|locker|po box|next door|neighbo/.test(t) ? hc : null);
-  if (city && city.foreign) return { id: "reshipper", dist1: null, toYou: true, physical: true, abroad: true, label: String(text).trim() };
+  // abroad keeps its real distance: a blank dist1 is what most of the dataset's online orders have
+  if ((city && city.foreign) || (!city && /abroad|overseas|international/.test(t)))
+    return { id: "reshipper", dist1: (city && miles(city, hc)) || 4000, toYou: true, physical: true, abroad: true, label: String(text).trim() };
   const d = city ? miles(city, hc) : 25;
   return { id: "mule", dist1: Math.max(2, city === hc ? 4 + (t.length % 9) : d), toYou: true, physical: true, label: String(text).trim(), city: city ? city.name : null };
 }

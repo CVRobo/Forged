@@ -127,10 +127,11 @@ class OnlineRecord(BaseModel):
 
 
 class GusVerdict(BaseModel):
-    """The browser's scripted Gus, sent with online records until the server has its own model."""
+    """The browser's scripted Gus: the answer when the server has no trained model (ml/online)."""
     caught: bool
     tells: list[list[Any]] = Field(default_factory=list, description="[[tell, weight], ...]")
     payout: int = 0
+    values: list[float] = Field(default_factory=list, description="what each order pays the player if it gets through")
 
 
 class SubmitRequest(BaseModel):
@@ -140,12 +141,26 @@ class SubmitRequest(BaseModel):
     gus: GusVerdict | None = None
 
 
+class PreviewRequest(BaseModel):
+    """The checkout as the player types: Gus's gut feeling. Nothing is saved."""
+    record: OnlineRecord
+
+
+class PreviewResponse(BaseModel):
+    worry: float = Field(description="the riskiest order's score over the player's threshold: 1 or more means caught")
+    scores: list[float]
+    threshold: float
+    version: int
+    tells: list[list[Any]] = Field(default_factory=list, description="the riskiest order's [[tell, weight], ...]")
+
+
 class SubmitResponse(BaseModel):
     verdict: str = Field(description="PAID or FLAGGED")
     top_tells: list[Tell]
     inspector_line: str
     payout: int
     new_version: int
+    results: list[dict[str, Any]] | None = Field(default=None, description="online orders: per order {declined, reason, score, tells}")
 
 
 # --- Patch Notes ---

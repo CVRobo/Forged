@@ -14,11 +14,13 @@ from fastapi import APIRouter, HTTPException
 
 from server import config
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
-from server.services.online_data import submit_online
+from server.services.online_data import preview, submit_online
 from server.models.schemas import (
     CaseFile,
     MemoRule,
     OnlineRecord,
+    PreviewRequest,
+    PreviewResponse,
     RoundStartRequest,
     RoundStartResponse,
     SubmitRequest,
@@ -232,3 +234,9 @@ async def submit(req: SubmitRequest):
         payout=payout,
         new_version=new_version,
     )
+
+
+@router.post("/preview", response_model=PreviewResponse)
+async def preview_order(req: PreviewRequest):
+    """Gus's gut feeling while the player types the checkout (the fraud model's score, nothing saved)."""
+    return preview(req.record)
