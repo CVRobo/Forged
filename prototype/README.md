@@ -1,6 +1,6 @@
 # Forged: playable prototype
 
-A third-person office game about online-order fraud. You build fake orders on your in-game computer and sneak them past Gus, the shop's risk engine. Every order is saved as a row in the IEEE-CIS fraud dataset format (see `docs/online-fraud-redesign.md`). There's no AI and no backend yet.
+A third-person office game about online-order fraud. You build fake orders on your in-game computer and sneak them past Gus, the shop's risk engine. Every order is saved as a row in the IEEE-CIS fraud dataset format (see `docs/online-fraud-redesign.md`). On its own it plays against a scripted Gus in the browser; with the backend, the real fraud model judges every order (see "Connecting to the backend" and the root README).
 
 ```
 python serve.py
