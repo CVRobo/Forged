@@ -522,13 +522,13 @@ function isTyping(e) {
 }
 // the keys come from keys.js, so they show in Esc → Controls and can be rebound
 const K = window.ForgedKeys;
-const isKey = (action, code, fallback) => K ? K.is(action, code) : code === fallback;
+const isKey = (action, e, fallback) => K ? K.matches(action, e) : e.code === fallback;
 addEventListener("keydown", e => {
-  if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (isTyping(e) || (K ? K.shortcutMods(e) : e.ctrlKey || e.metaKey || e.altKey)) return;
   if ((K && K.isOpen && K.isOpen()) || (window.ForgedMenu && ForgedMenu.isOpen())) return; // rebinding / menu owns the keys
-  if (isKey("mute", e.code, "KeyM") && !e.repeat) soundKey("mute");
-  else if (isKey("volumeUp", e.code, "BracketRight")) soundKey("volumeUp");
-  else if (isKey("volumeDown", e.code, "BracketLeft")) soundKey("volumeDown");
+  if (isKey("mute", e, "KeyM") && !e.repeat) soundKey("mute");
+  else if (isKey("volumeUp", e, "BracketRight")) soundKey("volumeUp");
+  else if (isKey("volumeDown", e, "BracketLeft")) soundKey("volumeDown");
 });
 // the computer screen forwards the same keys while you're seated
 FW.onMessage(m => { if (m.type === "sound-key") soundKey(m.action); });

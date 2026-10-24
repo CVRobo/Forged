@@ -1783,10 +1783,10 @@ if (!EMBED) ForgedMenu.init({
 
 // mute / volume keys work while seated too: the office's audio.js owns the setting
 document.addEventListener("keydown", e => {
-  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.repeat || ForgedKeys.shortcutMods(e)) return;
   const el = document.activeElement;
   if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
-  const action = ["mute", "volumeDown", "volumeUp"].find(a => ForgedKeys.is(a, e.code));
+  const action = ["mute", "volumeDown", "volumeUp"].find(a => ForgedKeys.matches(a, e));
   if (action) post("sound-key", { action });
 });
 document.addEventListener("keydown", e => {

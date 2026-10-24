@@ -77,10 +77,26 @@ function keyName(code) {
   return code;
 }
 
+const CODE_CHARS = { Minus: "-", Equal: "=", BracketLeft: "[", BracketRight: "]", Semicolon: ";", Quote: "'",
+  Comma: ",", Period: ".", Slash: "/", Backslash: "\\", Backquote: "`" };
+
 window.ForgedKeys = {
   MAC, ACTIONS, FIXED,
   /** does this keyboard code (or "Mouse<n>") trigger the action? */
   is(action, code) { const b = binds[action]; return !!b && !!code && (b[0] === code || b[1] === code); },
+  /** like is(), but by the character printed on the key, so letter shortcuts such as M (mute)
+   *  work on AZERTY/QWERTZ keyboards too; keys that type no character fall back to the code */
+  matches(action, e) {
+    const b = binds[action]; if (!b || !e) return false;
+    const typed = e.key && e.key.length === 1 ? e.key.toLowerCase() : null;
+    return b.some(code => {
+      if (!code) return false;
+      const ch = CODE_CHARS[code] || (/^Key[A-Z]$/.test(code) ? code[3].toLowerCase() : /^Digit\d$/.test(code) ? code[5] : null);
+      return ch && typed ? ch === typed : code === e.code;
+    });
+  },
+  /** AltGr (Ctrl+Alt on Windows) types [ ] on many layouts: not a shortcut modifier */
+  shortcutMods(e) { return e.metaKey || ((e.ctrlKey || e.altKey) && !(e.getModifierState && e.getModifierState("AltGraph"))); },
   /** which action of a group does this code trigger (first match) */
   actionFor(code, group) { const a = ACTIONS.find(x => (!group || x.group === group) && this.is(x.id, code)); return a ? a.id : null; },
   get(action) { return [...(binds[action] || [null, null])]; },
