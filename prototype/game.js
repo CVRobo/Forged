@@ -307,7 +307,7 @@ if (EMBED) {
   $("#insp-win-title").textContent = "Printer · Gus down the hall";
   $(".env-label").textContent = "DRAG TO PRINT";
   $("#envelope").title = "Drag me onto PRINT";
-  $("#btn-quit").textContent = "Quit to title";
+  $("#btn-quit").textContent = "Clock out"; // back to the office's Clock in card to pick a level
 }
 function toStage(cx, cy, el = stage) {
   const r = el.getBoundingClientRect();
@@ -330,6 +330,7 @@ function toast(text, kind = "") {
 
 document.addEventListener("click", e => {
   const go = e.target.closest("[data-go]");
+  if (go && EMBED && go.dataset.go === "levels") { sfx("click"); startRun(S.chosenLevel || 1); return; } // in the office the level was picked before clocking in
   if (go) { sfx("click"); if (go.dataset.go === "levels") renderLevels(); show(go.dataset.go); }
   const mn = e.target.closest("[data-menu]");
   if (mn) { sfx("click"); openMenu(mn.dataset.menu); }
@@ -890,6 +891,11 @@ window.addEventListener("message", e => {
   if (m.type === "heat" && Number.isFinite(+m.amount)) addHeat(+m.amount);
   if (m.type === "paused") setPaused(!!m.on);
   if (m.type === "quit") quitToTitle();
+  // the level is picked on the office's Clock in card: start that run (unless one is already going)
+  if (m.type === "level" && LEVELS[m.level] && !LEVELS[m.level].locked) {
+    S.chosenLevel = +m.level;
+    if (!$("#screen-desk.active")) startRun(S.chosenLevel);
+  }
   if (m.type === "dossier") openDossier();
   if (m.type === "tutorial-3d-done") tutWorldEvent(m.step);
 });
@@ -1175,7 +1181,7 @@ function quitToTitle() {
   Object.assign(S, { inv: null, submitted: false });
   show("title");
 }
-$("#btn-quit").onclick = () => { sfx("click"); quitToTitle(); };
+$("#btn-quit").onclick = () => { sfx("click"); if (EMBED) post("quit-office"); else quitToTitle(); }; // in the office: back to the Clock in card
 
 /* ======================= Tutorial (first round) =======================
  * One hands-on tutorial for the first round. A small card sits beside whatever to use
@@ -1233,7 +1239,7 @@ function tutorialDone() { try { return localStorage.getItem(TUT_KEY) === "1"; } 
 
 function startTutorial(fromId) {
   if (tut.on) return;
-  tut.steps = TUTORIAL.filter(st => EMBED || !st.world); // os.html on its own has no office to walk
+  tut.steps = TUTORIAL.filter(st => EMBED ? st.id !== "start" : !st.world); // os.html alone has no office to walk; in the office the level is picked before clocking in
   Object.assign(tut, { on: true, i: Math.max(0, tut.steps.findIndex(st => st.id === fromId)), entered: -1, done: false, verdictShown: false });
   post("tutorial-active", { on: true });
   clearInterval(tut.poll); tut.poll = setInterval(tutPoll, 200);
@@ -1344,6 +1350,7 @@ function tutWorldEvent(ev) { const st = tut.on && tutStep(); if (st && st.world 
 addEventListener("resize", () => tut.on && showTutStep());
 // first launch in the office: start at "Go to your desk" so the green arrow points there
 if (EMBED && !tutorialDone()) setTimeout(() => startTutorial("sit"), 600);
+if (EMBED) post("os-ready"); // the office replies with the level if you've already clocked in
 
 /* ======================= Player name (the leaderboard itself is in menu.js) ======================= */
 
