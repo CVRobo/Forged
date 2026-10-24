@@ -139,46 +139,126 @@ safe(() => {
 });
 
 /* ======================= West wall: fridge, vending machine ======================= */
-safe(() => {
-  const fx = -12.45, fz = 13.3;
-  box(.85, 2.0, .85, mat.fridge, fx, 1.0, fz);
-  box(.04, .5, .06, mat.steel, fx + .44, 1.55, fz - .3);
-  box(.04, .7, .06, mat.steel, fx + .44, .65, fz - .3);
-  box(.02, .02, .85, mat.dark, fx + .43, 1.28, fz);
-  const t = canvasTex(512, 1024, g => {
-    note(g, 40, 30, 300, 190, "#fff27a", ["LABEL YOUR", "FOOD.", "— Management"], -.06, "bold 34px 'Space Mono', monospace");
-    note(g, 250, 230, 230, 160, "#ffd0e4", ["WHO ATE", "MY YOGURT??"], .1);
-    note(g, 30, 420, 260, 170, "#b6f0c8", ["Fridge cleaned", "FRIDAYS.", "Everything goes."], .04, "bold 24px 'Space Mono', monospace");
-    note(g, 280, 470, 200, 140, "#bfe3ff", ["I can see", "you, Kevin."], -.08);
-    note(g, 60, 690, 380, 150, "#fff27a", ["THIS IS NOT", "A STORAGE UNIT"], .03, "bold 32px 'Space Mono', monospace");
-    note(g, 200, 860, 220, 130, "#ffd0e4", ["not ur milk"], -.12);
-  });
-  const p = plane(.8, 1.6, t); p.position.set(fx + .435, 1.0, fz); p.rotation.y = Math.PI / 2; FW.scene.add(p);
-  collide(fx, fz, .9, .9);
+// both stand against the west wall (x = -13) and face +x into the room
+const noteTex = (color, lines, font) => canvasTex(256, 200, (g, w, h) => {
+  g.fillStyle = color; g.fillRect(0, 0, w, h);
+  g.fillStyle = "rgba(0,0,0,.12)"; g.fillRect(0, h - 10, w, 10);
+  g.fillStyle = "#2b1d14"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = font || "bold 30px 'Space Mono', monospace";
+  lines.forEach((l, i) => g.fillText(l, w / 2, h / 2 - (lines.length - 1) * 18 + i * 36));
 });
+const notePlane = (w, h, tex) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: .95 }));
+
 safe(() => {
-  const vx = -12.4, vz = 11.0;
-  box(.95, 2.1, 1.15, mat.red, vx, 1.05, vz);
-  const t = canvasTex(512, 1024, (g, w, h) => {
-    g.fillStyle = "#222"; g.fillRect(0, 0, w, h);
-    g.fillStyle = "#ffd23f"; g.font = "86px Bungee, Impact, sans-serif"; g.textAlign = "center"; g.fillText("SNAX", w / 2 - 50, 100);
-    g.fillStyle = "#cfe8f2"; g.fillRect(24, 130, 360, 720);
-    const cols = ["#e0352b", "#ffd23f", "#3fae6a", "#7a5cff", "#f4a63a", "#1f8a8a", "#ff7eb6", "#8a5a35"];
-    for (let r = 0; r < 5; r++) {
-      g.fillStyle = "#8a9aa2"; g.fillRect(24, 250 + r * 140, 360, 10);
-      for (let c = 0; c < 4; c++) {
-        g.fillStyle = cols[(r * 3 + c * 5) % cols.length]; g.fillRect(40 + c * 86, 160 + r * 140, 64, 88);
-        g.fillStyle = "rgba(255,255,255,.6)"; g.fillRect(48 + c * 86, 172 + r * 140, 14, 60);
-      }
-    }
-    g.fillStyle = "#555"; g.fillRect(400, 300, 90, 200); g.fillStyle = "#7cff9a"; g.fillRect(410, 320, 70, 40);
-    g.fillStyle = "#111"; g.fillRect(410, 380, 70, 20); g.fillRect(410, 420, 70, 20);
-    g.fillStyle = "#111"; g.fillRect(40, 880, 340, 100);
-    g.fillStyle = "#fff"; g.font = "bold 26px 'Space Mono', monospace"; g.fillText("OUT OF ORDER*", w / 2 - 50, 950);
-    g.font = "bold 18px 'Space Mono', monospace"; g.fillText("*mostly", 440, 990);
+  const fx = -12.55, fz = 13.3;          // centre of the body
+  const D = .72, W = .84, H = 1.95;      // depth (x), width (z), height
+  const front = fx + D / 2;
+  const g = new THREE.Group(); FW.scene.add(g);
+  const white = mat.fridge, seam = mat.dark, chrome = mat.steel;
+  // body + darker kick grille
+  box(D, H - .08, W, white, fx, .08 + (H - .08) / 2, fz, g);
+  box(.04, .08, W - .1, seam, front - .01, .04, fz, g);
+  for (let i = 0; i < 5; i++) box(.02, .012, W - .2, M("#555"), front + .015, .025 + i * .014, fz, g);
+  // two doors that stand slightly proud of the body, freezer on top
+  const door = (y0, y1) => box(.06, y1 - y0 - .02, W - .02, M("#fbfbf7"), front + .03, (y0 + y1) / 2, fz, g);
+  door(.1, 1.28); door(1.3, H);
+  box(.065, .02, W - .02, seam, front + .02, 1.29, fz, g); // gap between doors
+  // vertical chrome handles on standoffs, on the -z (hinge-free) side
+  const hz = fz - W / 2 + .1;
+  [[.45, 1.15], [1.42, 1.85]].forEach(([y0, y1]) => {
+    cyl(.022, .022, y1 - y0, chrome, front + .12, (y0 + y1) / 2, hz, g);
+    [y0 + .03, y1 - .03].forEach(y => box(.07, .025, .025, chrome, front + .085, y, hz, g));
   });
-  const p = plane(.95 * .9, 2.0, t); p.position.set(vx + .485, 1.05, vz); p.rotation.y = Math.PI / 2; FW.scene.add(p);
-  collide(vx, vz, 1.0, 1.2);
+  // a little logo badge and a cereal box on top
+  box(.01, .04, .14, chrome, front + .062, 1.86, fz + .22, g);
+  box(.22, .3, .08, M("#ffd23f"), fx, H + .15, fz + .2, g);
+  box(.23, .06, .09, M("#e0352b"), fx, H + .22, fz + .2, g);
+  // passive-aggressive notes, each its own paper square stuck on a door with a magnet
+  const notes = [
+    ["#fff27a", ["LABEL YOUR", "FOOD.", "— Management"], 1.62, .12, -.06, "bold 26px 'Space Mono', monospace"],
+    ["#ffd0e4", ["WHO ATE", "MY YOGURT??"], 1.5, -.17, .1],
+    ["#b6f0c8", ["Fridge cleaned", "FRIDAYS."], 1.05, .14, .04, "bold 24px 'Space Mono', monospace"],
+    ["#bfe3ff", ["I can see", "you, Kevin."], .82, -.12, -.08],
+    ["#fff27a", ["NOT A", "STORAGE UNIT"], .55, .1, .03],
+  ];
+  const magnets = [mat.red, M("#1f8a8a"), M("#f4a63a"), M("#7a5cff"), mat.red];
+  notes.forEach(([color, lines, y, dz, rot, font], i) => {
+    const p = notePlane(.26, .2, noteTex(color, lines, font));
+    p.position.set(front + .064, y, fz + dz); p.rotation.set(0, Math.PI / 2, rot); g.add(p);
+    const mg = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .015, 10), magnets[i]);
+    mg.rotation.z = Math.PI / 2; mg.position.set(front + .072, y + .085, fz + dz); g.add(mg);
+  });
+  collide(fx + .05, fz, D + .2, W + .05);
+});
+
+safe(() => {
+  const vx = -12.5, vz = 11.0;
+  const D = .85, W = 1.1, H = 2.05, front = vx + D / 2;
+  const g = new THREE.Group(); FW.scene.add(g);
+  const red = mat.red, dark = mat.dark, black = M("#1b1b1f");
+  const winZ = vz - .1, winW = .72, winY0 = .62, winY1 = 1.7;
+  // cabinet shell (open in front of the display window so you can see inside)
+  box(.06, H, W, red, vx - D / 2 + .03, H / 2, vz, g);                     // back
+  [-1, 1].forEach(s => box(D, H, .05, red, vx, H / 2, vz + s * (W / 2 - .025), g)); // sides
+  box(D, .08, W, red, vx, H - .04, vz, g);                                 // top
+  box(D, winY0, W, red, vx, winY0 / 2, vz, g);                             // base block
+  box(D - .1, H - winY1 - .1, W - .1, red, vx + .05, (winY1 + H - .08) / 2, vz, g); // header block
+  // black front frame around the window
+  const fz0 = vz - W / 2 + .05, fz1 = vz + W / 2 - .05, wz0 = winZ - winW / 2, wz1 = winZ + winW / 2;
+  box(.06, H - .1 - winY1, W - .1, black, front + .01, (winY1 + H - .1) / 2, vz, g);
+  box(.06, winY0 - .06, W - .1, black, front + .01, (winY0 + .06) / 2, vz, g);
+  box(.06, winY1 - winY0, wz0 - fz0, black, front + .01, (winY0 + winY1) / 2, (fz0 + wz0) / 2, g);
+  box(.06, winY1 - winY0, fz1 - wz1, black, front + .01, (winY0 + winY1) / 2, (wz1 + fz1) / 2, g);
+  // lit header sign
+  const sign = canvasTex(512, 128, (c, w, h) => {
+    c.fillStyle = "#1b1b1f"; c.fillRect(0, 0, w, h);
+    c.fillStyle = "#ffd23f"; c.font = "86px Bungee, Impact, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("SNAX", w / 2, h / 2 + 6);
+  });
+  const sp = new THREE.Mesh(new THREE.PlaneGeometry(W - .2, .26), new THREE.MeshBasicMaterial({ map: sign }));
+  sp.position.set(front + .045, H - .2, vz); sp.rotation.y = Math.PI / 2; g.add(sp);
+  // display window: shelves, spiral coils and snacks, behind glass
+  box(.04, winY1 - winY0, winW, M("#dfeef2"), front - .22, (winY0 + winY1) / 2, winZ, g);   // lit back panel
+  const snackCols = ["#e0352b", "#ffd23f", "#3fae6a", "#7a5cff", "#f4a63a", "#1f8a8a", "#ff7eb6", "#8a5a35"];
+  const snackGeo = new THREE.BoxGeometry(.06, .13, .1), coilGeo = new THREE.TorusGeometry(.04, .006, 6, 14);
+  const coilMat = M("#c9ced3"), snackMats = snackCols.map(c => M(c));
+  for (let r = 0; r < 4; r++) {
+    const y = winY0 + .08 + r * .27;
+    box(.2, .02, winW, M("#8a9aa2"), front - .11, y, winZ, g);           // shelf
+    for (let c = 0; c < 4; c++) {
+      const z = winZ - winW / 2 + .1 + c * .175;
+      const s = new THREE.Mesh(snackGeo, snackMats[(r * 3 + c * 5) % snackMats.length]);
+      s.position.set(front - .12, y + .08, z); g.add(s);
+      const k = new THREE.Mesh(coilGeo, coilMat); k.rotation.y = Math.PI / 2; k.position.set(front - .1, y + .05, z); g.add(k);
+    }
+  }
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(winW, winY1 - winY0), new THREE.MeshStandardMaterial({ color: "#cfefff", transparent: true, opacity: .22, roughness: .05 }));
+  glass.position.set(front + .045, (winY0 + winY1) / 2, winZ); glass.rotation.y = Math.PI / 2; g.add(glass);
+  const lightStrip = new THREE.Mesh(new THREE.BoxGeometry(.02, .02, winW), new THREE.MeshBasicMaterial({ color: "#fffbe0" }));
+  lightStrip.position.set(front + .02, winY1 - .02, winZ); g.add(lightStrip);
+  // control column on the +z side: screen, keypad, coin slot
+  const cz = vz + W / 2 - .17;
+  box(.03, .9, .2, M("#3a3a40"), front + .045, 1.25, cz, g);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(.14, .07), new THREE.MeshBasicMaterial({ color: "#7cff9a" }));
+  screen.position.set(front + .062, 1.58, cz); screen.rotation.y = Math.PI / 2; g.add(screen);
+  const keyGeo = new THREE.BoxGeometry(.015, .035, .035), keyMat = M("#d8d8d8");
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+    const k = new THREE.Mesh(keyGeo, keyMat); k.position.set(front + .065, 1.45 - r * .05, cz - .05 + c * .05); g.add(k);
+  }
+  box(.02, .08, .03, black, front + .065, 1.12, cz, g);      // coin slot
+  box(.02, .05, .12, M("#111"), front + .065, .98, cz, g);   // bill slot
+  // pick-up bay with a flap
+  box(.05, .22, .62, black, front + .03, .34, winZ, g);
+  const flap = box(.02, .18, .56, M("#2c2c33"), front + .06, .34, winZ, g); flap.rotation.z = -.12;
+  box(.01, .03, .3, M("#ffd23f"), front + .066, .5, winZ, g);
+  // OUT OF ORDER (mostly) sticker
+  const oo = notePlane(.26, .12, canvasTex(256, 120, (c, w, h) => {
+    c.fillStyle = "#fffaf0"; c.fillRect(0, 0, w, h);
+    c.fillStyle = "#e0352b"; c.font = "bold 30px 'Space Mono', monospace"; c.textAlign = "center"; c.fillText("OUT OF ORDER*", w / 2, 52);
+    c.fillStyle = "#2b1d14"; c.font = "bold 20px 'Space Mono', monospace"; c.fillText("*mostly", w / 2, 92);
+  }));
+  oo.position.set(front + .05, 1.82, winZ - .2); oo.rotation.set(0, Math.PI / 2, .12); g.add(oo);
+  // feet
+  [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([a, b]) => box(.08, .04, .08, black, vx + a * (D / 2 - .08), .02, vz + b * (W / 2 - .08), g));
+  collide(vx + .05, vz, D + .15, W + .05);
 });
 
 /* ======================= North wall: corkboard of memos ======================= */

@@ -27,8 +27,7 @@ const WALL = "#8c3b3b"; // pompous burgundy
 /* ======================= Shell ======================= */
 
 FW.room({ x0: X0, x1: X1, z0: Z0, z1: Z1, skip: ["east"], floor: ["#6b4a33", "#5a3c28"], wallColor: WALL });
-// the main office's west wall stops at z = -9; close the 1 m gap in our north-east corner
-FW.wallRun("z", X1, Z0, -9, [], { color: WALL });
+// (the 1 m corner past the main office's west wall is filled by FW.room itself)
 
 const scene = FW.scene;
 const gold = M("#e8b422"), darkWood = M("#4a2c1a"), wood = M("#7a4a2a"), leather = M("#5a1f14"),

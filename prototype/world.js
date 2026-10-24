@@ -178,6 +178,16 @@ function room({ x0, x1, z0, z1, floor = ["#d8c8a8", "#c9b894"], wallColor, skip 
   const c = new THREE.Mesh(new THREE.PlaneGeometry(w, d), M("#f3ead8"));
   c.rotation.x = Math.PI / 2; c.position.set(cx, WALL_H, cz); scene.add(c);
   const opt = wallColor ? { color: wallColor } : {};
+  // a skipped side is shared with the main office, but only where the main office actually has a wall:
+  // fill whatever part of that side sticks out past it (otherwise you see into the void)
+  const fill = (axis, fixed, from, to, lo, hi) => {
+    if (from < lo) wallRun(axis, fixed, from, Math.min(to, lo), [], opt);
+    if (to > hi) wallRun(axis, fixed, Math.max(from, hi), to, [], opt);
+  };
+  if (skip.includes("north")) fill("x", z0, x0, x1, -RW / 2, RW / 2);
+  if (skip.includes("south")) fill("x", z1, x0, x1, -RW / 2, RW / 2);
+  if (skip.includes("west")) fill("z", x0, z0, z1, -RD / 2, RD / 2);
+  if (skip.includes("east")) fill("z", x1, z0, z1, -RD / 2, RD / 2);
   if (!skip.includes("north")) wallRun("x", z0, x0, x1, doors.north, opt);
   if (!skip.includes("south")) wallRun("x", z1, x0, x1, doors.south, opt);
   if (!skip.includes("west")) wallRun("z", x0, z0, z1, doors.west, opt);
@@ -442,7 +452,7 @@ function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, 
   const face = buildHead(Object.assign({ skin }, look));
   const head = face.head; head.position.y = 2.02; g.add(head);
   const tex = tagTex({ label: name, color: tagColor });
-  const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex })); // walls hide it, so tags no longer show through rooms
   tag.scale.set(1.6, .3, 1); tag.position.y = 2.72; tag.renderOrder = 10; g.add(tag);
   g.scale.setScalar(scale);
   scene.add(g);
@@ -828,6 +838,29 @@ plant(-12.2, 8.2, "tall"); plant(12.2, 8.2, "bush"); plant(12.2, -8.2, "bush"); 
 }
 const jug = cyl(.26, .26, .5, M("#7cc6ff", { transparent: true, opacity: .7 }), -12.3, 1.25, -8.2); jug.castShadow = false; collide(-12.3, -8.2, .7, .7);
 const exitSign = signPlane("EXIT", null, 1, .35, "#1d9a4b"); exitSign.position.set(0, 2.6, RD / 2 - .17); exitSign.rotation.y = Math.PI; scene.add(exitSign);
+// the emergency exit under the sign: double metal doors with push bars and wired-glass windows
+const exitDoor = (() => {
+  const zf = RD / 2 - .16, g = new THREE.Group(); scene.add(g);
+  const frame = M("#2e2a28"), metalDoor = M("#6f8f86"), chrome = M("#c9ced3"), red = M("#e0352b");
+  box(.12, 2.42, .12, frame, -.86, 1.21, zf, g); box(.12, 2.42, .12, frame, .86, 1.21, zf, g); box(1.84, .12, .12, frame, 0, 2.42, zf, g);
+  const leaves = [-1, 1].map(side => {
+    const hinge = new THREE.Group(); hinge.position.set(side * .8, 0, zf - .04); g.add(hinge);
+    const leaf = box(.78, 2.3, .06, metalDoor, -side * .39, 1.17, 0, hinge);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(.28, .4), new THREE.MeshStandardMaterial({ color: "#bfe8ff", transparent: true, opacity: .5, roughness: .1 }));
+    win.position.set(-side * .39, 1.65, -.035); win.rotation.y = Math.PI; hinge.add(win);
+    cyl(.025, .025, .6, chrome, -side * .42, 1.05, -.09, hinge).rotation.z = Math.PI / 2;  // push bar
+    [-.25, .25].forEach(dx => box(.03, .03, .06, chrome, -side * .42 + dx, 1.05, -.06, hinge));
+    return hinge;
+  });
+  box(1.4, .02, .9, M("#3a3a40"), 0, .01, zf - .55, g);                          // floor mat
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.0, .35), new THREE.MeshBasicMaterial({ color: "#3dff8a", transparent: true, opacity: .25 }));
+  glow.position.set(0, 2.6, zf - .02); glow.rotation.y = Math.PI; g.add(glow);         // the sign glows
+  const alarm = new THREE.Mesh(new THREE.BoxGeometry(.18, .12, .05), red); alarm.position.set(1.15, 1.5, zf - .02); g.add(alarm);
+  collide(0, zf, 1.9, .3);
+  return { leaves };
+})();
+let exitOpenUntil = 0;
+
 
 /* --- windows with half-drawn blinds on the north wall (all geometry sits in front of the wall face) --- */
 const WALL_N = -RD / 2 + .15; // inner face of the north wall
@@ -1234,6 +1267,11 @@ const INTERACTIONS = [
   { label: () => "Drop it in the IN tray", can: () => P.carrying && near(IN_TRAY, 1.9), act: deliver },
   { label: () => `Talk to ${P.hud ? P.hud.clerk.name : "Brenda"}`, can: () => near({ x: CLERK_DESK.x, z: CLERK_DESK.z + 1.2 }, 2.2) || near({ x: CLERK_DESK.x, z: CLERK_DESK.z - 1.6 }, 1.6), act: () => say(clerk, P.hud ? `"${P.hud.clerk.hello}" <br><small>(Send your cover note from your computer.)</small>` : `"I'm on lunch, hon. Email me."`, 3800) },
   { label: () => `Chat with ${P.hud ? P.hud.inspector : "Gus"}`, can: () => !P.carrying && P.phase !== "judging" && !(P.phase === "result" && bubbles.some(b => b.ch === inspector)) && near(IN_TRAY, 1.9), act: () => say(inspector, pick(["Mmm… pie.", "Did you know I have a stapler?", "I read every invoice. Mostly.", "Is it lunch yet?"]), 2600) },
+  { label: () => "Clock out early", can: () => near({ x: 0, z: RD / 2 - 1 }, 1.6), act: () => {
+      exitOpenUntil = performance.now() + 1600; sfx("door");
+      if (P.carrying) say(player, "Leave with a forged invoice in my hand? Bold.", 2600);
+      else say(player, pick(["Not before quota. The boss would notice.", "One more invoice. Then I'm out.", "The parking lot looks free… but my desk looks profitable."]), 2600);
+    } },
   { label: () => "Look at the corkboard", can: () => near({ x: 3, z: -RD / 2 + 1.2 }, 1.8), act: () => wtoast(pins.length ? `${pins.length} trick${pins.length > 1 ? "s" : ""} pinned. ${pins.filter(p => p.caught).length} caught.` : "Empty… for now.") },
   { label: () => "Small talk with the Boss", can: () => boss.g.visible && near(boss.g.position, 1.8), act: () => say(boss, pick(["Shouldn't you be at your desk?", "Numbers. I want numbers.", "Nice weather for compliance."]), 2400) },
 ];
@@ -1645,6 +1683,7 @@ function loop(now) {
   if (st < 1) inspector.armR.rotation.x = st < .5 ? -.3 - st * 4.8 : -2.7 + (st - .5) * 4.8;
   else inspector.armR.rotation.x = -.3;
   updateMarker(now);
+  { const open = now < exitOpenUntil ? .55 : 0; exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); }); }
   for (const fn of UPDATERS) { try { fn(dt, now); } catch (e) { console.error("[forged] plugin update failed", e); } }
   updateCine(now);
   updateConfetti(dt);
@@ -1669,7 +1708,7 @@ window.forged = { P, player, boss: B, camera, CINE, sit, stand, setPhase, grab, 
 window.FW = {
   THREE, scene, camera, renderer,
   // building blocks
-  M, mats, box, cyl, sphere, outline, collide, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
+  M, mats, box, cyl, sphere, outline, collide, walls, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
   makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses,
   // state
   P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,
