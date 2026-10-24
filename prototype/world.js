@@ -49,10 +49,11 @@ function resize() {
 }
 addEventListener("resize", resize); resize();
 
-// warm key light from the sun side, cool sky bounce from below/behind: a subtle warm/cool split
+// warm key light from above (ceiling panels): shadows fall short, right under things, never "through" a wall.
+// Cool sky bounce from below/behind: a subtle warm/cool split
 scene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", 0.52));
 const sun = new THREE.DirectionalLight("#ffecd0", 0.62);
-sun.position.set(-8, 18, 10);
+sun.position.set(-1.6, 30, 2.6); // almost straight down, a touch south-west so shapes keep a little depth
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;

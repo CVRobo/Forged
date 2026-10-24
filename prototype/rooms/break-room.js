@@ -332,10 +332,11 @@ safe(() => {
   // table clutter: a mug, a magazine
   cyl(.06, .055, .13, mat.mugC, TABLE.x - .25, .86, TABLE.z + .2);
   const mag = box(.3, .02, .4, M("#ffd23f"), TABLE.x + .15, .805, TABLE.z - .2); mag.rotation.y = .4;
-  // a warm lamp over the table
-  cyl(.02, .02, .55, mat.dark, TABLE.x, 2.93, TABLE.z);
-  cyl(.12, .4, .3, mat.mugB, TABLE.x, 2.52, TABLE.z);
-  const l = new THREE.PointLight("#ffd9a0", .55, 7, 2); l.position.set(TABLE.x, 2.3, TABLE.z); FW.scene.add(l);
+  // a warm lamp over the table (cord and shade cast no shadow: the lamp is the light)
+  cyl(.02, .02, .55, mat.dark, TABLE.x, 2.93, TABLE.z).castShadow = false;
+  cyl(.12, .4, .3, mat.mugB, TABLE.x, 2.52, TABLE.z).castShadow = false;
+  const l = new THREE.PointLight("#ffd9a0", .8, 4.6, 2); // reach stops at the room's walls (4.2 m), so no glow leaks into the office
+  l.position.set(TABLE.x, 2.3, TABLE.z); FW.scene.add(l);
 });
 
 let pam = null, pamMug = null;
