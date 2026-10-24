@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forged — Fraud Model Report</title>
+<style>
+  :root {
+    --bg: #faf8f4; --panel: #fff; --ink: #1c1a17; --muted: #6b6560; --line: #e5e0d8;
+    --accent: #b26b2e; --good: #2e7d4f; --bad: #c0392b; --live: #b26b2e; --gated: #9b8e80;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 6px 20px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17150f; --panel: #211e18; --ink: #efe9df; --muted: #a39a8c; --line: #342f27;
+      --accent: #e0923f; --good: #4caf72; --bad: #e06552; --live: #e0923f; --gated: #7d7566;
+      --shadow: 0 1px 3px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.2);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 16px 80px; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -.01em; }
+  header p { color: var(--muted); margin: 0 0 28px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 20px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 14px; font-weight: 700; }
+  .briefing { font-size: 18px; line-height: 1.6; }
+  .src { font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
+  .kpi .n { font-size: 28px; font-weight: 750; letter-spacing: -.02em; }
+  .kpi .l { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+  .pill.live { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+  .pill.gated { background: color-mix(in srgb, var(--gated) 22%, transparent); color: var(--muted); }
+  .pill.open { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+  .pill.closed { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+  .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Forged — Fraud Model Report</h1>
+    <p>Gus, the fraud detector, learns from players' attacks. This page reads <code>report.js</code> from the pipeline.</p>
+  </header>
+
+  <div class="card">
+    <h2>AI analyst briefing</h2>
+    <div class="briefing" id="briefing">Loading…</div>
+    <div class="src" id="src"></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h2>Real fraud caught on unseen days</h2>
+    <div id="chart"></div>
+    <div class="legend" id="legend"></div>
+    <div class="note" id="chart-note"></div>
+  </div>
+
+  <div class="card">
+    <h2>Model versions</h2>
+    <div id="versions"></div>
+  </div>
+
+  <div class="card">
+    <h2>Attacks players found</h2>
+    <div id="attacks"></div>
+  </div>
+</div>
+
+<script src="report.js"></script>
+<script>
+(function () {
+  const R = window.FORGED_REPORT;
+  const $ = id => document.getElementById(id);
+  const pct = x => (x * 100).toFixed(0) + "%";
+  if (!R) { $("briefing").textContent = "No report.js found. Run: python -m ml.online.briefing --html"; return; }
+
+  // briefing
+  $("briefing").textContent = R.briefing;
+  $("src").textContent = "Written by: " + (R.source || "template");
+
+  const ev = R.data.real_fraud_eval, versions = Object.entries(ev.by_version);
+  const live = versions.find(([, s]) => s.promoted) || versions[0];
+  const attacks = R.data.attacks;
+
+  // KPIs (from the live version)
+  const ls = live ? live[1] : null;
+  const kpis = [];
+  if (ls) {
+    kpis.push([`${(ls.mean_precision * ev.alerts_per_day).toFixed(0)}`, `real frauds per ${ev.alerts_per_day} alerts/day`]);
+    kpis.push([pct(ls.mean_recall), "of each day's real fraud caught"]);
+  }
+  kpis.push([ev.test_days, "unseen days evaluated"]);
+  if (attacks.orders) kpis.push([attacks.got_through + " / " + attacks.orders, "player orders that got through"]);
+  $("kpis").innerHTML = kpis.map(([n, l]) => `<div class="kpi"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+
+  // line chart: recall per day, one line per version
+  const W = 880, H = 320, P = { t: 14, r: 14, b: 34, l: 42 };
+  const days = ev.by_version[live[0]].days;
+  const n = days.length;
+  const x = i => P.l + (n <= 1 ? 0 : (W - P.l - P.r) * i / (n - 1));
+  const y = v => P.t + (H - P.t - P.b) * (1 - v);
+  const palette = ["#b26b2e", "#2e7d4f", "#2e6fb2", "#8e44ad", "#c0392b"];
+  const colorOf = (vnum, i) => ev.by_version[vnum].promoted ? "var(--live)" : "var(--gated)";
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Recall per day by version">`;
+  // y gridlines at 0, .25, .5, .75, 1
+  for (const g of [0, .25, .5, .75, 1]) {
+    svg += `<line x1="${P.l}" y1="${y(g)}" x2="${W - P.r}" y2="${y(g)}" stroke="var(--line)"/>`;
+    svg += `<text x="${P.l - 8}" y="${y(g) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${pct(g)}</text>`;
+  }
+  svg += `<text x="${x(0)}" y="${H - 14}" font-size="11" fill="var(--muted)">day 1</text>`;
+  svg += `<text x="${x(n - 1)}" y="${H - 14}" text-anchor="end" font-size="11" fill="var(--muted)">day ${n}</text>`;
+  versions.forEach(([vnum, s], vi) => {
+    const dashed = !s.promoted;
+    const pts = s.recall.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+    svg += `<polyline points="${pts}" fill="none" stroke="${colorOf(vnum)}" stroke-width="2"${dashed ? ' stroke-dasharray="5 4"' : ''} stroke-linejoin="round"/>`;
+  });
+  svg += `</svg>`;
+  $("chart").innerHTML = svg;
+  $("legend").innerHTML = versions.map(([vnum, s]) =>
+    `<span><i class="sw" style="background:${colorOf(vnum)}"></i> v${vnum} — ${s.promoted ? "live" : "gated (rejected)"} · ${pct(s.mean_recall)} avg</span>`).join("");
+  $("chart-note").textContent = `Each line is one model version's share of real fraud caught per day, reviewing the top ${ev.alerts_per_day} orders — measured only on days the model never trained on. Gated versions (dashed) were held back by the safety gate.`;
+
+  // versions table
+  const vrows = R.data.versions.map(v => {
+    const s = ev.by_version[v.version];
+    const learned = (v.learned && v.learned.length) ? v.learned.join(", ") : "—";
+    return `<tr>
+      <td><b>v${v.version}</b></td>
+      <td>${v.promoted ? '<span class="pill live">live</span>' : '<span class="pill gated">gated</span>'}</td>
+      <td class="num">${s ? pct(s.mean_recall) : "—"}</td>
+      <td>${learned}</td>
+      <td class="note" style="margin:0">${v.note || ""}</td>
+    </tr>`;
+  }).join("");
+  $("versions").innerHTML = `<table><thead><tr><th>Version</th><th>Status</th><th class="num">Real fraud caught</th><th>New tells learned</th><th>Note</th></tr></thead><tbody>${vrows}</tbody></table>`;
+
+  // attack families
+  const fams = (attacks.families || []).filter(f => f.got_through > 0).slice(0, 12);
+  if (!fams.length) { $("attacks").innerHTML = '<div class="empty">No player attacks got through yet.</div>'; }
+  else {
+    const money = n => "$" + Math.round(n).toLocaleString();
+    const rows = fams.map(f => `<tr>
+      <td>${f.family}</td>
+      <td class="num">${f.tried}</td>
+      <td class="num">${f.got_through}</td>
+      <td class="num">${money(f.exposure)}</td>
+      <td>${f.closed_in ? `<span class="pill closed">fixed v${f.closed_in}</span>` : '<span class="pill open">open</span>'}</td>
+    </tr>`).join("");
+    $("attacks").innerHTML = `<table><thead><tr><th>Trick family</th><th class="num">Tried</th><th class="num">Got through</th><th class="num">Exposure</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="note">Top ${fams.length} of ${attacks.families.length} families by dollars that reached the player. "Fixed" means a later version catches at least 80% of that family.</div>`;
+  }
+})();
+</script>
+</body>
+</html>

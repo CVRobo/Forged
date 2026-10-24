@@ -33,7 +33,7 @@ def family(rows: pd.DataFrame) -> pd.Series:
     dist1 = pd.to_numeric(rows.get("dist1"), errors="coerce")
     digital = _b(rows["R_emaildomain"].notna() & dist1.isna() & rows["M5"].ne("T"))
     ship = np.select([digital, _b(rows["M6"].eq("T")), _b(dist1 >= 2500), _b(dist1 < 50), _b(dist1 >= 50)],
-                     ["code by email", "their home", "abroad", "nearby drop", "far drop"], "?")
+                     ["code by email", "their home", "abroad", "nearby drop", "far drop"], "other drop")
     hide = np.select([_b(x["proxy"].eq("anonymous")), _b(x["proxy"].eq("hidden")), _b(x["dist2"] > 500)],
                      ["Tor/free VPN", "VPN", "far away"], "local")
     device = np.where(_b(x["device"].isin(["firefox", "linux"]) & x["DeviceType"].eq("mobile")), "emulator", "real device")

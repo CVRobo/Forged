@@ -64,7 +64,7 @@ function honestAnswers(level, h) {
     email: often(.7, h.email, pick([`${first}.${last}${h.addr1 % 90}@gmail.com`, `${last}.family@outlook.com`, `${first}${last}@icloud.com`])),
     device: often(.6, h.phone === "iphone" ? "iPhone 12" : "Samsung Galaxy S9", pick(["Windows laptop", "MacBook Air", "Windows laptop", "iPad tablet"])),
     where: often(.85, city, often(.3, `VPN in ${city}`, pick(near))),
-    ship: often(.65, "Their home", pick([`Office in ${city}`, `PO box in ${city}`, `Mom's house in ${pick(near)}`, `Friend in ${city}`, `Locker in ${city}`])),
+    ship: often(.85, "Their home", pick([`Office in ${city}`, `PO box in ${city}`, `Mom's house in ${pick(near)}`])),
     when: often(.9, pick(["Right now", "Tomorrow at lunch", "7pm", "Next week", "10am"]), pick(["1am", "late night"])),
     repeat: often(.85, "1", "2"), gap: pick(["3", "7", "14"]),
   };
