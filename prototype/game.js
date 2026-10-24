@@ -381,9 +381,9 @@ async function startRoundOnServer() {
     if (S.round !== round) return; // the player already moved on
     S.roundId = r.round_id ?? r.roundId ?? null;
     if (Array.isArray(r.memo) && r.memo.length) {
-      // the server never says which rule is the decoy, so `real` stays unknown
-      S.memo = r.memo.map(m => typeof m === "string" ? { text: m } : { text: m.text ?? m.rule, tell: m.tell ?? m.feature })
-        .map(m => ({ ...m, real: undefined, mark: null }));
+      // `real` is never shown directly: only the Dossier unlock reveals the decoy
+      S.memo = r.memo.map(m => typeof m === "string" ? { text: m } : { text: m.text ?? m.rule, tell: m.tell ?? m.feature, real: m.real })
+        .map(m => ({ ...m, mark: null }));
       renderMemo();
     }
     const v = +(r.inspector_version ?? r.version);
@@ -441,6 +441,7 @@ function showBriefing() {
   }).join("");
   $$(".scheme-card").forEach(c => c.onclick = () => { sfx("pick"); overlay("briefing", false); beginForge(c.dataset.scheme); });
   overlay("briefing");
+  if (!tutorialDone() && S.round === 1) setTimeout(() => startTutorial(0), 350);
 }
 
 /* ======================= Invoice ======================= */
@@ -472,6 +473,7 @@ function beginForge(schemeId) {
   scheduleBoss();
   updateHud();
   post("phase", { phase: "forging" });
+  if (tut.on && TUTORIAL[tut.i].wait === "scheme") setTimeout(() => { tut.i++; showTutStep(); }, 350);
 }
 
 function renderInvoice() {
@@ -840,6 +842,7 @@ window.addEventListener("message", e => {
   if (!m || m.src !== "forged-world") return;
   if (m.type === "deliver" && S.printed && !S.delivered) { S.delivered = true; submit(); }
   if (m.type === "boss-near") bossWalk();
+  if (m.type === "heat" && Number.isFinite(+m.amount)) addHeat(+m.amount);
 });
 
 /* ======================= Inspection (MOCK verdict) ======================= */
@@ -891,9 +894,10 @@ function adaptVerdict(r, mock) {
   const caught = verdict ? verdict === "FLAGGED" : !!r.caught;
   const raw = r.top_tells ?? r.tells ?? [];
   const tells = raw.map(t => {
-    const name = typeof t === "string" ? t : t.feature ?? t.name ?? t.tell;
-    const weight = typeof t === "string" ? 1 : +(t.weight ?? t.score ?? t.contribution ?? 1);
-    return [name, weight, TELL_REGION[name] ?? null];
+    const name = typeof t === "string" ? t : t.tell_type ?? t.feature ?? t.name ?? t.tell;
+    const weight = typeof t === "string" ? 1 : +(t.strength ?? t.weight ?? t.score ?? 1);
+    const region = typeof t === "string" ? null : t.region;
+    return [name, weight, region || TELL_REGION[name] || null];
   }).filter(t => t[0]);
   const v = +(r.new_version ?? r.version);
   return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)),
@@ -1040,7 +1044,7 @@ async function loadPatchNotes(since, extra) {
     const lines = notes.flatMap(n => {
       if (typeof n === "string") return [n];
       const v = n.version != null ? `v${n.version}` : "";
-      const n_ = n.learned_from ?? n.examples ?? n.n ?? n.count;
+      const n_ = n.invoices_trained_on ?? n.learned_from ?? n.examples ?? n.count;
       const from = n_ != null ? ` — learned from ${n_} invoices` : "";
       const learned = [].concat(n.learned ?? n.catches ?? n.features ?? n.text ?? n.summary ?? []);
       return learned.map(l => `${v ? v + " " : ""}now catches: <b>${tellLabel(l)}</b>${from}.`);
@@ -1084,6 +1088,133 @@ $("#btn-next-round").onclick = () => {
   if (hadDossier) { renderMemo(); S.dossier = false; }
 };
 $("#btn-quit").onclick = () => { sfx("click"); overlay("between", false); clearTimeout(S.bossTimer); show("title"); };
+
+/* ======================= Guided tutorial =======================
+ * Dims the screen, cuts a hole around one part, and points at it with an
+ * arrow and a card. Runs once per browser (the first scheme pick), and any
+ * time from the ❔ Tutorial button in the toolbox. */
+
+const TUT_KEY = "forged-tutorial-done";
+const TUTORIAL = [
+  { at: ["#scheme-cards"], side: "top", wait: "scheme", title: "Pick your scheme",
+    text: () => `Each scheme is a different kind of fake invoice. <b>Weak to</b> says what the inspector can catch it with, and <b>Payout</b> is the money multiplier. Using the same scheme twice in a row raises heat.<br><br><b>Click a scheme to start.</b>` },
+  { at: ["#win-memo"], side: "right", title: "The leaked memo",
+    text: () => `The boss's orders to the inspector: what he's watching for this round. <b>Two rules are real, one is fake.</b> Click a rule to mark it REAL or FAKE as you work it out from what gets caught.` },
+  { at: ["#win-case"], side: "right", title: "The case file",
+    text: () => `What normal looks like at this company: known vendors, their usual amounts and bank numbers, who approves what, and house rules in the notes. <b>The closer your invoice looks to normal, the harder it is to catch.</b>` },
+  { at: ["#scheme-banner", "#invoice"], side: "right", title: "Your invoice",
+    text: () => `This is the fake you're building, made from your scheme. You can <b>type over the vendor name and the total</b>. Everything else changes with tools.` },
+  { at: ["#dock .dock-label", "#tools"], side: "top", title: "The toolbox",
+    text: () => `Click a tool (or press <kbd>1</kbd>–<kbd>6</kbd>), then click the invoice. The badge is how many uses are left this round. <b>You need at least 2 edits to send it</b>, and 4 is the limit. <kbd>Esc</kbd> puts a tool down. The burner pen unlocks in the shop.` },
+  { at: [".tool[data-tool=scissors]"], side: "top", title: "Get paid: scissors & tape",
+    text: () => S.inv && ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank)
+      ? `Your account is already on this invoice, so you're set. On a <b>Vendor changed banks</b> or <b>Duplicate</b> scheme, use scissors on the <b>REMIT PAYMENT TO</b> box to tape in your account, or the money goes to the real vendor.`
+      : `Use scissors on the <b>REMIT PAYMENT TO</b> box to tape in your own account. <b>If you skip this, the money goes to the real vendor</b> and the invoice won't send.` },
+  { at: ["#win-clerk"], side: "left", title: "The cover email",
+    text: () => `Send a short note to the clerk. Play to their quirk (top right of the window). The more <b>Convinced</b> they are, the less suspicious the inspector gets.` },
+  { at: ["#win-inspector"], side: "left", title: "The inspector",
+    text: () => `Who's judging you, and which version he is. Every round he's retrained on your tricks and gets smarter: <b>intern → magnifier → UV lamp → cyborg</b>.` },
+  { at: ["#envelope"], side: "left", title: EMBED ? "Print and deliver" : "Send it",
+    text: () => EMBED
+      ? `When you're done, <b>drag this envelope onto PRINT</b> (the dark box at the top right). You'll stand up: grab the invoice at the printer (<kbd>E</kbd>), carry it to the inspector's IN tray (<kbd>E</kbd>), then sit back down for the verdict and the shop.`
+      : `When you're done, <b>drag this envelope into the OUTBOX</b> (the dark box at the top right). The inspector stamps it PAID or FLAGGED, and you spend your money in the shop before the next round.` },
+  { at: ["#topbar .tb-heat", "#topbar .tb-money"], side: "bottom", title: "Heat and money",
+    text: () => `<b>Heat</b> rises with risky edits and repeated schemes, and high heat makes the inspector suspicious. <b>Siphoned</b> is your money so far.` },
+  { at: ["#btn-debug"], side: "top", title: "Detector view",
+    text: () => `Press <kbd>D</kbd> to see exactly what the inspector's model reads. Tools only matter through these fields.` },
+  { at: [], title: "One last thing: the boss",
+    text: () => `If the boss walks behind you while you forge, <b>press <kbd>Space</kbd> fast</b> to hide the invoice under a newspaper, or you take +15 heat.${EMBED ? ` <kbd>Esc</kbd> stands you up from the computer.` : ""}<br><br>Replay this tour any time with <b>❔ Tutorial</b> in the toolbox. Good luck.` },
+];
+const tut = { on: false, i: 0 };
+
+function tutorialDone() { try { return localStorage.getItem(TUT_KEY) === "1"; } catch (e) { return false; } }
+function startTutorial(from = 0) {
+  dropTool(); hidePopover();
+  Object.assign(tut, { on: true, i: from });
+  $("#tutorial").classList.add("show");
+  $("#tut-dots").innerHTML = TUTORIAL.map(() => "<i></i>").join("");
+  showTutStep();
+}
+function endTutorial() {
+  tut.on = false;
+  $("#tutorial").classList.remove("show", "passthrough");
+  try { localStorage.setItem(TUT_KEY, "1"); } catch (e) { /* it just shows again next time */ }
+}
+
+// bounding box of the target elements, in stage coordinates
+function tutRect(sels) {
+  const sr = stage.getBoundingClientRect();
+  const rs = sels.map(q => $(q)).filter(Boolean).map(el => el.getBoundingClientRect()).filter(r => r.width);
+  if (!rs.length) return null;
+  const l = Math.min(...rs.map(r => r.left)), t = Math.min(...rs.map(r => r.top));
+  const R = Math.max(...rs.map(r => r.right)), B = Math.max(...rs.map(r => r.bottom));
+  return { x: (l - sr.left) / scale, y: (t - sr.top) / scale, w: (R - l) / scale, h: (B - t) / scale };
+}
+
+function showTutStep() {
+  const step = TUTORIAL[tut.i], pad = 10;
+  // windows may still be animating in: measure again once they've settled
+  clearTimeout(tut.settle);
+  if (!tut.settling) tut.settle = setTimeout(() => { tut.settling = true; if (tut.on) showTutStep(); tut.settling = false; }, 450);
+  $("#tut-step").textContent = `Tutorial · ${tut.i + 1} of ${TUTORIAL.length}`;
+  $("#tut-title").textContent = step.title;
+  $("#tut-text").innerHTML = step.text();
+  $$("#tut-dots i").forEach((d, k) => d.classList.toggle("on", k === tut.i));
+  $("#tut-back").style.visibility = tut.i > 0 && !TUTORIAL[tut.i - 1].wait ? "visible" : "hidden";
+  $("#tut-next").style.display = step.wait ? "none" : "";
+  $("#tut-next").textContent = tut.i === TUTORIAL.length - 1 ? "Let's forge ✓" : "Next →";
+  $("#tutorial").classList.toggle("passthrough", !!step.wait);
+
+  const r = tutRect(step.at), hole = $(".tut-hole"), card = $(".tut-card");
+  const h = r ? { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 } : { x: 800, y: 450, w: 0, h: 0 };
+  Object.assign(hole.style, { left: h.x + "px", top: h.y + "px", width: h.w + "px", height: h.h + "px" });
+  hole.classList.toggle("none", !r);
+
+  // place the card beside the hole, on the preferred side if it fits there
+  const cw = card.offsetWidth, ch = card.offsetHeight, gap = 70, W = 1600, H = 900, m = 16;
+  const spots = {
+    right: [h.x + h.w + gap, h.y + h.h / 2 - ch / 2], left: [h.x - gap - cw, h.y + h.h / 2 - ch / 2],
+    top: [h.x + h.w / 2 - cw / 2, h.y - gap - ch], bottom: [h.x + h.w / 2 - cw / 2, h.y + h.h + gap],
+  };
+  const fits = ([x, y]) => x >= m && y >= m && x + cw <= W - m && y + ch <= H - m;
+  let pos;
+  if (!r) pos = [W / 2 - cw / 2, H / 2 - ch / 2];
+  else {
+    const order = [step.side, "right", "left", "bottom", "top"].filter(Boolean);
+    const side = order.find(sd => fits(spots[sd])) || step.side || "right";
+    pos = spots[side];
+  }
+  const cx = clamp(pos[0], m, W - cw - m), cy = clamp(pos[1], m, H - ch - m);
+  card.style.left = cx + "px"; card.style.top = cy + "px";
+
+  // arrow from the card's edge to the hole's edge
+  const line = $(".tut-line");
+  if (!r) { line.setAttribute("d", ""); return; }
+  const near = (px, py, b) => [clamp(px, b.x, b.x + b.w), clamp(py, b.y, b.y + b.h)];
+  const [sx, sy] = near(h.x + h.w / 2, h.y + h.h / 2, { x: cx, y: cy, w: cw, h: ch });
+  let [ex, ey] = near(cx + cw / 2, cy + ch / 2, h);
+  const dx = ex - sx, dy = ey - sy, len = Math.hypot(dx, dy) || 1;
+  if (len < 30) { line.setAttribute("d", ""); return; }
+  ex -= dx / len * 14; ey -= dy / len * 14; // stop just short of the outline
+  const bend = Math.min(60, len * .25);
+  const qx = (sx + ex) / 2 - dy / len * bend, qy = (sy + ey) / 2 + dx / len * bend;
+  line.setAttribute("d", `M${sx},${sy} Q${qx},${qy} ${ex},${ey}`);
+}
+
+function tutNext() {
+  sfx("click");
+  if (tut.i >= TUTORIAL.length - 1) return endTutorial();
+  tut.i++; showTutStep();
+}
+$("#tut-next").onclick = tutNext;
+$("#tut-back").onclick = () => { if (tut.i > 0 && !TUTORIAL[tut.i - 1].wait) { sfx("click"); tut.i--; showTutStep(); } };
+$("#tut-skip").onclick = () => { sfx("click"); endTutorial(); };
+$("#btn-tutorial").onclick = () => {
+  sfx("click");
+  if (!S.inv || S.submitted) { toast("Start a round first, then open the tutorial", "bad"); return; }
+  startTutorial(1);
+};
+addEventListener("resize", () => tut.on && showTutStep());
 
 /* ======================= Leaderboard + Hall of Shame ======================= */
 
@@ -1181,7 +1312,10 @@ function scheduleBoss() {
   }
 }
 function bossWalk() {
-  if (S.submitted || !$("#screen-desk").classList.contains("active") || $(".overlay.show")) return;
+  if (S.submitted || tut.on || !$("#screen-desk").classList.contains("active") || $(".overlay.show")) {
+    if (tut.on && !S.submitted) S.bossTimer = setTimeout(bossWalk, 8000); // try again after the tour
+    return;
+  }
   sfx("steps");
   const sh = $("#boss-shadow"); sh.classList.remove("walk"); void sh.offsetWidth; sh.classList.add("walk");
   $("#boss-prompt").classList.add("show");
@@ -1209,7 +1343,7 @@ function record() {
   const inv = S.inv;
   return {
     level: S.level, scheme: S.scheme, vendor: inv.vendor, amount: inv.amount,
-    bank_account: "••••" + inv.bank, sender_domain: inv.domain, invoice_no: inv.invoiceNo, po_number: inv.po, date: inv.date,
+    bank_account: inv.bank, sender_domain: inv.domain, invoice_no: inv.invoiceNo, po_number: inv.po, date: inv.date,
     line_items: inv.items.map(i => `${i.desc} ×${i.qty} @ ${i.price}`),
     field_altered: [...S.altered],
     legibility: Object.fromEntries(Object.entries(S.legibility).map(([k, v]) => [k, +v.toFixed(2)])),
@@ -1230,6 +1364,12 @@ $("#btn-debug").onclick = () => { sfx("click"); toggleDebug(); };
 /* ======================= Keyboard ======================= */
 
 document.addEventListener("keydown", e => {
+  if (tut.on) {
+    if (e.key === "Escape") { e.preventDefault(); endTutorial(); }
+    else if (!TUTORIAL[tut.i].wait && (e.key === "Enter" || e.key === "ArrowRight" || e.code === "Space")) { e.preventDefault(); tutNext(); }
+    else if (e.key === "ArrowLeft") $("#tut-back").click();
+    return;
+  }
   const typing = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable;
   if (e.code === "Space" && S.bossWindow) { e.preventDefault(); document.activeElement.blur?.(); hideInvoice(); return; }
   if (typing) { if (e.key === "Escape" || e.key === "Enter" && document.activeElement.isContentEditable) { e.preventDefault(); document.activeElement.blur(); } return; }
