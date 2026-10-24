@@ -5,11 +5,16 @@ LAN address printed at startup and press LAN game on the Clock in card. The room
 ws://<host>:<port>/lan (lan_room.py, lan_ws.py; docs/superpowers/specs/2026-10-24-lan-multiplayer-design.md).
 On a hosting service (Dockerfile) the same room is an online game, shared at the service's address.
 
+With API_UPSTREAM set (the Dockerfile at the repo root does), it also fronts the FastAPI backend: API
+calls go through to it, and config.js tells the game its API is this same site, so the hosted game
+plays against the real fraud model on one address.
+
     python serve.py          # http://localhost:8765
     python serve.py 9000     # another port (or set PORT, as hosting services do)
 """
 from __future__ import annotations
 
+import http.client
 import http.server
 import ipaddress
 import json
@@ -18,12 +23,17 @@ import socket
 import sys
 import threading
 import time
+import urllib.parse
 
 import lan_room
 import lan_ws
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TICK_HZ = 15  # snapshots of everyone's position per second
+API_UPSTREAM = os.environ.get("API_UPSTREAM", "").rstrip("/")  # the backend behind this server, e.g. http://127.0.0.1:8000
+# headers that belong to one hop, not the whole trip (and the ones send_response writes itself)
+HOP_HEADERS = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers",
+               "transfer-encoding", "upgrade", "host", "content-length", "server", "date"}
 
 
 def lan_address() -> str:
@@ -147,9 +157,59 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        if self.path.split("?", 1)[0] == "/lan" and "websocket" in self.headers.get("Upgrade", "").lower():
+        path = self.path.split("?", 1)[0]
+        if path == "/lan" and "websocket" in self.headers.get("Upgrade", "").lower():
             return self.join_lan()
+        if API_UPSTREAM and path == "/config.js":
+            return self.send_config()
+        if API_UPSTREAM and not os.path.exists(self.translate_path(self.path)):
+            return self.proxy()  # not a game file: an API call (/health, /leaderboard, /report…)
         super().do_GET()
+
+    def do_HEAD(self):
+        if API_UPSTREAM and not os.path.exists(self.translate_path(self.path)):
+            return self.proxy()
+        super().do_HEAD()
+
+    def do_POST(self):
+        if not API_UPSTREAM:
+            return self.send_error(501, "No backend behind this server (set API_UPSTREAM)")
+        self.proxy()
+
+    do_PUT = do_PATCH = do_DELETE = do_OPTIONS = do_POST
+
+    def send_config(self):
+        """Tell the game its API is this same site. Without a backend, the static config.js leaves it offline."""
+        data = b"window.FORGED_API = window.FORGED_API || location.origin; // serve.py: the API is this site\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/javascript")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def proxy(self):
+        """Pass an API call through to the backend (API_UPSTREAM) and its answer back."""
+        up = urllib.parse.urlsplit(API_UPSTREAM)
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length else None
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP_HEADERS}
+        try:
+            conn = http.client.HTTPConnection(up.hostname, up.port or 80, timeout=30)
+            conn.request(self.command, self.path, body=body, headers=headers)
+            r = conn.getresponse()
+            status, reason, out_headers, data = r.status, r.reason, r.getheaders(), r.read()
+            conn.close()
+        except OSError as e:  # the backend is down or still starting: the game falls back to the scripted Gus
+            status, reason, data = 502, "Bad Gateway", json.dumps({"detail": f"backend unavailable: {e}"}).encode()
+            out_headers = [("Content-Type", "application/json")]
+        self.send_response(status, reason)
+        for k, v in out_headers:
+            if k.lower() not in HOP_HEADERS:
+                self.send_header(k, v)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
 
     def join_lan(self):
         key = self.headers.get("Sec-WebSocket-Key", "")
@@ -177,7 +237,10 @@ def main():
     threading.Thread(target=server.lan.tick_forever, daemon=True).start()
     print(f"Forged prototype on http://localhost:{port} (caching off)")
     print(f"LAN game: friends on your network open {server.lan.room.share} (up to {lan_room.MAX_PLAYERS} players, you included)")
-    print("On a hosting service, share the service's own address instead: the lobby shows it.", flush=True)
+    print("On a hosting service, share the service's own address instead: the lobby shows it.")
+    if API_UPSTREAM:
+        print(f"Backend: API calls go to {API_UPSTREAM}, so the game plays against the real fraud model")
+    sys.stdout.flush()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

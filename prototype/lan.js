@@ -17,7 +17,7 @@ const { boss, inspector } = FW.npcs;
 const $ = s => document.querySelector(s);
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const param = k => { try { return new URLSearchParams(location.search).get(k); } catch (e) { return null; } };
-const API = param("api") || ""; // with a server, the server shares Gus and this file leaves him alone
+const API = param("api") || window.FORGED_API || ""; // with a server, the server shares Gus and this file leaves him alone
 const NAME_KEY = "forged-player"; // the leaderboard name, shared with menu.js and game.js
 const SEND_MS = 100, PING_MS = 5000, MAX = 4;
 // everyone in a room wears their own shirt colour (lan_room.py SHIRTS, Customize's swatches), on the name tag too
