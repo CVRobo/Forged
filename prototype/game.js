@@ -378,14 +378,17 @@ function startRun(level) {
   nextRound();
 }
 
-function nextRound() {
+/* retry: after a catch, the same victim and card come back with your answers filled in,
+ * and the checkout opens where Gus caught you */
+function nextRound(retry = false) {
   S.round++;
   S.heat = Math.round(S.heat * 0.6);
   const prev = S.holder; // a new stolen card every round
+  const again = retry && S.lastResult && S.lastResult.caught ? { input: { ...S.input }, tells: S.lastResult.tells.slice(0, 2) } : null;
   // the stolen cards on your desk this round (a Mastermind picks one; everyone else gets the first)
-  const wallet = shuffle(O.HOLDERS.filter(h => !prev || h.name !== prev.name)).slice(0, 3).map(h => ({ ...h, card: pick(O.CARDS) }));
+  const wallet = again ? S.wallet : shuffle(O.HOLDERS.filter(h => !prev || h.name !== prev.name)).slice(0, 3).map(h => ({ ...h, card: pick(O.CARDS) }));
   Object.assign(S, { scheme: null, inv: null, input: null, step: null, sugg: {}, persuasion: 0, submitted: false,
-    printed: false, delivered: false, lastResult: null, rows: null, holder: wallet[0], wallet });
+    printed: false, delivered: false, lastResult: null, rows: null, holder: again ? prev : wallet[0], wallet, retryTells: again ? again.tells : null });
   $("#tb-round").textContent = S.round;
   $("#invoice").innerHTML = ""; $("#invoice").className = "paper plan";
   $("#strip").innerHTML = "";
@@ -395,6 +398,14 @@ function nextRound() {
   dealMemo();
   renderInspector();
   startPlanning();
+  if (again) {
+    S.input = again.input;
+    S.touched = new Set(steps().map(s => s.id));
+    const at = again.tells.map(t => t[2]).find(id => id && steps().some(s => s.id === id));
+    S.step = at || "review";
+    rebuild();
+    if (again.tells.length) toast(`↺ Gus caught you on: ${tellLabel(again.tells[0][0])}. Change it and send again.`);
+  }
   startRoundOnServer();
 }
 
@@ -600,20 +611,24 @@ function renderPlan() {
     ${S.lastResult ? `<div class="t-verdict ${S.lastResult.caught ? "bad" : "ok"}">${S.lastResult.caught ? "CAUGHT" : "GOT AWAY"}</div>` : ""}`;
   renderMood();
   // forensic replay: the review lines that gave you away
-  if (S.lastResult && S.lastResult.caught) S.lastResult.tells.slice(0, 2).forEach(t => t[2] && P.querySelector(`[data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
-  P.classList.toggle("forensic", !!(S.lastResult && S.lastResult.caught));
+  const red = S.lastResult ? (S.lastResult.caught ? S.lastResult.tells.slice(0, 2) : []) : S.retryTells || [];
+  red.forEach(t => t[2] && P.querySelector(`[data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
+  P.classList.toggle("forensic", red.length > 0);
   $$(".co-dot", P).forEach(b => b.onclick = () => goStep(b.dataset.step));
   $$(".co-input", P).forEach(inp => {
-    inp.oninput = () => { S.input[inp.dataset.k] = inp.value; S.touched.add(inp.dataset.k); clearTimeout(S.typeT); S.typeT = setTimeout(() => rebuild(false), 160); };
+    inp.oninput = () => { S.input[inp.dataset.k] = inp.value; S.touched.add(inp.dataset.k); fixedTell(); clearTimeout(S.typeT); S.typeT = setTimeout(() => rebuild(false), 160); };
     inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); rebuild(false); nextStep(1); } };
   });
-  $$(".co-chip", P).forEach(b => b.onclick = () => { S.input[b.dataset.k] = b.dataset.v; S.touched.add(b.dataset.k); sfx("pen"); rebuild(); });
+  $$(".co-chip", P).forEach(b => b.onclick = () => { S.input[b.dataset.k] = b.dataset.v; S.touched.add(b.dataset.k); fixedTell(); sfx("pen"); rebuild(); });
   $$(".co-card", P).forEach(b => b.onclick = () => { S.holder = S.wallet[+b.dataset.wallet]; S.sugg = {}; sfx("snip"); renderCaseFile(); rebuild(); });
   $$(".co-line", P).forEach(b => b.onclick = () => !S.submitted && goStep(b.dataset.region));
   const back = $("#co-back"), next = $("#co-next");
   if (back) back.onclick = () => nextStep(-1);
   if (next) next.onclick = () => nextStep(1);
 }
+
+/* on a retry, a red line stops blinking once you change that step */
+function fixedTell() { if (S.retryTells) S.retryTells = S.retryTells.filter(t => t[2] !== S.step); }
 
 /* the order summary, like a real checkout's last page */
 function reviewHtml(f) {
@@ -911,7 +926,7 @@ function adaptVerdict(r, mock) {
   }).filter(t => t[0]);
   const v = +(r.new_version ?? r.version);
   return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)), results: r.results ?? mock.results, rows: mock.rows,
-    line: r.inspector_line ?? r.line ?? null, newVersion: Number.isFinite(v) && v > 0 ? v : null, source: "api" };
+    line: r.inspector_line || r.line || null, newVersion: Number.isFinite(v) && v > 0 ? v : null, source: "api" };
 }
 
 async function judge() {
@@ -920,7 +935,9 @@ async function judge() {
   if (!API || !S.roundId) return mock;
   try {
     const { verdict, ...rec } = record(); // the verdict is what we're asking for
-    const r = await api("POST", "/submit", { round_id: S.roundId, player: playerName(), record: rec, perks: S.perks }, 10000);
+    // the server keeps the rows; until it has its own model it answers with the browser's Gus
+    const gus = { caught: mock.caught, tells: mock.tells.map(t => [t[0], +(+t[1]).toFixed(2)]), payout: mock.payout };
+    const r = await api("POST", "/submit", { round_id: S.roundId, player: playerName(), record: rec, perks: S.perks, gus }, 10000);
     return adaptVerdict(r, mock);
   } catch (e) { offline(e); return mock; }
 }
@@ -1085,6 +1102,7 @@ function showBetween() {
   S.cards.forEach(c => c.isNew = false);
   renderShop();
   messUpDesk();
+  $("#btn-retry").hidden = !r.caught;
   overlay("between");
   if (S.round === 1) showTip("first-shop", "🛒 Spend your earnings in the shop — perks and unlocks carry across rounds.", "shop-intro");
 }
@@ -1138,13 +1156,15 @@ function renderShop() {
   });
 }
 
-$("#btn-next-round").onclick = () => {
+function startNext(retry) {
   sfx("pick"); overlay("between", false);
   const hadDossier = S.dossier;
-  nextRound();
+  nextRound(retry);
   // dossier reveals the decoy for exactly one round
   if (hadDossier) { renderMemo(); S.dossier = false; }
-};
+}
+$("#btn-next-round").onclick = () => startNext(false);
+$("#btn-retry").onclick = () => startNext(true);
 function quitToTitle() {
   $$(".overlay").forEach(o => o.classList.remove("show"));
   clearTimeout(S.bossTimer); S.bossWindow = false; $("#boss-prompt").classList.remove("show");

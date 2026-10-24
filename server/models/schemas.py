@@ -6,6 +6,8 @@ Keep it flat and portable — a future language port reads these to generate str
 
 from __future__ import annotations
 
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -111,9 +113,31 @@ class ClerkVoiceResponse(BaseModel):
 # --- Submit ---
 
 
+class OnlineRecord(BaseModel):
+    """The typed checkout (prototype record() with mode "online"): one IEEE-CIS row per order.
+
+    Rows keep the dataset's column names; see prototype/orders.js toRows for the mapping.
+    """
+    model_config = {"extra": "allow"}
+
+    mode: Literal["online"]
+    level: int
+    scheme: str
+    rows: list[dict[str, Any]]
+
+
+class GusVerdict(BaseModel):
+    """The browser's scripted Gus, sent with online records until the server has its own model."""
+    caught: bool
+    tells: list[list[Any]] = Field(default_factory=list, description="[[tell, weight], ...]")
+    payout: int = 0
+
+
 class SubmitRequest(BaseModel):
     round_id: str
-    record: InvoiceRecord
+    record: OnlineRecord | InvoiceRecord
+    player: str | None = None
+    gus: GusVerdict | None = None
 
 
 class SubmitResponse(BaseModel):

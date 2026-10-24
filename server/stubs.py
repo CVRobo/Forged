@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query
 
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
 from server.services.detector import TELL_DESCRIPTIONS
+from server.services.online_data import submit_online
 from server.models.schemas import (
     CaseFile,
     ClerkRequest,
@@ -24,6 +25,7 @@ from server.models.schemas import (
     LeaderboardEntry,
     MemoRule,
     PatchNote,
+    OnlineRecord,
     RoundStartRequest,
     RoundStartResponse,
     SubmitRequest,
@@ -162,6 +164,8 @@ async def stub_clerk_voice(req: ClerkVoiceRequest):
 
 @router.post("/submit", response_model=SubmitResponse)
 async def stub_submit(req: SubmitRequest):
+    if isinstance(req.record, OnlineRecord):  # the typed checkout
+        return submit_online(req.record, req.gus, req.round_id, req.player)
     tells = _compute_stub_tells(req.record)
     suspicion = sum(t.strength for t in tells) * 0.67  # v1 skill factor
     suspicion -= random.randint(-12, 12)

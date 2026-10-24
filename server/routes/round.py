@@ -14,9 +14,11 @@ from fastapi import APIRouter, HTTPException
 
 from server import config
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
+from server.services.online_data import submit_online
 from server.models.schemas import (
     CaseFile,
     MemoRule,
+    OnlineRecord,
     RoundStartRequest,
     RoundStartResponse,
     SubmitRequest,
@@ -112,6 +114,8 @@ async def round_start(req: RoundStartRequest):
 
 @router.post("/submit", response_model=SubmitResponse)
 async def submit(req: SubmitRequest):
+    if isinstance(req.record, OnlineRecord):  # the typed checkout
+        return submit_online(req.record, req.gus, req.round_id, req.player)
     # 1. Load round state from Redis
     round_state = game_state.load_round(req.round_id)
     if round_state is None:

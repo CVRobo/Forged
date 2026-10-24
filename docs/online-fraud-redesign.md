@@ -130,6 +130,12 @@ Playtest feedback on v0.3: losing made Gus stronger, so a losing player could ne
 - **Balance (simulated, 300 careers of 20 rounds):** win rate starts near 100 % and drifts down as Gus studies wins. Overall: 50 % sending the first idea, 71 % trying 3 ideas per round, 86 % trying 8. One trick repeated is caught from round 2; sloppy orders (Tor, emulator, ProtonMail, shipping abroad) almost always lose.
 - **Data note for B:** `record()` now sends the typed `input` and the player's `rank`; rows have `scheme_id` `typed-r<round>`. Free text means the long tail of email domains and devices will be wider than the dataset's; values outside the dataset's vocabulary still go into the row as typed.
 
+## 9b. Server: online records are saved (built)
+
+`POST /submit` accepts the checkout's record (`mode: "online"`, see `OnlineRecord` in `server/models/schemas.py`), in both the stub and the real server. The server appends every order's row to `server/data/ieee_rows.csv` (or `FORGED_DATA_DIR`): the 434 IEEE-CIS columns, the game's columns and `player`, git-ignored. Until there is a model trained on these rows, the browser sends its scripted Gus's verdict as `gus` and the server answers with it, so the game plays the same online and offline. To swap in a model, replace `submit_online` in `server/services/online_data.py`.
+
+After a catch, **Try again** replays the same victim and card with the answers filled in. It opens on the step Gus caught, and the lines that gave you away blink red until you change them.
+
 ## 10. Open questions
 
 1. Do we keep invoice fraud as a first level for the demo, or replace it completely?
