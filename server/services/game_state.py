@@ -8,6 +8,7 @@ no magic, just get/set/zadd calls.
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any
 
 import redis
@@ -70,6 +71,29 @@ def load_session(session_id: str) -> dict[str, Any] | None:
     return json.loads(raw)
 
 
+def create_session() -> tuple[str, dict[str, Any]]:
+    """Create a new session with a UUID. Returns (session_id, session_data)."""
+    import time as _time
+
+    session_id = str(uuid.uuid4())
+    data: dict[str, Any] = {
+        "round_ids": [],
+        "created_at": _time.time(),
+        "current_heat": 0,
+    }
+    save_session(session_id, data)
+    return session_id, data
+
+
+def append_round_to_session(session_id: str, round_id: str) -> None:
+    """Append a round_id to an existing session's round list."""
+    data = load_session(session_id)
+    if data is None:
+        return
+    data.setdefault("round_ids", []).append(round_id)
+    save_session(session_id, data)
+
+
 # ---------------------------------------------------------------------------
 # Leaderboard (Sorted Set)
 # ---------------------------------------------------------------------------
@@ -116,6 +140,28 @@ def drain_retrain_queue() -> list[str]:
     pipe.delete("retrain:queue")
     results = pipe.execute()
     return results[0]
+
+
+def aggregate_retrain_tells(round_ids: list[str]) -> list[str]:
+    """Read stored tells from submissions, return top-3 as human-readable descriptions."""
+    from collections import Counter
+
+    from server.services.detector import TELL_DESCRIPTIONS
+
+    r = get_redis()
+    counts: Counter[str] = Counter()
+    for rid in round_ids:
+        raw = r.hget(f"submission:{rid}", "tells")
+        if raw is None:
+            continue
+        tells = json.loads(raw)
+        for t in tells:
+            tt = t.get("tell_type") if isinstance(t, dict) else getattr(t, "tell_type", None)
+            if tt:
+                counts[tt] += 1
+
+    top = counts.most_common(3)
+    return [TELL_DESCRIPTIONS.get(tt, tt) for tt, _ in top]
 
 
 # ---------------------------------------------------------------------------
@@ -216,14 +262,43 @@ def get_blind_spots() -> dict[str, int]:
 # ---------------------------------------------------------------------------
 
 
-def store_submission(round_id: str, record: dict[str, Any], verdict: str, version: int) -> None:
-    """Store a submission for later analysis and vector search."""
+def store_submission(
+    round_id: str,
+    record: dict[str, Any],
+    verdict: str,
+    version: int,
+    *,
+    session_id: str | None = None,
+    level: int | None = None,
+    case_file: dict[str, Any] | None = None,
+    memo_rules: list[dict[str, Any]] | None = None,
+    persuasion: int = 0,
+    tells: list[dict[str, Any]] | None = None,
+    suspicion: float = 0.0,
+) -> None:
+    """Store a submission with full training context for later analysis."""
     r = get_redis()
-    r.hset(f"submission:{round_id}", mapping={
+    mapping: dict[str, str] = {
         "record": json.dumps(record),
         "verdict": verdict,
         "version": str(version),
-    })
+    }
+    if session_id is not None:
+        mapping["session_id"] = session_id
+    if level is not None:
+        mapping["level"] = str(level)
+    if case_file is not None:
+        mapping["case_file"] = json.dumps(case_file)
+    if memo_rules is not None:
+        mapping["memo_rules"] = json.dumps(memo_rules)
+    if persuasion:
+        mapping["persuasion"] = str(persuasion)
+    if tells is not None:
+        mapping["tells"] = json.dumps(tells)
+    if suspicion:
+        mapping["suspicion"] = str(suspicion)
+
+    r.hset(f"submission:{round_id}", mapping=mapping)
     # Also add to the time-ordered set for recent submissions
     import time
     r.zadd("submissions:all", {round_id: time.time()})
