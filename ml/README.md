@@ -1,6 +1,6 @@
 # ml/ (Person B)
 
-The detector side of Forged. Built in the order of Model Spec v0.2, section 7. Done so far: steps 1–5 (schema and `compute_features`, the legit generator, the scripted attackers, a baseline that passes the spec's checks, and the retrain loop), plus `ml/detector.py`, the module the game server imports. Also done: the data side of steps 7 and 9 (replay grid, memo rules, patch notes, per-level thresholds).
+The detector side of Forged. Built in the order of Model Spec v0.2, section 7. Done so far: steps 1–6 (schema and `compute_features`, the legit generator, the scripted attackers, a baseline that passes the spec's checks, the retrain loop, and in-session memory), plus `ml/detector.py`, the module the game server imports. Also done: the data side of steps 7 and 9 (replay grid, memo rules, patch notes, per-level thresholds).
 
 | File | What it is |
 | --- | --- |
@@ -9,13 +9,15 @@ The detector side of Forged. Built in the order of Model Spec v0.2, section 7. D
 | `world.py` | The Sunny Diner level: six approved vendors, the name and line-item pools shared by legit and fraud invoices, and the hidden `Truth` (mule accounts, real order amounts). |
 | `payloads.py` | Ground truth. `payload_schemes()` and `is_fraud()` for the five Sunny Diner schemes. Labels come only from here. |
 | `text.py` | Cover-email templates, shared by both classes (spec 3.2). |
-| `generate.py` | Simulated runs (spec 3.1): `build_dataset(seed)` and `clone_attacks(levers, n, seed)` for trick cloning (spec 2.2). |
+| `generate.py` | Simulated runs (spec 3.1): `build_dataset(seed)`, and `clone_attacks` / `clone_runs(levers, n, seed)` for trick cloning (spec 2.2). |
 | `attackers.py` | One scripted attacker per scheme: `Levers`, `sample_levers()` (random, with a care level) and fixed-lever mode. |
-| `baseline.py` | Stage 1 detector: logistic regression, Platt calibration, threshold at a target FPR, per-feature reasons. |
-| `checks.py` | The gate before the retrain loop: spec checks 2.1, 3.1, 3.2, 4.5 and the v1 recall target. |
+| `baseline.py` | Stage 1 detector: logistic regression, Platt calibration, threshold at a target FPR, per-feature reasons. `memory=False` scores with the kNN features at their training mean. |
+| `memory.py` | In-session memory (spec 2.3): `NumpyIndex` (brute-force cosine search with time and session filters, the spec's fallback when Redis is down), the three kNN features, `replay()` for generator data, memory dropout for training, `heat()`. |
+| `memory_scale.json` | The fixed standardization for the index vectors, fit once on the base train split. Refit only when the generator changes: `python -m ml.memory --fit`. |
+| `checks.py` | The gate before the retrain loop: spec checks 2.1, 3.1, 3.2, 4.5 and the v1 recall target. Also reports v1 with memory on and at each level. |
 | `detector.py` | **What the server imports**: `predict`, `retrain`, `top_features`, `memo_rules`, `versions`, `replay_grid`, `warm`. |
 | `adapter.py` | Turns the game's `InvoiceRecord` (prototype `record()`) into an `Invoice` and a serving case file. |
-| `training.py` | Trains v1 and runs the retrain loop: dedupe, cloning, retrain guard, per-player cap, bootstrap promotion gate, `force`. |
+| `training.py` | Trains v1 and runs the retrain loop: dedupe, cloning, retrain guard, per-player cap, bootstrap promotion gate, `force`. Holds the live memory (`live_memory()`). |
 | `store.py` | Saved versions (`v{n}.joblib`, `versions.json`) and the replay buffer, under `FORGED_MODEL_DIR` (default `ml/models/`, git-ignored). |
 | `explain.py` | Tells (in the prototype's tell names and regions), memo rules from a depth-2 tree (spec 5.1), patch notes (spec 5.2). |
 | `demo.py` | Plays the spec's core sequence through `ml.detector` with game-shaped records. |
@@ -53,9 +55,40 @@ ml/.venv/bin/python -m ml.detector --train
 
 ## Where v1 stands
 
-Every check passes on seeds 1–12: v1 catches 63–69% of fresh scripted attacks at 4–6% FPR (target 50–70%). On seeds 1–3, no payload feature alone gets past 49% recall at 5% FPR (target under 60%), and text features alone score AUROC 0.59 (target under 0.75).
+v1 trains on all 34 features: the 31 base features and the three memory features. Sunny Diner and St. Mercy have memory off, so they score with the memory features at their training mean. The gate judges v1 that way.
 
-By scheme, v1 catches Duplicate Dance most often (about 85%) and Phantom Supplier least (about 50%). Spoofed reprints of a known vendor's invoice get caught 75–97% of the time, against 51–64% for hand-edited originals. That is a game-balance point for C and D: the burner pen is currently the riskier tool.
+Every check passes on all ten seed triples from 1–12 ((1, 2, 3) through (10, 11, 12) as train, validation and test). With memory off, v1 catches 61–69% of fresh scripted attacks at 4–6% FPR (target 50–70%). At Sunny Diner's own 3% target it catches 51–64%. On seeds 1–3, no payload feature alone gets past 42% recall at 5% FPR (target under 60%), and text features alone score AUROC 0.59 (target under 0.75).
+
+**With memory on, v1 goes past the 70% target.** At 5% FPR (Port Nocturne) it catches 68–81% of scripted attacks, 72.5% on seeds 1–3. At Neon Arcade's 8% it catches 78–88%. That's intended: memory is what makes the later levels harder. The 50–70% target only holds for the memory-off levels.
+
+By scheme (seeds 1–3, memory off), v1 catches Duplicate Dance most often (79%) and Boss Request least (45%). Spoofed reprints of a known vendor's invoice get caught 75–94% of the time, against 48–59% for hand-edited originals. That is a game-balance point for C and D: the burner pen is currently the riskier tool.
+
+## In-session memory (step 6)
+
+- **The index.** Every submission's base features go into a vector index: generator train rows, the replay buffer, and everything `predict()` and `retrain()` see. Each vector is standardized with the fixed `memory_scale.json` and stored with is_fraud, session, origin and created_at. A query only sees rows created earlier, and returns three features:
+  - `knn_fraud_share`: the fraud share among the 10 nearest neighbors.
+  - `knn_max_sim`: the highest similarity among those neighbors.
+  - `self_sim`: the highest similarity to this session's own earlier submissions.
+- **Similarity** is cosine, floored at 0, which is what a Redis COSINE index returns as 1 − distance. The index is in-process numpy (`NumpyIndex`, about 3,300 rows, sub-millisecond queries). A Redis backend only needs the same `add()`, `search()` and `id in index`.
+- **Generator data** gets its memory features by replaying each dataset in created_at order. Clones replay after the live memory.
+- **Memory dropout.** Every training row appears twice, at half weight each: once as served, and once with its memory features at the training mean. Without that, the memory features soak up signal, and memory-off recall fell from 65% to 57% at 5% FPR (50% at 3%).
+- **Scripted attackers now repeat themselves.** After a PAID attack, an attacker reuses the same trick half the time, as players do (`REPEAT_RATE` in `generate.py`). Without repeats, `self_sim` looked the same for fraud and legit, and the model gave it no weight.
+- **Heat.** `Prediction.heat` (0–100) comes from `self_sim`. It is 0 up to a typical legit invoice's self_sim (0.48, the median on the train split) and 100 at an exact repeat. The heat meter reads the same number at every level; only memory-on levels let it move the score.
+
+Spec 2.3 acceptance checks (all in `tests/test_detector.py`):
+
+1. **Same trick twice in one session, no retrain.** The second scores higher at a memory-on level. A mule account taped onto Pete's invoice scores 0.108 the first time at Port Nocturne and 0.162 the second. On the second, `self_sim` goes 0 → 1, `knn_fraud_share` 0.1 → 0.2, and heat 0 → 100. Both are still PAID (the threshold is 0.35). At Sunny Diner, where memory is off, both score the same.
+2. **Dropping memory costs recall on repeated tricks.** This is measured on player-like sessions that repeat one careful trick, with one PAID copy already in memory, at the same 5% FPR target with memory on (Port Nocturne) and off (St. Mercy).
+
+   | Trick | Memory on | Memory off | Base-features-only model |
+   | --- | --- | --- | --- |
+   | Careful phantom vendor | 57% | 15% | 19% |
+   | Careful switcheroo | 83% | 41% | 39% |
+   | Careful boss request | 86% | 52% | 61% |
+   | Careful padded invoice | 100% | 100% | 100% |
+
+   Frozen-set FPR stays about the same: 4.4% with memory on, 4.3% with memory off.
+3. **The gate**, as described under "Where v1 stands".
 
 ## Contract notes for A and C
 
@@ -66,7 +99,10 @@ By scheme, v1 catches Duplicate Dance most often (about 85%) and Phantom Supplie
   - `Invoice.sent_at`: `offhours_send` needs a send time, and the schema only had dates. `None` counts as business hours.
   - `VendorProfile.usual_stamps`: `stamp_matches_vendor` needs each vendor's stamp habits.
 - **Inputs are as of *before* the invoice.** `case_file.paid_invoices` must not contain it yet. `SessionHistory.round_no` is the round being scored. `entries` lists this run's earlier invoices, any verdict, and entries after the current round are ignored.
-- **The kNN features are not computed here.** `knn_fraud_share`, `knn_max_sim` and `self_sim` come from the vector index at submit time (spec 2.3). They get stored in `Submission.features` alongside the base features.
+- **`predict()` serves the kNN features and returns them; store them.** `Prediction.features` holds all 34 values as served. Store them as `Submission.features`, and send them back as `"features"` on each record passed to `retrain()`, because training never recomputes them (spec 2.3).
+- **Records need a `session_id` and a `round_id`.** `self_sim` compares against earlier records with the same `session_id`. `round_id` keeps two rounds with the same invoice apart. Without one, a record judged twice counts once.
+- **Heat comes from the model now.** `Prediction.heat` (0–100) is derived from `self_sim`. The prototype's own `heat` field can go.
+- **The memory lives in-process.** Train rows and the replay buffer are reloaded at startup, but rows `predict()` wrote since the last retrain are lost on restart. A Redis-backed index (A's infrastructure) would keep them, and needs only `add()`, `search()` and `id in index`, like `memory.NumpyIndex`.
 
 ## Choices made in `features.py` (change them if the team disagrees)
 
@@ -85,11 +121,11 @@ By scheme, v1 catches Duplicate Dance most often (about 85%) and Phantom Supplie
 
 ## Where the retrain loop stands
 
-One missed trick, cloned 100 times, retrains in under half a second, and the promotion gate keeps frozen-set FPR at about 4%. How well vN+1 catches the trick depends on whether the trick looks like something real vendors do:
+One missed trick, cloned 100 times, retrains in about half a second, and the promotion gate keeps frozen-set FPR at about 4%. How well vN+1 catches the trick depends on whether the trick looks like something real vendors do:
 
 - **Learned fully:** padded invoices and spoofed reprints. 10 of 10 fresh variants are caught after one retrain.
-- **Mostly learned:** a careful tape-on-bank switcheroo. v1 catches 18%; after one retrain 78–86% at the spec's 5% FPR, and 60–84% at Sunny Diner's 3%. The spec asks for 9 of 10. The gap is real hand-corrected bank changes, which look identical without the hidden mule account.
-- **Not learnable by retraining:** a careful fresh phantom vendor (2 of 10). It's indistinguishable from a real new vendor. Only in-session memory (step 6, `self_sim`) can catch a player who repeats it.
+- **Mostly learned:** a careful tape-on-bank switcheroo. v1 catches 39% at the spec's 5% FPR and 29% at Sunny Diner's 3%. After one retrain it catches 84–86% at 5% and 73–74% at 3% (four tricks, 100 fresh variants each). The spec asks for 9 of 10. The gap is real hand-corrected bank changes, which look identical without the hidden mule account.
+- **Not learnable by retraining:** a careful fresh phantom vendor (2 of 10). It's indistinguishable from a real new vendor. In-session memory catches a player who repeats it: 57% of repeats with memory on, against 15% with memory off.
 
 A trial of Stage 2 (gradient-boosted trees with the spec 4.3 monotone constraints) learns the switcheroo completely: 100% of variants after one retrain. But its v1 already catches 93% of scripted attacks, so adopting it means re-tuning the generator so that v1 lands back at 50–70%.
 
@@ -108,7 +144,7 @@ New tell names for C's labels: `short_terms`, `after_hours`, `vague_items`, `urg
 
 ## Next for B
 
-- Step 6: in-session memory (`knn_fraud_share`, `knn_max_sim`, `self_sim`) with the numpy fallback. It needs Redis from A only for the shared index.
+- A Redis backend for the memory index, once A's Redis is up (same interface as `memory.NumpyIndex`).
 - The stats page at `frontend/src/app/stats/page.tsx`. It needs A's endpoints from item 5 above.
 - Step 8: the search attacker and the robustness audit.
 - Stage 2 trees, if the team wants the stronger learner.

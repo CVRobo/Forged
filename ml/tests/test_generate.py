@@ -107,6 +107,19 @@ def test_legit_bank_changes_look_clean_on_the_other_levers(rows):  # spec 2.1
     assert len(changed) > 50 and len(clean) / len(changed) > 0.85
 
 
+def test_scripted_attackers_often_repeat_their_last_paid_trick(rows):  # as players do; memory needs it (2.3)
+    last_paid, following, same = {}, 0, 0
+    for r in rows:
+        if r.origin != "scripted_attacker":
+            continue
+        if r.session_id in last_paid:
+            following += 1
+            same += r.scheme_id == last_paid[r.session_id]
+        if r.verdict == "PAID":
+            last_paid[r.session_id] = r.scheme_id
+    assert following > 100 and same / following > 0.45  # 1 in 5 by chance
+
+
 def test_both_classes_have_the_same_empty_email_rate(rows):  # spec 3.2
     def empty(group):
         return statistics.mean(r.invoice.cover_email == "" for r in group)
