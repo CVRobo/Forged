@@ -521,3 +521,70 @@ kbd { background: var(--win); color: var(--ink); border: 2px solid var(--ink); b
 .tut-glow { outline: 4px solid #2ecc40; outline-offset: 4px; animation: tut-glow 1.2s ease-in-out infinite; }
 @keyframes tut-glow { 0%, 100% { outline-color: rgba(46, 204, 64, .95); box-shadow: 0 0 0 0 rgba(46, 204, 64, .45); } 50% { outline-color: rgba(46, 204, 64, .45); box-shadow: 0 0 22px 6px rgba(46, 204, 64, .45); } }
 
+#popover { max-width: 380px; }
+.pop-opt .po-top { display: flex; justify-content: space-between; gap: 10px; font-weight: 700; }
+.pop-opt i { font-style: normal; font-size: 11px; white-space: nowrap; }
+.pop-opt .po-heat { color: var(--flag); }
+.pop-opt .po-now { color: var(--paid); }
+.pop-opt[disabled] { cursor: default; opacity: .6; background: var(--soft); }
+.pop-opt.current { opacity: 1; border-style: dashed; }
+.debug-head { display: flex; align-items: center; gap: 8px; }
+.debug-head #debug-title { opacity: 1; font-weight: 700; }
+.debug-head #btn-csv { margin-left: auto; padding: 2px 8px; font-size: 11px; }
+
+/* ============ Shared by the checkout ============ */
+.win-off { display: none !important; }
+.paper.plan { height: 560px; display: flex; flex-direction: column; }
+.t-verdict { position: absolute; font-family: var(--display); font-size: 30px; padding: 2px 12px; border: 5px solid; border-radius: 8px; transform: rotate(-10deg); opacity: .85; mix-blend-mode: multiply; pointer-events: none; }
+.t-verdict.ok { color: var(--paid); } .t-verdict.bad { color: var(--flag); }
+.hand-done { font-weight: 700; font-size: 16px; padding: 0 10px; }
+#hand-ask { font-size: 15px; }
+#edits-left { white-space: nowrap; }
+
+.victim { display: flex; gap: 12px; align-items: center; margin: 4px 0 10px; }
+.victim-face { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--ink); background: var(--soft); display: grid; place-items: center; font-size: 36px; flex: none; }
+.victim-name { font-family: var(--display); font-size: 20px; }
+.victim-city { font-size: 13px; opacity: .7; }
+.victim-facts { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.9; }
+#patch-list .rank-up { background: var(--accent); border-radius: 8px; padding: 4px 8px; list-style: none; }
+
+/* ============ The checkout (typed, one question per screen) ============ */
+.co-bar { display: flex; align-items: center; gap: 8px; background: #ece6d6; border-bottom: 3px solid var(--ink); padding: 8px 14px; font-size: 13px; }
+.co-lock { font-size: 13px; }
+.co-url { flex: 1; background: #fff; border: 2px solid var(--ink); border-radius: 14px; padding: 3px 12px; font-family: var(--type); opacity: .85; }
+.gut { display: flex; align-items: center; gap: 6px; background: #fff; border: 2px solid var(--ink); border-radius: 18px; padding: 2px 10px 2px 4px; }
+.gut-face { font-size: 24px; line-height: 1; }
+.gut-txt { display: flex; flex-direction: column; font-weight: 700; font-size: 12px; line-height: 1.1; }
+.gut-txt small { font-weight: 400; font-size: 9px; opacity: .6; text-transform: uppercase; letter-spacing: .5px; }
+.co-dots { display: flex; gap: 6px; padding: 14px 22px 0; }
+.co-dot { flex: 1; border: 2px solid var(--ink); border-radius: 8px; background: #fff; font: 700 13px var(--ui); padding: 4px 2px; cursor: pointer; display: flex; flex-direction: column; align-items: center; color: var(--ink); }
+.co-dot small { font-size: 9px; font-weight: 400; opacity: .7; }
+.co-dot.done { background: #c9f2d6; }
+.co-dot.cur { background: var(--accent); transform: translateY(-2px); box-shadow: 2px 3px 0 var(--ink); }
+.co-ask { font-family: var(--display); font-size: 26px; padding: 18px 26px 6px; line-height: 1.1; }
+.co-body { flex: 1; padding: 6px 26px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+.co-field { display: flex; flex-direction: column; gap: 6px; }
+.co-sub { font-size: 13px; opacity: .7; }
+.co-input { font: 700 20px var(--ui); border: 3px solid var(--ink); border-radius: 10px; padding: 10px 14px; background: #fff; color: var(--ink); width: 100%; box-sizing: border-box; }
+.co-field.small .co-input { font-size: 15px; padding: 7px 12px; width: 60%; }
+.co-input:focus { outline: 4px solid var(--accent); }
+.co-sugg { display: flex; flex-wrap: wrap; gap: 6px; }
+.co-chip { font: 600 12px var(--ui); border: 2px dashed rgba(0,0,0,.4); border-radius: 14px; background: transparent; padding: 3px 10px; cursor: pointer; color: var(--ink); }
+.co-chip:hover { border-style: solid; background: var(--soft); }
+.co-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 22px 16px; border-top: 2px dashed var(--ink); }
+.co-total { font-weight: 700; font-size: 16px; }
+.co-hint { font-weight: 700; font-size: 13px; color: var(--accent-2); }
+.co-review { display: flex; flex-direction: column; gap: 6px; }
+.co-line { display: flex; justify-content: space-between; gap: 12px; text-align: left; border: 2px solid var(--ink); border-radius: 8px; background: #fff; padding: 7px 12px; font: 13px var(--ui); cursor: pointer; color: var(--ink); }
+.co-line b { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62%; }
+.co-line:hover:not([disabled]) { background: var(--soft); }
+.co-cards { display: flex; flex-direction: column; gap: 8px; }
+.co-card { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 3px solid var(--ink); border-radius: 10px; background: #fff; padding: 10px 14px; font: 13px var(--ui); cursor: pointer; color: var(--ink); }
+.co-card b { font-size: 15px; } .co-card small { opacity: .6; }
+.co-card.cur { background: var(--accent); box-shadow: 3px 3px 0 var(--ink); }
+.co-empty { opacity: .6; }
+.paper.plan .t-verdict { top: 120px; right: 30px; }
+#tools .co-step { position: relative; border: 3px solid var(--ink); border-radius: 10px; background: #fff; box-shadow: 3px 3px 0 var(--ink); font: 700 13px var(--ui); padding: 10px 14px 10px 24px; cursor: pointer; color: var(--ink); }
+#tools .co-step .key { position: absolute; left: 7px; top: 4px; font-size: 10px; opacity: .45; }
+#tools .co-step.done { background: #c9f2d6; }
+#tools .co-step.cur { background: var(--accent); transform: translateY(-4px); }

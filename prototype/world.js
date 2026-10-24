@@ -1,6 +1,6 @@
 /* Forged — third-person office.
  * The player walks around a small office, sits at their computer to forge
- * (os.html runs inside the monitor), prints the invoice, and carries it to the
+ * (os.html runs inside the monitor), prints the order slip, and carries it to the
  * inspector's IN tray. The boss patrols and checks your screen.
  * Built from primitives + emoji sprites so it needs no art assets.
  */
@@ -852,7 +852,7 @@ scanSlot.position.set(.8, 1.45, .805); boothDesk.add(scanSlot);
 }
 const inTray = box(.6, .08, .45, M("#c9c3b6"), -.7, 1.16, .75, boothDesk);
 const inLabel = signPlane("IN", null, .4, .16, "#e0352b"); inLabel.position.set(-.7, 1.28, .99); boothDesk.add(inLabel);
-const boothSign = signPlane("ACCOUNTS PAYABLE", "INSPECTOR ON DUTY", 4.2, 1.0, "#1f8a8a");
+const boothSign = signPlane("RISK REVIEW", "FRAUD ENGINE ON DUTY", 4.2, 1.0, "#1f8a8a");
 boothSign.position.set(BOOTH.x, 2.85, BOOTH.z - .5); scene.add(boothSign);
 [-1.8, 1.8].forEach(dx => cyl(.02, .02, .5, dark, BOOTH.x + dx, 3.5, BOOTH.z - .5));
 const glassMat = new THREE.MeshStandardMaterial({ color: "#bfe8ff", transparent: true, opacity: .25, roughness: .1 });
@@ -877,7 +877,7 @@ const corkTex = canvasTex(1024, 640, (g, w, h) => {
     g.fillStyle = "#fff"; g.fillRect(-90, -60, 180, 120);
     g.fillStyle = "#2b1d14"; g.font = "bold 18px 'Space Mono'"; g.textAlign = "center";
     g.fillText(p.scheme.slice(0, 16), 0, -22); g.font = "15px 'Space Mono'"; g.fillText(p.vendor.slice(0, 18), 0, 2);
-    g.fillStyle = p.caught ? "#e0352b" : "#1d9a4b"; g.font = "26px Bungee, Impact"; g.fillText(p.caught ? "FLAGGED" : "GOT AWAY", 0, 42);
+    g.fillStyle = p.caught ? "#e0352b" : "#1d9a4b"; g.font = "26px Bungee, Impact"; g.fillText(p.caught ? "CAUGHT" : "GOT AWAY", 0, 42);
     g.restore();
     g.fillStyle = "#e0352b"; g.beginPath(); g.arc(p.x + 90, p.y + 10, 10, 0, 7); g.fill();
   });
@@ -1016,7 +1016,7 @@ function poster(lines, sub, bg, fg, art, x, z, ry) {
   place(kit().add(BOXG(w + .08, h + .08, .03), 0, 0, -.015, 0, 0, 0, { line: .015 }).bake(), dark, grp, 0, 0, 0, 0, false);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), M("#ffffff", { map: tex })); m.position.z = .002; grp.add(m);
 }
-poster(["SYNERGY"], "TOGETHER WE INVOICE", "#2f6fd6", "#ffd23f", (g, w) => {
+poster(["SYNERGY"], "TOGETHER WE CHECK OUT", "#2f6fd6", "#ffd23f", (g, w) => {
   g.globalAlpha = .9; g.fillStyle = "#ffd23f"; g.beginPath(); g.arc(w / 2 - 60, 220, 110, 0, 7); g.fill();
   g.fillStyle = "#ff8fb1"; g.beginPath(); g.arc(w / 2 + 60, 220, 110, 0, 7); g.fill(); g.globalAlpha = 1;
 }, -RW / 2 + .17, 1.5, Math.PI / 2);
@@ -1130,7 +1130,7 @@ const tvTex = canvasTex(1024, 576, (g, w, h) => {
   const caught = tvHistory.filter(r => r.caught).length;
   const rate = tvHistory.length ? Math.round(caught / tvHistory.length * 100) : 0;
   g.textAlign = "left"; g.fillStyle = "#aaa"; g.font = "24px 'Space Mono'";
-  g.fillText(tvHistory.length ? `catch rate ${rate}% over ${tvHistory.length} attempt${tvHistory.length > 1 ? "s" : ""}` : "waiting for the first invoice…", 40, 115);
+  g.fillText(tvHistory.length ? `catch rate ${rate}% over ${tvHistory.length} attempt${tvHistory.length > 1 ? "s" : ""}` : "waiting for the first order…", 40, 115);
   const base = h - 70, maxH = 300, bw = 60;
   g.strokeStyle = "#333"; g.lineWidth = 2; g.beginPath(); g.moveTo(40, base); g.lineTo(w - 40, base); g.stroke();
   tvHistory.slice(-12).forEach((r, i) => {
@@ -1292,12 +1292,12 @@ function wtoast(text, kind = "") {
 }
 const OBJECTIVES = {
   idle: "Sit at your computer and open FORGED.exe",
-  briefing: "Pick a scheme on your computer",
-  forging: "Forge the invoice on your computer",
+  briefing: "Make your plan on the computer",
+  forging: "Make your plan on the computer",
   printing: "Printing…",
-  pickup: "Grab the invoice from the printer",
-  carrying: "Drop it in the inspector's IN tray. Act natural.",
-  judging: "The inspector is reading it…",
+  pickup: "Grab the order slip from the printer",
+  carrying: "Drop it in Gus's IN tray. Act natural.",
+  judging: "Gus is checking your order…",
   result: "Head back to your computer",
 };
 function setPhase(ph) {
@@ -1366,11 +1366,11 @@ function startPrinting() {
 
 function onVerdict(m) {
   const cls = m.caught ? "flagged" : "paid";
-  say(inspector, `<span class="stamp">${m.caught ? "FLAGGED" : "PAID"}</span>"${m.line}"`, 6000, cls);
+  say(inspector, `<span class="stamp">${m.caught ? "CAUGHT" : "APPROVED"}</span>"${m.line}"`, 6000, cls);
   pins.push({ x: 60 + (pins.length % 4) * 230, y: 130 + Math.floor(pins.length / 4 % 3) * 160, r: rand(-.12, .12), scheme: m.scheme, vendor: m.vendor, caught: m.caught });
   redraw(corkTex);
-  if (m.caught) { if (!CINE.active) P.shake = .5; wtoast("FLAGGED — the inspector pinned your trick to the corkboard", "bad"); }
-  else wtoast(`PAID +${money(m.payout)}`, "good");
+  if (m.caught) { if (!CINE.active) P.shake = .5; wtoast("CAUGHT: Gus pinned your trick to the corkboard", "bad"); }
+  else wtoast(`GOT AWAY +${money(m.payout)}`, "good");
   scanSlot.material.emissive.set(m.caught ? "#e0352b" : "#7cff9a"); scanSlot.material.emissiveIntensity = 1.2;
   setTimeout(() => { scanSlot.material.emissive.set("#7cff9a"); scanSlot.material.emissiveIntensity = .2; }, 3000);
   tvHistory.push({ caught: m.caught, version: tvVersion }); redraw(tvTex);
@@ -1407,14 +1407,14 @@ function updateMarker(now) {
 const near = (v, r) => Math.hypot(player.g.position.x - v.x, player.g.position.z - v.z) < r;
 const INTERACTIONS = [
   { label: () => "Use your computer", can: () => !P.carrying && near(CHAIR, 1.7), act: sit },
-  { label: () => "Grab the invoice", can: () => P.envelopeReady && !P.carrying && near({ x: PRINTER.x, z: PRINTER.z + .9 }, 1.8), act: grab },
+  { label: () => "Grab the order slip", can: () => P.envelopeReady && !P.carrying && near({ x: PRINTER.x, z: PRINTER.z + .9 }, 1.8), act: grab },
   { label: () => "Drop it in the IN tray", can: () => P.carrying && near(IN_TRAY, 1.9), act: deliver },
   { label: () => `Talk to ${P.hud ? P.hud.clerk.name : "Brenda"}`, can: () => near({ x: CLERK_DESK.x, z: CLERK_DESK.z + 1.2 }, 2.2) || near({ x: CLERK_DESK.x, z: CLERK_DESK.z - 1.6 }, 1.6), act: () => say(clerk, P.hud ? `"${P.hud.clerk.hello}" <br><small>(Send your cover note from your computer.)</small>` : `"I'm on lunch, hon. Email me."`, 3800) },
   { label: () => `Chat with ${P.hud ? P.hud.inspector : "Gus"}`, can: () => !P.carrying && P.phase !== "judging" && !(P.phase === "result" && bubbles.some(b => b.ch === inspector)) && near(IN_TRAY, 1.9), act: () => say(inspector, pick(["Mmm… pie.", "Did you know I have a stapler?", "I read every invoice. Mostly.", "Is it lunch yet?"]), 2600) },
   { label: () => "Clock out early", can: () => near({ x: EXIT_X, z: RD / 2 - 1 }, 1.6), act: () => {
       exitOpenUntil = performance.now() + 1600; sfx("door");
-      if (P.carrying) say(player, "Leave with a forged invoice in my hand? Bold.", 2600);
-      else say(player, pick(["Not before quota. The boss would notice.", "One more invoice. Then I'm out.", "The parking lot looks free… but my desk looks profitable."]), 2600);
+      if (P.carrying) say(player, "Leave with a fake order slip in my hand? Bold.", 2600);
+      else say(player, pick(["Not before quota. The boss would notice.", "One more order. Then I'm out.", "The parking lot looks free… but my desk looks profitable."]), 2600);
     } },
   { label: () => "Look at the corkboard", can: () => near({ x: 3, z: -RD / 2 + 1.2 }, 1.8), act: () => wtoast(pins.length ? `${pins.length} trick${pins.length > 1 ? "s" : ""} pinned. ${pins.filter(p => p.caught).length} caught.` : "Empty… for now.") },
   { label: () => "Small talk with the Boss", can: () => boss.g.visible && near(boss.g.position, 1.8), act: () => say(boss, pick(["Shouldn't you be at your desk?", "Numbers. I want numbers.", "Nice weather for compliance."]), 2400) },
@@ -1488,22 +1488,25 @@ function deliver() {
 }
 
 /* ======================= Booth close-up: "why I caught you" ======================= */
-/* After you drop the envelope the camera cuts to the counter: your invoice is
- * scanned, the fields that tipped the inspector off are circled, then the stamp
+/* After you drop the envelope the camera cuts to the counter: your order slip is
+ * scanned, the boxes that tipped Gus off are circled, then the stamp
  * slams. Tells come from the computer's verdict message (`tells`). */
 
-const TELL_ROWS = { domain_mismatch: 0, unknown_vendor: 0, letterhead: 0, bank_changed: 1, amount_unusual: 2, total_mismatch: 2,
-  altered: 3, dup_number: 3, bad_po: 3, stamp_wrong: 4, copy_gen: 5, low_legibility: 5, heat: 5 };
-const TELL_SHORT = { domain_mismatch: "odd sender", unknown_vendor: "who is this?", letterhead: "wrong logo", bank_changed: "bank changed",
-  amount_unusual: "way too big", total_mismatch: "doesn't add up", altered: "whiteout!", dup_number: "already paid", bad_po: "bad PO",
-  stamp_wrong: "wrong stamp", copy_gen: "copy of a copy", low_legibility: "stained", heat: "you look nervous" };
-const ROW_LABELS = ["Sender", "Bank account", "Amount", "Invoice # / PO", "Signature / stamp", "Scan quality"];
+// the order slip's rows: card, buyer, ship to, device / IP, cart, timing (tells come from orders.js)
+const TELL_ROWS = { new_card: 0, foreign_card: 0, velocity: 0, email_risky: 1, email_mismatch: 1, yahoo: 1,
+  far_ship: 2, new_address: 2, ip_far: 3, proxy: 3, emulator: 3, new_device: 3, device_reuse: 3, device_mobile: 3,
+  gift_card: 4, amount_unusual: 4, amount_jump: 4, night: 5, friday: 5, heat: 5 };
+const TELL_SHORT = { new_card: "brand-new card", foreign_card: "foreign card", velocity: "too many, too fast", email_risky: "anonymous email",
+  email_mismatch: "wrong name", yahoo: "yahoo?!", far_ship: "ships far away", new_address: "new address", ip_far: "IP far away",
+  proxy: "VPN!", emulator: "emulator", new_device: "new device", device_reuse: "same device again", device_mobile: "a phone?",
+  gift_card: "big gift card", amount_unusual: "way too big", amount_jump: "test charges", night: "3 AM?", friday: "Friday?", heat: "you look nervous" };
+const ROW_LABELS = ["Card", "Buyer email", "Ship to", "Device / IP", "Cart", "Timing"];
 const scanDoc = { vendor: "", marks: [], verdict: null };
 const scanTex = canvasTex(512, 640, (g, w, h) => {
   g.fillStyle = "#fffaf0"; g.fillRect(0, 0, w, h);
   g.strokeStyle = "#2b1d14"; g.lineWidth = 8; g.strokeRect(4, 4, w - 8, h - 8);
   g.textAlign = "left";
-  g.fillStyle = "#1f8a8a"; g.font = "44px Bungee, Impact"; g.fillText("INVOICE", 30, 70);
+  g.fillStyle = "#1f8a8a"; g.font = "44px Bungee, Impact"; g.fillText("ORDER", 30, 70);
   g.fillStyle = "#2b1d14"; g.font = "bold 24px 'Space Mono', monospace"; g.fillText((scanDoc.vendor || "scanning…").slice(0, 26), 30, 110);
   ROW_LABELS.forEach((label, i) => {
     const y = 175 + i * 72, hit = scanDoc.marks.find(m => m.row === i);
@@ -1522,8 +1525,13 @@ scanBeam.position.z = .01; scanPaper.add(scanBeam);
 const stampTex = canvasTex(512, 200, (g, w, h) => {
   const paid = scanDoc.verdict === "paid", col = paid ? "#1d9a4b" : "#e0352b";
   g.strokeStyle = col; g.lineWidth = 18; g.strokeRect(14, 14, w - 28, h - 28);
-  g.fillStyle = col; g.font = "110px Bungee, Impact"; g.textAlign = "center"; g.textBaseline = "middle";
-  g.fillText(paid ? "PAID" : "FLAGGED", w / 2, h / 2 + 6);
+  const word = paid ? "APPROVED" : "CAUGHT";
+  let size = 110;
+  g.font = size + "px Bungee, Impact";
+  const tw = g.measureText(word).width;
+  if (tw > w - 70) { size = Math.floor(size * (w - 70) / tw); g.font = size + "px Bungee, Impact"; }
+  g.fillStyle = col; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(word, w / 2, h / 2 + 6);
 });
 const stampMark = new THREE.Mesh(new THREE.PlaneGeometry(.72, .28), new THREE.MeshBasicMaterial({ map: stampTex, transparent: true }));
 stampMark.position.set(0, -.05, .012); stampMark.rotation.z = .25; stampMark.visible = false; scanPaper.add(stampMark);

@@ -269,7 +269,7 @@ safe(() => {
     g.strokeStyle = "#6b4226"; g.lineWidth = 26; g.strokeRect(0, 0, w, h);
     note(g, 50, 50, 300, 220, "#fff", ["MANDATORY FUN", "Friday 4pm", "Attendance", "tracked."], -.05);
     note(g, 380, 40, 270, 170, "#fff27a", ["Coffee is for", "CLOSERS."], .06, "bold 30px 'Space Mono', monospace");
-    note(g, 690, 60, 280, 230, "#bfe3ff", ["Invoices go in", "the IN TRAY,", "not the sink.", "— Accounts"], -.03, "bold 24px 'Space Mono', monospace");
+    note(g, 690, 60, 280, 230, "#bfe3ff", ["Order slips go", "in the IN TRAY,", "not the sink.", "— Risk team"], -.03, "bold 24px 'Space Mono', monospace");
     note(g, 70, 330, 280, 200, "#ffd0e4", ["LOST:", "red stapler.", "No questions."], .07);
     note(g, 400, 280, 260, 260, "#fff", ["DAYS SINCE", "LAST AUDIT:", "", "0"], -.04, "bold 28px 'Space Mono', monospace");
     note(g, 700, 340, 270, 180, "#b6f0c8", ["Brenda: back", "from lunch", "at ??:??"], .05);
@@ -413,6 +413,21 @@ const caffeinated = now => now < S.caffUntil;
 
 /* ======================= Hints ======================= */
 const TELL_HINTS = {
+  new_card: "Gus hates brand-new cards on big orders. Use one with some history.",
+  foreign_card: "A foreign card at our little shop? He circles those first.",
+  velocity: "Three orders on one card in a minute? Even I'd notice. Space them out.",
+  email_risky: "ProtonMail, anonymous.com… he flags those on sight now.",
+  email_mismatch: "He checks that the email looks like the name on the card.",
+  ip_far: "He looks at where the IP is. Shop from near the cardholder.",
+  proxy: "He's learned to spot VPNs. The good proxies look like someone's home.",
+  emulator: "Emulators have weird screens. He noticed.",
+  new_device: "An old account on a brand-new device? That's his favorite catch.",
+  device_reuse: "Same laptop, different cards? He remembers devices now.",
+  far_ship: "Shipping overseas lights him up. Keep it local.",
+  new_address: "A new address on an old card makes him squint.",
+  gift_card: "Big gift cards go straight to review these days.",
+  amount_jump: "A $1 charge then a $900 one? Classic card testing. He knows.",
+  night: "Orders at 3 AM make him suspicious. Shop at lunch like a normal person.",
   domain_mismatch: "Gus has been squinting at sender emails lately. Make the domain match the vendor.",
   unknown_vendor: "He's twitchy about vendors he's never heard of. Stick to real ones.",
   letterhead: "He compares logos now. A wrong letterhead is an instant flag.",

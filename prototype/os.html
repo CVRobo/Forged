@@ -20,19 +20,19 @@
       <div class="prop-ring" style="left:180px;top:140px"></div>
       <div class="prop-ring" style="left:1290px;top:600px"></div>
       <div class="prop-sticky" style="left:1240px;top:150px;transform:rotate(6deg)">Don't<br>get<br>caught :)</div>
-      <div class="prop-paper" style="left:140px;top:560px;transform:rotate(-9deg)">INVOICE #0042<br>━━━━━━━━<br>Dave's Discount Anvils<br>$1,250.00</div>
+      <div class="prop-paper" style="left:140px;top:560px;transform:rotate(-9deg)">ORDER #SD-0042<br>━━━━━━━━<br>Espresso machine<br>$899.99</div>
     </div>
     <div class="title-card">
       <div class="logo">FORGED</div>
       <div class="logo-stamp">PAID</div>
-      <p class="tagline">Sneak fake invoices past an inspector who learns from every trick you pull.</p>
+      <p class="tagline">Sneak fraudulent online orders past a risk engine that learns from every trick you pull.</p>
       <div class="title-buttons">
         <button class="btn btn-big" data-go="levels">▶ Play Solo</button>
         <button class="btn btn-big btn-ghost" disabled>⚔ Duel <span class="tag">soon</span></button>
         <button class="btn btn-ghost" data-menu="howto">How to play</button>
         <button class="btn btn-ghost" data-menu="board">🏆 Leaderboard</button>
       </div>
-      <p class="fineprint">Fictional companies. Cartoon paperwork. A game about outsmarting a detector, not a how-to.</p>
+      <p class="fineprint">Fictional shops and people. Cartoon checkouts. A game about outsmarting a detector, not a how-to.</p>
     </div>
   </section>
 
@@ -40,7 +40,7 @@
   <section id="screen-levels" class="screen">
     <div class="screen-head">
       <button class="btn btn-ghost" data-go="title">← Back</button>
-      <h1>Choose a client</h1>
+      <h1>Choose a shop</h1>
       <span></span>
     </div>
     <div id="level-cards" class="level-cards"></div>
@@ -55,6 +55,7 @@
       <div class="tb-logo">FORGED</div>
       <div class="tb-chip"><span class="tb-label">Client</span><span id="tb-level">Sunny Diner Supply</span></div>
       <div class="tb-chip"><span class="tb-label">Round</span><span id="tb-round">1</span></div>
+      <div class="tb-chip"><span class="tb-label">Rank</span><span id="tb-rank">⭐ Rookie</span></div>
       <div class="tb-heat">
         <span class="tb-label">Heat 🔥</span>
         <div class="heat-track"><div id="heat-fill"></div></div>
@@ -76,20 +77,21 @@
 
     <!-- case file -->
     <div class="win" id="win-case" style="left:16px;top:352px;width:360px;height:434px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Case File<span class="win-hint" id="case-client"></span></div>
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Today's Victim<span class="win-hint" id="case-client"></span></div>
       <div class="win-body case-body" id="case-body"></div>
     </div>
 
-    <!-- invoice -->
+    <!-- order ticket (kept as #invoice so the boss newspaper and forensic styles still apply) + campaign strip -->
     <div id="invoice-wrap">
       <div id="scheme-banner"></div>
-      <div id="invoice" class="paper"></div>
+      <div id="invoice" class="paper ticket"></div>
+      <div id="strip"></div>
       <div id="newspaper"><div class="np-head">THE DAILY LEDGER</div><div class="np-sub">Local diner wins pie contest, again</div><div class="np-lines"></div></div>
     </div>
 
     <!-- inspector + outbox -->
     <div class="win" id="win-inspector" style="left:1032px;top:76px;width:552px;height:322px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span><span id="insp-win-title">Accounts Payable Scanner</span><span class="win-hint" id="insp-version">v1</span></div>
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span><span id="insp-win-title">Risk Engine</span><span class="win-hint" id="insp-version">v1</span></div>
       <div class="win-body insp-body">
         <div class="insp-left">
           <div class="insp-face" id="insp-face"><div id="insp-portrait"></div></div>
@@ -109,16 +111,16 @@
 
     <!-- clerk chat -->
     <div class="win" id="win-clerk" style="left:1032px;top:412px;width:552px;height:374px">
-      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Cover Email<span class="win-hint" id="clerk-quirk"></span></div>
+      <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Support Chat<span class="win-hint" id="clerk-quirk"></span></div>
       <div class="win-body clerk-body">
         <div class="clerk-head">
           <div class="clerk-avatar" id="clerk-avatar"></div>
-          <div><div class="clerk-name" id="clerk-name">Brenda</div><div class="clerk-sub" id="clerk-sub">Accounts clerk</div></div>
+          <div><div class="clerk-name" id="clerk-name">Brenda</div><div class="clerk-sub" id="clerk-sub">Customer support</div></div>
           <div class="persuade"><span class="tb-label">Convinced</span><div class="persuade-track"><div id="persuade-fill"></div></div></div>
         </div>
         <div class="chat" id="chat"></div>
         <form class="chat-input" id="chat-form" autocomplete="off">
-          <input id="chat-text" maxlength="180" placeholder="Write a short note to the clerk…">
+          <input id="chat-text" maxlength="180" placeholder="Write a short note to customer support…">
           <button class="btn btn-small" type="submit">Send</button>
         </form>
       </div>
@@ -126,7 +128,7 @@
 
     <!-- dock / toolbox -->
     <footer id="dock">
-      <div class="dock-label">TOOLBOX<span id="edits-left">Edits 0/4</span></div>
+      <div class="dock-label"><span id="hand-ask">YOUR HAND</span><span id="edits-left"></span></div>
       <div id="tools"></div>
       <div class="dock-sep"></div>
       <button class="btn btn-ghost btn-small" id="btn-dossier" title="Your collected intel">📂 Dossier</button>
@@ -137,9 +139,9 @@
 
     <!-- boss shadow -->
     <div id="boss-shadow"><div class="boss-body">🕴️</div></div>
-    <div id="boss-prompt">FOOTSTEPS! Press <kbd>SPACE</kbd> to hide the invoice</div>
+    <div id="boss-prompt">FOOTSTEPS! Press <kbd>SPACE</kbd> to hide the screen</div>
 
-    <!-- popover used by scissors / stamps / pen -->
+    <!-- popover with the toolkit's options -->
     <div id="popover"></div>
 
     <!-- hover tips on the scheme picker -->
@@ -147,7 +149,8 @@
 
     <!-- detector debug -->
     <aside id="debug-panel">
-      <div class="debug-head">What the detector sees <span>(mock record — press <b id="debug-key">F3</b> to close)</span></div>
+      <div class="debug-head"><span id="debug-title">What Gus sees</span> <span>(press <b id="debug-key">F3</b> to close)</span>
+        <button class="btn btn-ghost btn-small" id="btn-csv" title="Every order sent from this browser, with the IEEE-CIS columns">⬇ CSV</button></div>
       <pre id="debug-json"></pre>
     </aside>
   </section>
@@ -157,7 +160,7 @@
     <div class="modal briefing">
       <div class="modal-kicker" id="brief-kicker">ROUND 1 · BRIEFING</div>
       <h2>Pick your scheme</h2>
-      <p class="modal-sub">Read the case file and the memo. Each scheme has different weak points — repeating one raises heat.</p>
+      <p class="modal-sub">Read the card &amp; shop file and the memo. Each scheme is a starter campaign you can change. Repeating one raises heat.</p>
       <div id="scheme-cards" class="scheme-cards"></div>
     </div>
   </div>
@@ -228,6 +231,6 @@
 </div>
 </div>
 <div id="tool-cursor"></div>
-<script>document.write(['keys.js', 'menu.js', 'game.js'].map(f => '<script src="' + f + '?v=' + Date.now() + '"><\/script>').join(''));</script>
+<script>document.write(['keys.js', 'menu.js', 'orders.js', 'game.js'].map(f => '<script src="' + f + '?v=' + Date.now() + '"><\/script>').join(''));</script>
 </body>
 </html>
