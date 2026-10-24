@@ -32,7 +32,7 @@ def family(rows: pd.DataFrame) -> pd.Series:
                         ["victim's account", "anonymous email", "lookalike email"], "new email")
     dist1 = pd.to_numeric(rows.get("dist1"), errors="coerce")
     digital = _b(rows["R_emaildomain"].notna() & dist1.isna() & rows["M5"].ne("T"))
-    ship = np.select([digital, _b(rows["M6"].eq("T")), _b(dist1.isna()), _b(dist1 < 50), _b(dist1 >= 50)],
+    ship = np.select([digital, _b(rows["M6"].eq("T")), _b(dist1 >= 2500), _b(dist1 < 50), _b(dist1 >= 50)],
                      ["code by email", "their home", "abroad", "nearby drop", "far drop"], "?")
     hide = np.select([_b(x["proxy"].eq("anonymous")), _b(x["proxy"].eq("hidden")), _b(x["dist2"] > 500)],
                      ["Tor/free VPN", "VPN", "far away"], "local")

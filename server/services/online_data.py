@@ -18,7 +18,9 @@ import os
 import threading
 from pathlib import Path
 
-from server.models.schemas import GusVerdict, OnlineRecord, SubmitResponse, Tell
+from fastapi import HTTPException
+
+from server.models.schemas import GusVerdict, OnlineRecord, PreviewResponse, SubmitResponse, Tell
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +75,22 @@ def judge(record: OnlineRecord, gus: GusVerdict | None) -> dict:
     flagged_tells = [t for r in results if r["reason"] == "flagged" for t in r["tells"]]
     tells = sorted(flagged_tells or [t for r in results for t in r["tells"]], key=lambda t: -t[1])
     return {"caught": caught, "results": results, "tells": tells, "version": v.version, "source": "model", "payout": int(payout)}
+
+
+def preview(record: OnlineRecord) -> PreviewResponse:
+    """The gut feeling: the same scores and threshold as the verdict, without saving anything."""
+    v = _model()
+    if v is None:
+        raise HTTPException(status_code=503, detail="no fraud model: the game uses its scripted Gus")
+    import pandas as pd
+    rows = pd.DataFrame(record.rows)
+    if rows.empty:
+        raise HTTPException(status_code=422, detail="no orders yet")
+    scores = [float(s) for s in v.scores(rows)]
+    cut = v.game_threshold(getattr(record, "rank", None))
+    worst = max(range(len(scores)), key=scores.__getitem__)
+    return PreviewResponse(worry=round(scores[worst] / cut, 4), scores=[round(s, 4) for s in scores], threshold=cut,
+                           version=v.version, tells=v.explain(rows.iloc[[worst]])[0])
 
 
 def save_rows(record: OnlineRecord, verdict: dict, round_id: str, player: str | None) -> int:

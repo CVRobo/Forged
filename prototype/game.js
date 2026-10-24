@@ -388,7 +388,8 @@ function nextRound(retry = false) {
   // the stolen cards on your desk this round (a Mastermind picks one; everyone else gets the first)
   const wallet = again ? S.wallet : shuffle(O.HOLDERS.filter(h => !prev || h.name !== prev.name)).slice(0, 3).map(h => ({ ...h, card: pick(O.CARDS) }));
   Object.assign(S, { scheme: null, inv: null, input: null, step: null, sugg: {}, persuasion: 0, submitted: false,
-    printed: false, delivered: false, lastResult: null, rows: null, holder: again ? prev : wallet[0], wallet, retryTells: again ? again.tells : null });
+    printed: false, delivered: false, lastResult: null, rows: null, holder: again ? prev : wallet[0], wallet, retryTells: again ? again.tells : null,
+    gutApi: S.gutApi && S.gutApi.off ? S.gutApi : null });
   $("#tb-round").textContent = S.round;
   $("#invoice").innerHTML = ""; $("#invoice").className = "paper plan";
   $("#strip").innerHTML = "";
@@ -554,15 +555,39 @@ function rebuild(full = true) {
 /* Gus's gut feeling: the same rules as the verdict, without the luck */
 function gutFeeling() {
   if (!S.inv.orders.length) return null;
+  // with a server, the fraud model's own score: worry 1 is exactly where the verdict says caught
+  const g = S.gutApi;
+  if (API && g && !g.off && g.worry != null) return g.worry < 1 ? 42 * g.worry : 42 + g.worry;
   const rows = previewRows();
   const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion,
     learned: S.learned, memory: S.memory, leniency: leniency(), preview: true });
   return Math.max(...r.results.map(x => x.suspicion ?? 0));
 }
 const MOODS = [[22, "😊", "Looks normal"], [32, "🙂", "Fine, I guess"], [42, "🤨", "Hmm…"], [1e9, "😠", "No way"]];
+/* POST /preview: ask the fraud model about the checkout as it is now. The last answer stays on
+ * screen until the new one arrives; without a model (503) the scripted gut feeling takes over */
+function askGus() {
+  if (!API || !S.inv || !S.inv.orders.length || (S.gutApi && S.gutApi.off)) return;
+  const key = JSON.stringify([S.input, S.holder.name, rank().n, S.round]);
+  if (S.gutApi && S.gutApi.key === key) return;
+  S.gutApi = { ...(S.gutApi || {}), key };
+  clearTimeout(S.gutT);
+  S.gutT = setTimeout(async () => {
+    const { verdict, ...rec } = record();
+    try {
+      const r = await api("POST", "/preview", { record: rec }, 4000);
+      if (!S.gutApi || S.gutApi.key !== key) return; // the player kept typing
+      S.gutApi.worry = +r.worry;
+      renderMood();
+    } catch (e) {
+      if (/HTTP 503/.test(e && e.message)) S.gutApi = { off: true }; // no model on the server
+    }
+  }, 250);
+}
 function renderMood() {
   const el = $("#gut");
   if (!el) return;
+  askGus();
   const s = gutFeeling(), m = s == null ? ["", "😶", "Waiting…"] : MOODS.find(x => s < x[0]);
   el.innerHTML = `<span class="gut-face">${m[1]}</span><span class="gut-txt"><small>Gus's gut feeling</small>${m[2]}</span>`;
 }

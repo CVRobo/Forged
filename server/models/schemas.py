@@ -141,6 +141,19 @@ class SubmitRequest(BaseModel):
     gus: GusVerdict | None = None
 
 
+class PreviewRequest(BaseModel):
+    """The checkout as the player types: Gus's gut feeling. Nothing is saved."""
+    record: OnlineRecord
+
+
+class PreviewResponse(BaseModel):
+    worry: float = Field(description="the riskiest order's score over the player's threshold: 1 or more means caught")
+    scores: list[float]
+    threshold: float
+    version: int
+    tells: list[list[Any]] = Field(default_factory=list, description="the riskiest order's [[tell, weight], ...]")
+
+
 class SubmitResponse(BaseModel):
     verdict: str = Field(description="PAID or FLAGGED")
     top_tells: list[Tell]

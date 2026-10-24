@@ -29,7 +29,7 @@ Then run the server from the same environment, and the game with `?api=http://lo
 USE_STUBS=true ml/.venv/Scripts/python -m uvicorn server.main:app --port 8000
 ```
 
-`/submit` scores each order with the live version. Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background. Without a trained model the server answers with the browser's scripted Gus.
+`/submit` scores each order with the live version. `/preview` gives the checkout's gut feeling from the same score and threshold (nothing is saved), so the face and the verdict always agree: 😠 means the order would be caught. Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background. Without a trained model the server answers with the browser's scripted Gus.
 
 ## How it learns
 
@@ -51,6 +51,8 @@ USE_STUBS=true ml/.venv/Scripts/python -m uvicorn server.main:app --port 8000
 ## Why honest game shoppers matter
 
 The game fills some columns in ways real data never does. For example, `dist2` is always set in the game but mostly blank in real data, and product `W` never has device info in real data. A model trained on real data plus player orders (all fraud) learns "looks like the game = fraud": a classifier separated game rows from real fraud with AUC 1.0. Adding honest shoppers in the game's format removes that shortcut. v1 blocks about 1 % of them, close to its real-world rate.
+
+Shipping abroad records its real distance in `dist1`. A blank `dist1` is what almost every real online order has, so an abroad order used to look like a normal one.
 
 ## Two thresholds
 
@@ -77,4 +79,3 @@ The game fills some columns in ways real data never does. For example, `dist2` i
 
 - The column mapping in `prototype/orders.js` (`toRows`) is a documented guess, because IEEE-CIS columns are anonymized.
 - The simulated honest shoppers' habits (how often they use a VPN or ship elsewhere) are assumptions, and they set how suspicious "ships elsewhere" looks.
-- The gut feeling in the checkout is still the browser's scripted Gus, so it can disagree with the model's verdict.

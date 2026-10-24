@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query
 
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
 from server.services.detector import TELL_DESCRIPTIONS
-from server.services.online_data import submit_online
+from server.services.online_data import preview, submit_online
 from server.models.schemas import (
     CaseFile,
     ClerkRequest,
@@ -26,6 +26,8 @@ from server.models.schemas import (
     MemoRule,
     PatchNote,
     OnlineRecord,
+    PreviewRequest,
+    PreviewResponse,
     RoundStartRequest,
     RoundStartResponse,
     SubmitRequest,
@@ -222,3 +224,9 @@ async def stub_leaderboard():
         LeaderboardEntry(player="Bob", money=8200, patches_caused=1),
         LeaderboardEntry(player="Charlie", money=4100, patches_caused=0),
     ]
+
+
+@router.post("/preview", response_model=PreviewResponse)
+async def preview_order(req: PreviewRequest):
+    """Gus's gut feeling while the player types the checkout (the fraud model's score, nothing saved)."""
+    return preview(req.record)
