@@ -18,6 +18,9 @@ out/
 # ML models
 ml/models/*.pkl
 ml/models/*.joblib
+ml/online/models/*.joblib
+ml/online/models/*.jsonl
+ml/online/models/versions.json
 
 # Redis
 dump.rdb
