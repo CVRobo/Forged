@@ -37,3 +37,4 @@ ml/online/models/*
 !ml/online/models/versions.json
 !ml/online/models/v2.joblib
 !ml/online/models/v3.joblib
+!ml/online/models/v4.joblib

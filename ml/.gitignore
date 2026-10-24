@@ -7,3 +7,4 @@ models/*
 !online/models/versions.json
 !online/models/v2.joblib
 !online/models/v3.joblib
+!online/models/v4.joblib

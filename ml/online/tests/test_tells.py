@@ -119,7 +119,8 @@ def test_a_drop_in_town_is_a_new_address_not_the_ocean(live):
 
 
 def test_a_look_alike_account_is_a_new_account(live):
-    assert "new_account" in tells(live, "careful_local")
+    # since the CRS check, a made-up mailbox in the cardholder's name is also what Fraud Finder flags
+    assert {"new_account", "identity"} & set(tells(live, "careful_local"))
 
 
 def test_a_warehouse_overseas_ships_far(live):

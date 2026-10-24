@@ -83,7 +83,7 @@ def learning_curve() -> list[dict]:
         after, before = (meta.get("test") or {}).get("player_catch"), (meta.get("parent_test") or {}).get("player_catch")
         if meta.get("parent") in reg and after is not None and before is not None:
             steps.append({"from": meta["parent"], "to": v, "before": round(float(before), 3), "after": round(float(after), 3),
-                          "held": meta.get("note", "")})
+                          "held": meta.get("note", "") + (" (promoted by hand: " + meta["forced_why"] + ")" if meta.get("forced") else "")})
     return steps
 
 

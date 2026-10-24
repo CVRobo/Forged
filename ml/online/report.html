@@ -157,7 +157,7 @@
         <span class="lc-track"><span class="lc-bar" style="width:${Math.round(x * 100)}%"></span></span>
         <span class="lc-v">${pct(x)}</span></div>`;
     $("learning").innerHTML = steps.map(s => `<div class="lc-step"><div class="lc-title">v${s.from} → v${s.to}
-        <span class="lc-up">▲${Math.round((s.after - s.before) * 100)}</span> <span class="lc-held">${s.held}</span></div>
+        <span class="lc-up">${s.after >= s.before ? "▲" : "▼"}${Math.abs(Math.round((s.after - s.before) * 1000) / 10)}</span> <span class="lc-held">${s.held}</span></div>
         ${bar("v" + s.from, s.before)}${bar("v" + s.to, s.after)}</div>`).join("");
   }
 

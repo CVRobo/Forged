@@ -12,10 +12,15 @@ IEEE-CIS rows predate CRS, so their signals are blank and the model learns their
 the game-format rows (simulated shoppers and players). That's what is real here and what isn't.
 
 Where the answers come from:
-  - the CRS sandbox, when CRS_USERNAME and CRS_PASSWORD are set (answers cached in data/crs_cache.json);
-  - otherwise an offline mirror: the sandbox's published answers for each persona's own identity,
-    and for any other email a rule of thumb (an unknown mailbox ~60, an anonymous one 85).
-FORGED_CRS=off forces the mirror. Login happens once per process and is never retried: CRS
+  - the CRS sandbox, when CRS_USERNAME and CRS_PASSWORD are set (in the repo's .env);
+  - every sandbox answer is kept in crs_cache.json (committed: all fake people and made-up emails),
+    so a machine without the keys, or the deployed game, gets the same answers training saw;
+  - an identity never asked before, without the keys: an offline mirror of how the sandbox answers.
+    The persona's own login and name get its published score; the own login under another name
+    gets 100; any other email gets what the sandbox gave that email provider on average (about 90:
+    the sandbox sends anything but a persona's exact request to AtData, which can't vouch for a
+    made-up address), and an address it rejected outright gets 100.
+FORGED_CRS=off forces cache + mirror. Login happens once per process and is never retried: CRS
 disables an account after repeated failed logins.
 """
 from __future__ import annotations
@@ -32,18 +37,21 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
+try:  # the credentials live in the repo's .env, also when training runs outside the server
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+except ImportError:
+    pass
+
 BASE = os.environ.get("CRS_BASE_URL", "https://api-sandbox.stitchcredit.com/api")
-TIMEOUT = 4.0
+TIMEOUT = 8.0
 HERE = Path(__file__).resolve().parent
-CACHE = HERE / "data" / "crs_cache.json"
+CACHE = HERE / "crs_cache.json"
 PERSONAS = {p["id"]: p for p in json.loads((HERE / "crs_personas.json").read_text(encoding="utf-8"))["personas"]}
 
 IDV = ["PASS", "FAIL", "STEP_UP"]
 STEP_UP_CODES = {"2401"}  # TransUnion's fraud-alert message: verify more, don't decline
-ANON = {"protonmail.com", "proton.me", "anonymous.com", "mail.com", "guerrillamail.com", "tempmail.com", "yopmail.com",
-        "tutanota.com", "10minutemail.com", "mail.ru", "yandex.ru"}
-COMMON = {"gmail.com", "yahoo.com", "hotmail.com", "aol.com", "comcast.net", "icloud.com", "outlook.com", "msn.com",
-          "att.net", "live.com", "sbcglobal.net", "verizon.net", "ymail.com", "bellsouth.net", "me.com", "cox.net"}
+UNKNOWN_MAILBOX = 90.0  # the sandbox's typical answer for a made-up address at a provider it has no answers for
 
 _lock = threading.Lock()
 _state = {"token": None, "tried": False, "error": None}
@@ -139,29 +147,35 @@ def fraud_finder(persona_id: str, email: str | None, name: str | None) -> float 
     own = p["fraud_finder"]
     email = (email or "").strip().lower() or own["email"]
     first, _, last = (name or f"{own['firstName']} {own['lastName']}").strip().upper().partition(" ")
+    if last == own["lastName"] and first.rstrip(".")[:1] == own["firstName"][:1]:
+        first = own["firstName"]  # "M. Bellamy" is the cardholder: the shop sends the account's full name
     body = {**own, "email": email, "firstName": first[:50], "lastName": (last or own["lastName"])[:50]}
     body.pop("ipAddress", None)  # where the buyer shops from is already in the model (dist2, proxy)
-    got = _ask("ff", body, "/fraud-finder/fraud-finder", lambda r: float(r["risk"]["score"]))
+    got = _ask("ff", body, "/fraud-finder/fraud-finder", _ff_score)
     return float(got) if got is not None else _mirror_risk(p, body)
 
 
+def _ff_score(resp: dict) -> float:
+    """Fraud Finder's risk score. An address it can't deliver to comes back with no score: the riskiest."""
+    if "risk" in resp:
+        return float(resp["risk"]["score"])
+    if (resp.get("email_validation") or {}).get("status") == "invalid":
+        return 100.0
+    raise KeyError("risk")
+
+
 def _mirror_risk(p: dict, body: dict) -> float:
-    """The offline stand-in: the sandbox's own answer for the persona's identity, a rule of thumb otherwise."""
+    """The offline stand-in for an identity the sandbox was never asked about (see the module notes)."""
     own = p["fraud_finder"]
-    name_ok = body["firstName"][:1] == own["firstName"][:1] and body["lastName"] == own["lastName"]
     if body["email"] == own["email"]:
-        risk = p["expect"]["risk"]
-    else:
-        local, _, domain = body["email"].partition("@")
-        if "." not in domain:
-            risk = 95  # not a deliverable address
-        elif domain in ANON:
-            risk = 85
-        else:  # a mailbox AtData has no history for; less so when it carries the cardholder's name
-            risk = 60 if domain in COMMON else 70
-            if own["lastName"].lower() in local:
-                risk -= 10
-    return float(min(100, risk + (0 if name_ok else 10)))
+        name_ok = body["firstName"] == own["firstName"] and body["lastName"] == own["lastName"]
+        return float(p["expect"]["risk"]) if name_ok else 100.0
+    domain = body["email"].partition("@")[2]
+    if "." not in domain:
+        return 100.0
+    seen = [v["value"] for k, v in _load_cache().items()
+            if k.startswith("ff:") and json.loads(k[3:])["email"].endswith("@" + domain)]
+    return float(sum(seen) / len(seen)) if seen else UNKNOWN_MAILBOX
 
 
 def holder_email(persona_id: str) -> str | None:
