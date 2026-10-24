@@ -204,6 +204,7 @@ const S = {
   stains: [], stamps: [], copyGen: 0, altered: new Set(), legibility: {}, persuasion: 0,
   memo: [], tool: null, pendingStamp: null, submitted: false, bossTimer: null, bossWindow: false,
   roundId: null, // from POST /round/start; null when offline
+  patches: 0, shame: [], // retrains this run caused, and what each one learned
 };
 
 /* ======================= Sound (tiny WebAudio synth) ======================= */
@@ -300,6 +301,8 @@ document.addEventListener("click", e => {
   if (go) { sfx("click"); if (go.dataset.go === "levels") renderLevels(); show(go.dataset.go); }
   const op = e.target.closest("[data-open]");
   if (op) { sfx("click"); overlay(op.dataset.open); }
+  const bd = e.target.closest("[data-board]");
+  if (bd) { sfx("click"); openBoard(); }
   const cl = e.target.closest("[data-close]");
   if (cl) { sfx("click"); cl.closest(".overlay").classList.remove("show"); }
 });
@@ -330,7 +333,7 @@ function renderLevels() {
 
 function startRun(level) {
   Object.assign(S, { level, round: 0, money: 0, heat: 0, version: 1, perks: [], unlocks: [], dossier: false,
-    shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0 });
+    shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [] });
   stage.dataset.level = level;
   $("#desk-mess").innerHTML = "";
   const L = LEVELS[level];
@@ -374,7 +377,7 @@ async function startRoundOnServer() {
   if (!API) return;
   const round = S.round;
   try {
-    const r = await api("POST", "/round/start", { level: S.level });
+    const r = await api("POST", "/round/start", { level: S.level, player: playerName() });
     if (S.round !== round) return; // the player already moved on
     S.roundId = r.round_id ?? r.roundId ?? null;
     if (Array.isArray(r.memo) && r.memo.length) {
@@ -902,7 +905,7 @@ async function judge() {
   if (!API || !S.roundId) return mock;
   try {
     const { verdict, ...rec } = record(); // the verdict is what we're asking for
-    const r = await api("POST", "/submit", { round_id: S.roundId, record: rec, perks: S.perks }, 10000);
+    const r = await api("POST", "/submit", { round_id: S.roundId, player: playerName(), record: rec, perks: S.perks }, 10000);
     return adaptVerdict(r, mock);
   } catch (e) { offline(e); return mock; }
 }
@@ -967,6 +970,12 @@ function showCorkboard() {
   S.prevVersion = oldV;
   if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
   else if (!shredded) S.version++;
+  renderInspector(); updateHud();
+  if (S.version > oldV) {
+    S.patches++;
+    if (r.tells.length) S.shame.push({ player: playerName(), version: S.version, trick: SCHEMES[S.scheme].name,
+      learned: r.tells[0][0], amount: S.inv.amount, round: S.round });
+  }
   const top = r.tells.slice(0, 3);
   const pos = [[120, 60], [80, 330], [430, 300]];
   $("#cork-pins").innerHTML = `
@@ -1075,6 +1084,82 @@ $("#btn-next-round").onclick = () => {
   if (hadDossier) { renderMemo(); S.dossier = false; }
 };
 $("#btn-quit").onclick = () => { sfx("click"); overlay("between", false); clearTimeout(S.bossTimer); show("title"); };
+
+/* ======================= Leaderboard + Hall of Shame ======================= */
+
+const PLAYER_KEY = "forged-player";
+function playerName() {
+  try { return (localStorage.getItem(PLAYER_KEY) || "").trim() || "You"; } catch (e) { return "You"; }
+}
+// offline only: sample rivals so the board is never empty (B pre-seeds the real one)
+const SAMPLE_PLAYERS = [
+  { name: "Shredder Sally", money: 18400, patches: 9 },
+  { name: "Two-Copy Tony", money: 11250, patches: 7 },
+  { name: "Notary Nadia", money: 6900, patches: 4 },
+  { name: "Stamp Champ", money: 3150, patches: 2 },
+];
+const SAMPLE_SHAME = [
+  { player: "Two-Copy Tony", version: 7, trick: "Duplicate with tweaks", learned: "copy_gen", n: 340 },
+  { player: "Shredder Sally", version: 4, trick: "Phantom supplier", learned: "unknown_vendor", n: 212 },
+  { player: "Notary Nadia", version: 3, trick: "Boss request", learned: "amount_unusual", n: 96 },
+];
+
+let boardTab = "leaders";
+function openBoard() {
+  const input = $("#player-name");
+  input.value = playerName() === "You" ? "" : playerName();
+  input.placeholder = "You";
+  input.onchange = () => {
+    try { localStorage.setItem(PLAYER_KEY, input.value.trim()); } catch (e) { /* name just isn't remembered */ }
+    S.shame.forEach(x => x.player = playerName());
+    loadBoard();
+  };
+  overlay("board");
+  loadBoard();
+}
+$$(".board-tab").forEach(b => b.onclick = () => {
+  sfx("click"); boardTab = b.dataset.tab;
+  $$(".board-tab").forEach(x => x.classList.toggle("active", x === b));
+  $("#board-leaders").hidden = boardTab !== "leaders"; $("#board-shame").hidden = boardTab !== "shame";
+});
+
+function renderBoard(players, shame, live) {
+  const me = playerName();
+  $("#board-source").textContent = live ? "● Live from the server" : "Offline: sample players, plus your current run";
+  $("#board-foot").textContent = "Patches = times the inspector was retrained because of your tricks";
+  const rows = [...players].sort((a, b) => b.money - a.money);
+  $("#board-leaders").innerHTML = rows.length ? `<table class="board-table">
+    <tr><th>#</th><th>Forger</th><th class="num">Siphoned</th><th class="num">Patches caused</th></tr>
+    ${rows.map((p, i) => `<tr class="${p.name === me ? "me" : ""}"><td class="board-rank">${i + 1}</td><td>${esc(p.name)}</td>
+      <td class="num">${money(p.money)}</td><td class="num">${p.patches}</td></tr>`).join("")}</table>`
+    : `<div class="board-empty">No forgers yet. Be the first.</div>`;
+  $("#board-shame").innerHTML = shame.length ? shame.map(x => `
+    <div class="shame-item ${x.player === me ? "me" : ""}">
+      <div class="shame-ver">v${x.version}</div>
+      <div><b>${esc(x.player)}</b>'s ${esc(x.trick)} taught the inspector to catch: ${esc(tellLabel(x.learned))}
+        <small>${x.round ? "Your run, round " + x.round : ""}</small></div>
+      <div class="shame-n">${x.n != null ? x.n + " invoices<br>retrained on" : x.amount != null ? money(x.amount) : ""}</div>
+    </div>`).join("") : `<div class="board-empty">Nobody has forced a patch yet.</div>`;
+}
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// GET /leaderboard: { players: [{name, money, patches}], hall_of_shame: [{player, version, trick, learned, n}] }
+async function loadBoard() {
+  const me = { name: playerName(), money: S.money, patches: S.patches };
+  const localShame = [...S.shame].reverse();
+  renderBoard(S.round ? [...SAMPLE_PLAYERS, me] : SAMPLE_PLAYERS, [...localShame, ...SAMPLE_SHAME], false);
+  if (!API) return;
+  try {
+    const r = await api("GET", "/leaderboard");
+    const list = Array.isArray(r) ? r : r.players ?? r.leaderboard ?? [];
+    const players = list.map(p => ({ name: p.name ?? p.player ?? "?", money: +(p.money ?? p.siphoned ?? 0),
+      patches: +(p.patches ?? p.patches_caused ?? 0) }));
+    const shame = (r.hall_of_shame ?? r.shame ?? []).map(x => ({ player: x.player ?? x.name ?? "?",
+      version: x.version ?? "?", trick: x.trick ?? x.scheme ?? "a trick", learned: x.learned ?? x.feature ?? x.tell ?? "",
+      n: x.n ?? x.learned_from ?? x.examples ?? null }));
+    if ($("#overlay-board").classList.contains("show")) renderBoard(players, shame.length ? shame : localShame, true);
+  } catch (e) { offline(e); }
+}
 
 /* desk gets messier as the run goes on */
 function messUpDesk() {

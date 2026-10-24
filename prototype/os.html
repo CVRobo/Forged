@@ -28,6 +28,7 @@
         <button class="btn btn-big" data-go="levels">▶ Play Solo</button>
         <button class="btn btn-big btn-ghost" disabled>⚔ Duel <span class="tag">soon</span></button>
         <button class="btn btn-ghost" data-open="howto">How to play</button>
+        <button class="btn btn-ghost" data-board>🏆 Leaderboard</button>
       </div>
       <p class="fineprint">Fictional companies. Cartoon paperwork. A game about outsmarting a detector, not a how-to.</p>
     </div>
@@ -202,8 +203,25 @@
       </div>
       <div class="between-foot">
         <button class="btn btn-ghost" id="btn-quit">Leave the office</button>
+        <button class="btn btn-ghost" data-board>🏆 Leaderboard</button>
         <button class="btn btn-big" id="btn-next-round">Next round →</button>
       </div>
+    </div>
+  </div>
+
+  <div id="overlay-board" class="overlay">
+    <div class="modal board">
+      <div class="board-head">
+        <div class="board-tabs">
+          <button class="board-tab active" data-tab="leaders">🏆 Leaderboard</button>
+          <button class="board-tab" data-tab="shame">🧾 Hall of Shame</button>
+        </div>
+        <label class="board-name">Your name <input id="player-name" maxlength="16" spellcheck="false" autocomplete="off"></label>
+      </div>
+      <div class="board-source" id="board-source"></div>
+      <div class="board-pane" id="board-leaders"></div>
+      <div class="board-pane" id="board-shame" hidden></div>
+      <div class="between-foot"><span class="fineprint" id="board-foot"></span><button class="btn btn-big" data-close>Back</button></div>
     </div>
   </div>
 
