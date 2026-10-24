@@ -10,6 +10,8 @@ import copy
 import math
 
 MAX_PLAYERS = 4
+# shirt colours: Customize's swatches (customize.js SHIRTS), in the order new players get them; no two players alike
+SHIRTS = ("#e0352b", "#2f6fd6", "#3fae6a", "#7a5cff", "#f4a63a", "#1f8a8a", "#e75aa3", "#ffd23f", "#3a3a40", "#f4f4f4")
 DESKS = (1, 2, 3, 4)  # world.js's four cubicles
 SILENCE_S = 120  # drop a player who has sent nothing for this long (clients ping every 5 s)
 MEMORY_KEEP = 40  # Gus remembers the last 40 orders that fooled him (game.js saveBrain)
@@ -76,9 +78,9 @@ def clean_signature(sig):
 
 
 class Player:
-    def __init__(self, pid: int, name: str, look: dict, local: bool, desk: int, color: int, now: float):
+    def __init__(self, pid: int, name: str, look: dict, local: bool, desk: int, color: str, now: float):
         self.id, self.name, self.look, self.local, self.desk = pid, name, look, local, desk
-        self.color = color  # 0-3: their shirt colour in the room (lan.js COLORS), never the same as anyone else's
+        self.color = color  # their shirt in the room, one of SHIRTS, never the same as anyone else's
         self.state = None  # [x, z, ry, sp, flags] once they send one; flags: 1 seated, 2 carrying, 4 clocked in
         self.money = self.patches = self.round = 0
         self.seen = now
@@ -123,9 +125,10 @@ class Room:
         pid, self._next = self._next, self._next + 1
         taken = {p.desk for p in self.players.values()}
         desk = min(d for d in DESKS if d not in taken)
-        used = {p.color for p in self.players.values()}
-        color = min(c for c in range(MAX_PLAYERS) if c not in used)
-        self.players[pid] = Player(pid, text(name, 16) or f"Forger {pid}", clean_look(look), bool(local), desk, color, now)
+        look, used = clean_look(look), {p.color for p in self.players.values()}
+        want = look.get("shirt")  # the shirt they picked in Customize, if nobody here wears it yet
+        color = want if want in SHIRTS and want not in used else next(c for c in SHIRTS if c not in used)
+        self.players[pid] = Player(pid, text(name, 16) or f"Forger {pid}", look, bool(local), desk, color, now)
         welcome = {**self.roster(), "t": "welcome", "id": pid, "desk": desk, "share": share or self.share, "max": MAX_PLAYERS,
                    "brains": {str(level): copy.deepcopy(b) for level, b in self.brains.items()}}
         return pid, self._out(([pid], welcome), (self.ids(but=pid), self.roster()))
@@ -182,7 +185,14 @@ class Room:
         return self._out((self.ids(), self.roster()))
 
     def _on_look(self, p: Player, m: dict):
-        p.look = clean_look(m.get("look"))
+        """A new look from Customize. A new shirt colour is theirs if nobody else wears it."""
+        before, p.look = p.look.get("shirt"), clean_look(m.get("look"))
+        want = p.look.get("shirt")
+        holder = next((q for q in self.players.values() if q.color == want and q is not p), None)
+        if want in SHIRTS and holder is None:
+            p.color = want
+        elif holder is not None and want != before:  # they just picked someone else's colour: only they hear why not
+            return self._out((self.ids(but=p.id), self.roster()), ([p.id], {**self.roster(), "shirtTaken": holder.name}))
         return self._out((self.ids(), self.roster()))
 
     def _on_score(self, p: Player, m: dict):

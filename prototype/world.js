@@ -1886,7 +1886,8 @@ addEventListener("mouseup", e => P.keys.delete("Mouse" + e.button));
 
 // Esc while the mouse is captured: the browser releases it and swallows the key, so open the menu here
 document.addEventListener("pointerlockchange", () => {
-  if (!document.pointerLockElement && P.started && !P.seated && !P.paused && !ForgedMenu.isOpen()) ForgedMenu.open("pause");
+  const editing = window.ForgedCustomizer && window.ForgedCustomizer.isOpen(); // the character editor frees the mouse itself
+  if (!document.pointerLockElement && P.started && !P.seated && !P.paused && !editing && !ForgedMenu.isOpen()) ForgedMenu.open("pause");
 });
 
 // some browsers (and embedded previews) refuse pointer lock: that's fine, drag-to-look still works

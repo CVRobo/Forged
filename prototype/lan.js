@@ -20,9 +20,12 @@ const param = k => { try { return new URLSearchParams(location.search).get(k); }
 const API = param("api") || ""; // with a server, the server shares Gus and this file leaves him alone
 const NAME_KEY = "forged-player"; // the leaderboard name, shared with menu.js and game.js
 const SEND_MS = 100, PING_MS = 5000, MAX = 4;
-// the room gives everyone their own colour (lan_room.py), worn as the shirt and the name tag: red, blue, green, purple
-const COLORS = ["#e0352b", "#2f6fd6", "#1d9a4b", "#8e44ad"];
-const colorOf = p => COLORS[p && p.color] || COLORS[0];
+// everyone in a room wears their own shirt colour (lan_room.py SHIRTS, Customize's swatches), on the name tag too
+const SHIRT_NAMES = { "#e0352b": "red", "#2f6fd6": "blue", "#3fae6a": "green", "#7a5cff": "purple", "#f4a63a": "orange",
+  "#1f8a8a": "teal", "#e75aa3": "pink", "#ffd23f": "yellow", "#3a3a40": "charcoal", "#f4f4f4": "white" };
+const colorOf = p => p && SHIRT_NAMES[p.color] ? p.color : "#e0352b";
+const TAG_SHADE = { "#ffd23f": "#a87b00", "#f4f4f4": "#6e6e6e" }; // white letters need a darker tag on light shirts
+const tagOf = p => TAG_SHADE[colorOf(p)] || colorOf(p);
 const FRESH_BRAIN = { version: 1, learned: {}, memory: [] };
 // a private address means a LAN game; a public one (a hosting service or a tunnel) is an online game
 const ON_LAN = !location.hostname || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$|^\[?::1\]?$/.test(location.hostname);
@@ -87,7 +90,7 @@ function renderLobby() {
   const owner = lan.players.find(p => p.id === lan.owner);
   $("#lan-status").textContent = inRoom() ? `${lan.players.length}/${MAX} here` : STATUS[lan.status] || "";
   $("#lan-list").innerHTML = !inRoom() ? "" : lan.players.map(p => `
-    <li style="--color:${colorOf(p)}"><span class="lan-desk">${p.desk}</span>
+    <li style="--color:${tagOf(p)}"><span class="lan-desk">${p.desk}</span>
       <span class="lan-who">${esc(p.name)}${p.id === lan.owner ? " 👑" : ""}${p.id === lan.id ? " <i>(you)</i>" : ""}</span>
       <span class="lan-where">${p.started ? "in the office" : "at the door"}</span></li>`).join("");
   $("#lan-note").innerHTML = inRoom()
@@ -186,6 +189,7 @@ function applyRoster(m) {
   lan.ready = true;
   syncDesks(m);
   wearMyColor();
+  if (m.shirtTaken) FW.wtoast(`${m.shirtTaken} already wears that shirt: you're still in ${SHIRT_NAMES[colorOf(me())]}`, "bad");
   setBossAuthority(first, wasOwner);
   ForgedMenu.setRoom(lan.players);
   renderLobby(); renderChip();
@@ -226,7 +230,7 @@ const wornLook = p => Object.assign({}, FW.DEFAULT_LOOK, p.look || {}, { shirt: 
 const lookKey = p => JSON.stringify(p.look || {}) + colorOf(p);
 function makeAvatar(p) {
   const L = wornLook(p);
-  const ch = FW.makeChar({ shirt: L.shirt, pants: L.pants, skin: L.skin, tie: L.tie, name: p.name, tagColor: colorOf(p),
+  const ch = FW.makeChar({ shirt: L.shirt, pants: L.pants, skin: L.skin, tie: L.tie, name: p.name, tagColor: tagOf(p),
     look: { hair: L.hair, hairColor: L.hairColor, brows: L.brows, mouth: L.mouth, nose: L.nose, glasses: L.glasses, earrings: L.earrings, mustache: L.mustache } });
   ch.g.visible = false;
   const env = FW.box(.5, .03, .32, envMat, 0, -.74, .16, ch.armR);
@@ -235,7 +239,7 @@ function makeAvatar(p) {
 }
 function syncAvatar(a, p) {
   if (lookKey(p) !== a.look) { a.look = lookKey(p); FW.restyleChar(a.ch, wornLook(p)); }
-  if (p.name !== a.name || colorOf(p) !== a.color) { a.name = p.name; a.color = colorOf(p); FW.setTag(a.ch, p.name, a.color); }
+  if (p.name !== a.name || colorOf(p) !== a.color) { a.name = p.name; a.color = colorOf(p); FW.setTag(a.ch, p.name, tagOf(p)); }
 }
 // you wear your room colour too: on screen only, your saved look in Customize is left alone
 let wornKey = "";
@@ -426,6 +430,9 @@ window.forgedLan = {
   state: () => ({ status: lan.status, id: lan.id, owner: lan.owner, desk: FW.MY_DESK.n, bossRemote: B.remote,
     players: lan.players.map(p => `${p.desk}:${p.name}${p.started ? "*" : ""}`), avatars: avatars.size, brains: lan.brains }),
   leave: () => leaveRoom("left"),
+  // Customize (customize.js) shows the shirt you wear in the room and the ones other players already wear
+  shirts: () => inRoom() ? { mine: colorOf(me()),
+    taken: Object.fromEntries(lan.players.filter(p => p.id !== lan.id).map(p => [colorOf(p), p.name])) } : null,
 };
 renderLobby();
 if (param("lan") !== null) { showPanel(true); connect(); }

@@ -63,6 +63,7 @@ Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Cont
 
 **What's shared:**
 - **The office.** You see everyone walking, sitting at their desks and carrying their order slips, in their own look from Customize. Desks go in join order, and **E** takes any free desk. A coworker steps away while a player has their desk.
+- **Shirts.** Everyone wears their own shirt colour, on their name tag too. You keep the shirt you picked in Customize if nobody here wears it yet. Otherwise new players get red, blue, green or purple. In a room, Customize fades the colours others wear, and a free one you pick reaches everyone within a second. Your saved look is only changed by Customize itself.
 - **The boss.** The owner's game walks him and rolls the fire drills, and everyone else's game follows. When he catches anyone with a slip, he stops on every screen.
 - **Gus.** There's one Gus per shop for the whole room, and he learns from everyone's wins. A trick someone else got away with gets you caught, and his version goes up for everyone. Your own saved Gus is left alone and comes back when you leave.
 - **Verdicts and standings.** Every verdict gets the inspector's stamp, a corkboard pin, a TV point and a toast for everyone. Hold **Tab** for the room's standings.

@@ -43,10 +43,15 @@ def test_desks_follow_join_order_and_free_ones_can_be_taken():
     b, _ = room.join("B", {}, False)
     c, _ = room.join("C", {}, False)
     assert [room.players[p].desk for p in (a, b, c)] == [1, 2, 3]
-    assert [room.players[p].color for p in (a, b, c)] == [0, 1, 2]  # everyone wears a different shirt
+    red, blue, green, yellow = "#e0352b", "#2f6fd6", "#3fae6a", "#ffd23f"
+    assert [room.players[p].color for p in (a, b, c)] == [red, blue, green]  # everyone wears a different shirt
     room.leave(b)
     d, _ = room.join("D", {}, False)
-    assert (room.players[d].desk, room.players[d].color) == (2, 1)  # the lowest free desk and colour
+    assert (room.players[d].desk, room.players[d].color) == (2, blue)  # the lowest free desk and colour
+    out = room.handle(c, {"t": "look", "look": {"shirt": red}})  # A's colour (picked in Customize): refused
+    assert room.players[c].color == green and [m.get("shirtTaken") for _, m in out] == [None, "A"]
+    room.handle(c, {"t": "look", "look": {"shirt": yellow}})  # a free one: theirs
+    assert room.players[c].color == yellow
     out = room.handle(c, {"t": "desk", "n": 1})  # A's: refused, and only C hears back
     assert room.players[c].desk == 3 and [pids for pids, _ in out] == [[c]]
     room.handle(c, {"t": "desk", "n": 4})
