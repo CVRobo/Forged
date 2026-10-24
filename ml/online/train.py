@@ -11,6 +11,7 @@ Humans then teach it the rest (retrain.py).
 """
 from __future__ import annotations
 
+import shutil
 import time
 
 import numpy as np
@@ -22,6 +23,19 @@ from ml.online import model as M
 
 SIM = {"players": (1200, 7), "honest": (3000, 11)}
 GAME_FRAUD_SHARE = 0.08  # the simulated attacks weigh as much as 8 % fraud among game-format orders, like the real online segment
+
+
+def can_retrain() -> tuple[bool, str]:
+    """Whether this machine has what training needs, and if not, what's missing: the Kaggle
+    files (or their cache) and Node for the simulated shoppers (or theirs)."""
+    real = (F.DATA_DIR / "real_identity.pkl").exists() or all(
+        (F.DATA_DIR / f).exists() for f in ("train_transaction.csv", "train_identity.csv"))
+    if not real:
+        return False, "the Kaggle files (train_transaction.csv, train_identity.csv) aren't in ml/online/data/"
+    simulated = all((F.DATA_DIR / f"simulated_{kind}_{n}_{seed}.jsonl").exists() for kind, (n, seed) in SIM.items())
+    if not simulated and shutil.which("node") is None:
+        return False, "Node isn't installed (the simulated shoppers come from the game's own code)"
+    return True, ""
 
 
 def base() -> dict[str, pd.DataFrame]:

@@ -40,10 +40,17 @@ def family(rows: pd.DataFrame) -> pd.Series:
     return pd.Series([" + ".join(p) for p in zip(account, ship, hide, device)], index=rows.index)
 
 
+def got_through(players: pd.DataFrame) -> pd.Series:
+    """Orders that got past Gus: approved, or approved and then forgotten (the Paper Shredder)."""
+    if "verdict" not in players:
+        return pd.Series(False, index=players.index)
+    return players["verdict"].isin(["APPROVED", "FORGOTTEN"])
+
+
 def report(players: pd.DataFrame) -> dict:
     players = players.reset_index(drop=True)
     players["family"] = family(players)
-    players["through"] = players["verdict"].eq("APPROVED") if "verdict" in players else False
+    players["through"] = got_through(players)
     versions = [r["version"] for r in M.registry() if r.get("promoted")]
     scored = {v: M.load(v) for v in versions}
     raw = {v: scored[v].scores(players) for v in versions}

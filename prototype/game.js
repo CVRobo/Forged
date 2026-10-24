@@ -128,7 +128,7 @@ const INSPECTOR_STAGES = [
 
 /* which blank of the plan to circle in the forensic replay, per tell */
 const TELL_REGION = {
-  email_risky: "you", email_mismatch: "you", yahoo: "you", name_mismatch: "you", odd_domain: "you", new_device: "device", device_reuse: "device",
+  email_risky: "you", email_mismatch: "you", yahoo: "you", name_mismatch: "you", odd_domain: "you", new_account: "you", new_device: "device", device_reuse: "device",
   emulator: "device", device_mobile: "device", ip_far: "where", proxy: "where", far_ship: "ship", new_address: "ship",
   gift_card: "cart", amount_unusual: "cart", copycat: "cart", amount_jump: "when", velocity: "when", night: "when", friday: "when",
   new_card: "card", foreign_card: "card",
