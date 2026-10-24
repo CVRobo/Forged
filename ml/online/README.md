@@ -71,6 +71,8 @@ ml/.venv/Scripts/python -m ml.online.briefing --html   # writes report.js
 
 Then open `ml/online/report.html` (any static server, e.g. `python -m http.server`). It shows the live model's real-world performance, the attacks players found, and the AI analyst's briefing. Set `ANTHROPIC_API_KEY` to have Claude write the briefing; without it, a template built from the same numbers is used. A sample `report.js` is committed so the page renders out of the box.
 
+The game has its own judge-facing panel too: the office's DETECTOR LIVE TV and `prototype/learning.html` show each version's catch rates and the gate's verdicts. It reads a copy of `models/versions.json`, so refresh it after a retrain (`prototype/README.md`, "Gus is learning").
+
 **Day-by-day evaluation** (`python -m ml.online.evaluate`) measures the model the way a fraud team does: on days it never trained on, reviewing a fixed number of alerts per day. v1 finds about 43 real frauds per 100 alerts and catches ~80% of each day's fraud. This is the chart's data, one line per version, so you can see whether learning from players helped or (when the gate rejects a version) would have hurt.
 
 ## Setup

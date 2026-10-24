@@ -17,6 +17,7 @@ Then open http://localhost:8765. `serve.py` is a plain static server with browse
 | `orders.js` | The online-order content (shops, stolen cards, ranks), the parsers that read the typed checkout, the IEEE-CIS row builder and the scripted Gus. Loaded before `game.js` |
 | `serve.py`, `lan_room.py`, `lan_ws.py` | The local server (caching off), which also hosts LAN games: the room's rules and a standard-library WebSocket |
 | `lan.js`, `lan.css` | LAN multiplayer in the office: the lobby on the Clock in card, the other players, the shared boss and Gus |
+| `learning.js`, `learning.css`, `learning.html`, `gus-versions.json` | "Gus is learning": the real fraud model's versions, opened from the DETECTOR LIVE TV, the Clock in card or as its own page |
 
 ## How a round plays
 
@@ -97,6 +98,24 @@ Use this when the Wi-Fi won't let laptops reach each other, which is common on v
 
 - There is one room of 4 for everyone with the link.
 - On Render's free plan the service sleeps after 15 idle minutes. Waking it takes about a minute and starts an empty room.
+
+## Gus is learning (the real model, version by version)
+
+A panel for showing people that the fraud model learns: walk up to the **DETECTOR LIVE** TV on the office's east wall and press **E**, or press **📈 How Gus learns** on the Clock in card. It pauses the office like the Game Menu; Esc closes it. The same panel is a page of its own at `/learning.html`, locally and on the hosted link.
+
+- **The current version:** the share of held-out attack orders it catches, and real fraud caught and honest customers blocked next to v1's and the gate's limits.
+- **One row per retrain:** attack orders caught by the version before and the retrained one, on the orders held out from that retrain (the gate's own before-and-after). Each retrain holds out its own orders, so the rows aren't joined into one line.
+- **What the gate protects:** real fraud caught and honest customers blocked for every version, on the same real transactions, each version marked promoted, pushed live by hand or rejected, with how many attack orders it trained on.
+- **Honest about precision:** at about 1 fraud in 1,000 orders, under 2% of the orders Gus blocks are fraud. The panel says so.
+- **Where the attack orders came from:** none from people yet. v2's came from the red-team search (`ml/online/robustness.py harden`), v3's and v4's from simulated careful players. `versions.json` calls them all player orders, so `ATTACKERS` in `learning.js` names the source; add a line there when a retrain learns from anything but players.
+
+The numbers come from `gus-versions.json`, a copy of `ml/online/models/versions.json`. A copy, because `serve.py` only serves this folder, and the game-only image (`prototype/Dockerfile`) has nothing else. The full image has `ml/` too, but it never retrains (no Kaggle data there), so the copy and the registry can't drift apart on the hosted link. After a retrain adds a version, refresh it (from the repo root):
+
+```
+cp ml/online/models/versions.json prototype/gus-versions.json
+```
+
+`python3 -m pytest prototype/tests/test_learning.py -q` fails while the copy is stale.
 
 ## How the two halves talk
 
