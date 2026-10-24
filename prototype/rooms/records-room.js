@@ -177,18 +177,19 @@ safe(() => {
 const lamp = { light: null, bulb: null, nextFlicker: 0, until: 0, onCol: new THREE.Color("#fff3c4"), offCol: new THREE.Color("#6b604a") };
 safe(() => {
   const g = new THREE.Group(); g.position.set(17.6, 0, 5.6); scene.add(g);
-  cyl(.015, .015, .5, ink, 0, 2.95, 0, g);
+  cyl(.015, .015, .5, ink, 0, 2.95, 0, g).castShadow = false; // the lamp is the light: its cord and shade cast no shadow
   const shadeMat = M("#2e5d4f");
-  const shadeM = cyl(.12, .42, .26, shadeMat, 0, 2.6, 0, g);
+  const shadeM = cyl(.12, .42, .26, shadeMat, 0, 2.6, 0, g); shadeM.castShadow = false;
   shadeM.material.side = THREE.DoubleSide;
   lamp.bulb = FW.sphere(.1, new THREE.MeshBasicMaterial({ color: "#fff3c4" }), 0, 2.46, 0, g);
-  lamp.light = new THREE.PointLight("#ffdca0", .9, 10, 1.6); lamp.light.position.set(0, 2.35, 0); g.add(lamp.light);
+  lamp.light = new THREE.PointLight("#ffdca0", 1.25, 5, 1.6); // reach stops at the room's west wall (4.6 m), so no glow leaks into the office
+  lamp.light.position.set(0, 2.35, 0); g.add(lamp.light);
 });
 function updateLamp(now) {
   if (!lamp.light) return;
   if (now > lamp.nextFlicker) { lamp.until = now + FW.rand(300, 900); lamp.nextFlicker = now + FW.rand(2500, 7000); }
   const on = now > lamp.until || Math.random() > .45;
-  lamp.light.intensity = on ? .9 : .12;
+  lamp.light.intensity = on ? 1.25 : .15;
   lamp.bulb.material.color.copy(on ? lamp.onCol : lamp.offCol);
 }
 

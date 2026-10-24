@@ -1,0 +1,26 @@
+/* LAN game (lan.js): the button and lobby on the Clock in card, and the chip under the HUD */
+#start .start-card { max-height: calc(100vh - 40px); overflow-y: auto; }
+#start .start-card.lan-open > p, #start .start-card.lan-open > ol { display: none; } /* room for the lobby */
+#btn-lan { display: block; margin: 10px auto 0; font: 700 15px var(--ui); color: var(--ink); background: #fff; border: 3px solid var(--ink);
+  border-radius: 10px; box-shadow: 3px 3px 0 var(--ink); padding: 6px 16px; cursor: pointer; }
+#btn-lan:hover { background: #f9dfb0; }
+#lan-panel { display: none; margin: 14px auto 0; max-width: 460px; text-align: left; background: #fff; border: 3px solid var(--ink);
+  border-radius: 12px; box-shadow: 4px 4px 0 var(--ink); padding: 12px 14px; }
+#lan-panel.show { display: block; }
+.lan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 15px; }
+#lan-status { font-size: 13px; opacity: .75; text-align: right; }
+.lan-name { display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; font-size: 14px; }
+.lan-name input { flex: 1; min-width: 0; font: 700 14px var(--ui); color: var(--ink); padding: 4px 8px; border: 2px solid var(--ink); border-radius: 6px; }
+#lan-list { list-style: none; margin: 0; padding: 0; }
+#lan-list li { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 14px; border-top: 1px dashed rgba(43, 29, 20, .25); }
+.lan-desk { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border: 2px solid var(--ink); border-radius: 6px;
+  background: var(--color); color: #fff; font-weight: 700; font-size: 12px; }
+.lan-who { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.lan-where { font-size: 12px; opacity: .65; white-space: nowrap; }
+#lan-note { font-size: 12px; line-height: 1.5; margin-top: 8px; }
+#lan-note b, #lan-note code { overflow-wrap: anywhere; }
+#lan-leave { margin-top: 10px; font: 700 13px var(--ui); color: var(--ink); background: #fff; border: 2px solid var(--ink); border-radius: 8px;
+  padding: 4px 12px; cursor: pointer; }
+#lan-leave:hover { background: #f9dfb0; }
+#lan-chip { font-size: 13px; width: fit-content; }
+.lan-dot { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border: 2px solid var(--ink); border-radius: 50%; vertical-align: -1px; }

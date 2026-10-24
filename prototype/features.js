@@ -512,7 +512,8 @@ function updateDrill(dt, now) {
   if (!drill.active) {
     if (now > drill.nextAt) {
       drill.nextAt = now + 1000;                           // re-check every second
-      if (P.started && !P.seated && !FW.CINE.active && !phone.busy && NPCS.every(n => n.mode === "seated") && Math.random() < 1 / 45) startDrill(now);
+      // in a LAN game only the owner, who walks the boss, rolls for a drill; lan.js starts it everywhere else
+      if (P.started && !P.seated && !B.remote && !FW.CINE.active && !phone.busy && NPCS.every(n => n.mode === "seated") && Math.random() < 1 / 45) startDrill(now);
     }
     return;
   }

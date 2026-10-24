@@ -17,6 +17,37 @@ The fraud model behind the typed checkout. It starts from the real IEEE-CIS data
 | `robustness.py` | Red-teams the project's own model to harden it: searches the game's checkout answers for orders Gus misses, then retrains on them (through the gate). |
 | `rows.js` | Batch converter: turns a list of typed checkouts into scored rows via the game's own code, for the robustness search. |
 | `probe.js` | Turns hand-written checkouts into rows, to test specific tricks. |
+| `crs.py` + `crs_personas.json` | The CRS identity check: two model inputs from the CRS Credit API (sandbox), see below. |
+| `crs_ablation.py` | The same retrain with and without the CRS inputs, to measure what they add. |
+
+## The CRS identity check (`crs.py`)
+
+Gus asks [CRS](https://calhacks.crscreditapi.com) who the buyer is, and uses the answers as two model inputs (v3 onward):
+
+- **`crs_idv`**: TransUnion TruValidate on the cardholder (name, SSN, DOB, address): `PASS`, `FAIL` (deceased, synthetic, an SSN issued to someone else) or `STEP_UP` (a fraud alert on file).
+- **`crs_risk`**: AtData Fraud Finder (0-100) on what the checkout presents: the buyer's email and name against the cardholder's phone and billing address.
+
+Every victim in the game is a CRS sandbox persona (`crs_personas.json`, all fake people). Five verify cleanly, one has a fraud alert, and three are ghost identities whose cards are for sale but who never shop themselves. Rows name their victim and buyer (`crs_id`, `buyer_email`, `buyer_name`, `buyer_is_holder`), and `features.frame` asks CRS for any row that does.
+
+**Where the answers come from.** With `CRS_USERNAME` and `CRS_PASSWORD` in the repo's `.env`, from the CRS sandbox. Login happens once per process and is never retried, because CRS locks accounts after failed logins. Every answer is kept in `crs_cache.json`, which is committed (fake people and made-up emails only), so a machine without the keys, or the deployed game, gets the same answers training saw. An identity the sandbox was never asked about, without keys, gets an offline mirror of how the sandbox answers: the persona's own login and name get its published score, its login under another name gets 100, and any other email gets what the sandbox gave that provider on average (about 90). `FORGED_CRS=off` forces cache and mirror.
+
+How the sandbox answers matters: a persona's exact request gets CRS's prepared answer, and anything else goes to the real vendor (AtData), which can't vouch for a made-up address and scores it 80-100, or returns no score for one it can't deliver to (we count that as 100). So the honest customer on their own login scores low, and every other mailbox scores high, honest or not. Weighted by how often each happens, honest shoppers average 43 and attackers 81.
+
+**What's real and what isn't.** The real IEEE-CIS rows predate CRS, so their CRS inputs are blank: the model learns the inputs' weight only from game-format rows (simulated shoppers and players). That ghost identities never shop honestly is our simulation's assumption, which is why the model treats an identity that fails CRS as near-certain fraud.
+
+**What it adds** (`python -m ml.online.crs_ablation`: the same retrain from v2, same rows and weights, live sandbox answers, tested on 841 held-out simulated careful-player orders):
+
+| | without CRS | with CRS |
+| --- | --- | --- |
+| Honest game shoppers blocked | 4.2% | **2.9%** |
+| Real fraud caught / real customers blocked | 64.4% / 3.6% | 64.0% / 3.6% |
+| Attacks caught, ghost identities (285) | 98.3% | **100%** |
+| Attacks caught, fraud-alert victim (82) | 96.3% | **97.6%** |
+| Attacks caught, clean victims (474) | 98.3% | 97.5% |
+
+So the identity check mostly makes Gus fairer to honest shoppers and closes stolen-identity fraud. It can't help with account takeover on a clean identity: the identity is the victim's, and it verifies. In the game, an order on a ghost identity that v2 let through (score 0.23, cut 0.25) is flagged by v4 at 0.999 with "CRS says that identity doesn't check out" as the top reason.
+
+**v3 and v4.** v3 was trained on a first offline guess at the sandbox's answers. On the live answers it would block 28% of honest game shoppers, so v4 retrained it on the live answers (2.0%). v4 catches the same held-out attacks within one order (97.2% vs 97.3%), which the gate's strictly-better check rejects, so v4 was promoted by hand; `versions.json` records it as `forced` with the reason.
 
 ## Adversarial robustness (`robustness.py`)
 
@@ -40,35 +71,52 @@ ml/.venv/Scripts/python -m ml.online.briefing --html   # writes report.js
 
 Then open `ml/online/report.html` (any static server, e.g. `python -m http.server`). It shows the live model's real-world performance, the attacks players found, and the AI analyst's briefing. Set `ANTHROPIC_API_KEY` to have Claude write the briefing; without it, a template built from the same numbers is used. A sample `report.js` is committed so the page renders out of the box.
 
+The game has its own judge-facing panel too: the office's DETECTOR LIVE TV and `prototype/learning.html` show each version's catch rates and the gate's verdicts. It reads a copy of `models/versions.json`, so refresh it after a retrain (`prototype/README.md`, "Gus is learning").
+
 **Day-by-day evaluation** (`python -m ml.online.evaluate`) measures the model the way a fraud team does: on days it never trained on, reviewing a fixed number of alerts per day. v1 finds about 43 real frauds per 100 alerts and catches ~80% of each day's fraud. This is the chart's data, one line per version, so you can see whether learning from players helped or (when the gate rejects a version) would have hurt.
 
 ## Setup
 
 **A trained `v1` ships in the repo** (`models/v1.joblib`), so a fresh clone runs the real model — judging orders and powering the checkout's gut feeling — without the Kaggle download. You only need the dataset to **retrain** or rebuild from scratch.
 
-Run it (Python 3.10–3.14):
+Two environments, depending on what you do:
+
+- **Serve the shipped model** (play the game): Python 3.10+, `server/requirements.txt`. The scores are identical to the pinned training environment's.
+- **Train, retrain, run the tests and tools**: Python 3.11+ (the pins in `ml/online/requirements.txt` include pandas 3).
 
 ```bash
-python -m venv ml/.venv
-ml/.venv/Scripts/python -m pip install -r ml/online/requirements.txt
-USE_STUBS=true ml/.venv/Scripts/python -m uvicorn server.main:app --port 8000
+uv venv ml/.venv --python 3.12        # or: python3.12 -m venv ml/.venv
+uv pip install --python ml/.venv/bin/python -r ml/online/requirements.txt
+USE_STUBS=true ml/.venv/bin/python -m uvicorn server.main:app --port 8000
 ```
 
-Then serve the game and open it against the API (from `prototype/`, `python serve.py`, then `http://localhost:8765/?api=http://localhost:8000`).
+(On Windows the interpreter is `ml/.venv/Scripts/python`.) Then serve the game and open it against the API (from `prototype/`, `python serve.py`, then `http://localhost:8765/?api=http://localhost:8000`). `USE_STUBS=true` needs no Redis: the online checkout always uses the real model. With `USE_STUBS=false`, Redis must be running (`docker compose up -d`).
 
-To **rebuild or retrain** the model, put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account), then `ml/.venv/Scripts/python -m ml.online.train`. Node is needed for the simulators (`simulate.js`).
+**On a Mac, no Homebrew libomp is needed.** LightGBM's macOS wheels look for OpenMP where Homebrew puts it (`/opt/homebrew/opt/libomp`). When it isn't there, `lgbm.py` loads a renamed copy of the one scikit-learn ships, made once inside the virtualenv. On Linux, install `libgomp1`.
+
+**Check it's live:** `GET /health` reports `model`: the live version, the reason if the model is off (and the game is on the browser's scripted Gus), and whether this machine can retrain (`learning`, `why_not_learning`, `wins_waiting`).
+
+To **rebuild or retrain** the model, put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account), then `ml/.venv/bin/python -m ml.online.train`. Node is needed for the simulators (`simulate.js`). Without the files, the server still judges every order, but Gus can't learn: the wins wait, and the server says why once (and in `/health`). Kaggle's `test_transaction.csv` and `test_identity.csv` don't count: they have no `isFraud` labels.
 
 ## Tests
 
 The unit tests need neither the Kaggle dataset nor a trained model, so they run fast:
 
 ```bash
-PYTHONPATH=. ml/.venv/Scripts/python -m pytest ml/online/tests -q
+PYTHONPATH=. ml/.venv/bin/python -m pytest ml/online/tests server/tests -q
 ```
 
-They cover feature framing and encoding (unknown categories → `other`, rare values dropped), the time-ordered split and the rank thresholds, the attack-family labelling, the per-player cap and the simulated-attack weighting, and — when Node is installed — that the game's own row builder produces well-formed fraud rows.
+They cover feature framing and encoding (unknown categories → `other`, rare values dropped), the time-ordered split and the rank thresholds, the attack-family labelling, the per-player cap and the simulated-attack weighting, and — when Node is installed — that the game's own row builder produces well-formed fraud rows. `test_tells.py` and `server/tests` also use the shipped model on game orders frozen in `tests/fixtures/orders.json` (rebuilt by `tests/fixtures/make_orders.py`).
 
-`/submit` scores each order with the live version. `/preview` gives the checkout's gut feeling from the same score and threshold (nothing is saved), so the face and the verdict always agree: 😠 means the order would be caught. Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background. Without a trained model the server answers with the browser's scripted Gus.
+## In the game
+
+- **One model, one version.** `/submit` scores each order with the live version. `/preview` gives the checkout's gut feeling from the same score and threshold (nothing is saved), so the face and the verdict always agree: 😠 means the order would be caught. `/round/start` reports the live version too, so Gus's version only goes up when a retrain is promoted, and `/patch-notes` and `/metrics` read what each version learned and how it tested (`models/versions.json`).
+- **The scripted Gus's nudges still count**, in the model's units (4 of his points per unit of log-odds). Heat over 40 adds `(heat - 40) × 0.5` points, and persuasion takes away `0.18` a point. Rank leniency is the model's rank thresholds (below).
+- **The cardholder can report the card** between orders placed days apart (4% a day; never with Patience). The rest of the campaign is then dead.
+- **The Paper Shredder** saves the run's first win after it's bought as `FORGOTTEN`: it pays and counts as got-through in the report, but retraining doesn't weigh it as a blind spot.
+- **The leaked memo tells the truth about the live version.** Its two true rules come from the four tell families the version weighs most (`Version.attention`, the same split gain the patch notes compare). The decoy is one of the scripted Gus's fake rules, about something the model never weighs: phones, Fridays, Yahoo.
+- **Learning.** Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background, on machines that have the data for it (`train.can_retrain`). Without a trained model the server answers with the browser's scripted Gus.
+- **Gus's reasons.** `Version.explain` turns each feature's push toward fraud into the tell the order's own value shows (`model.tell_for`). A drop 4 miles away is `new_address`; "shipped across the ocean" (`far_ship`) is for 100 miles or more. A card's long history isn't `velocity`; more than one order today is. A brand-new account is `new_account`. A push that shows nothing a player would recognize, like a common email or the card's brand, makes no tell.
 
 ## How it learns
 

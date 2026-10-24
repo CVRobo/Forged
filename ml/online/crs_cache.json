@@ -1,0 +1,686 @@
+{
+"idv:{\"city\": \"ATLANTA\", \"dob\": \"1975-12-05\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"ssn\": \"666701007\", \"state\": \"GA\", \"street1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"zip\": \"30341\"}": {
+"value": "PASS"
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcus.bellamy24@gmail.com\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcus.bellamy@example.com\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 12.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"bellamy.family@outlook.com\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"idv:{\"city\": \"ORLANDO\", \"dob\": \"1988-09-09\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"ssn\": \"666701005\", \"state\": \"FL\", \"street1\": \"7031 SUNSET RIDGE RD\", \"zip\": \"32819\"}": {
+"value": "PASS"
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"rickydalton@icloud.com\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"ricky.dalton@example.com\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 52.0
+},
+"idv:{\"city\": \"COLUMBUS\", \"dob\": \"1979-04-18\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"ssn\": \"666701006\", \"state\": \"OH\", \"street1\": \"960 MAPLEWOOD AVE\", \"zip\": \"43209\"}": {
+"value": "PASS"
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey@example.com\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 12.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angelamorrissey@icloud.com\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 29.0
+},
+"idv:{\"city\": \"AUSTIN\", \"dob\": \"1972-11-02\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"ssn\": \"666701002\", \"state\": \"TX\", \"street1\": \"88 LAKESHORE BLVD\", \"zip\": \"78746\"}": {
+"value": "PASS"
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"danielwhitfield@icloud.com\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"daniel.whitfield@example.com\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 9.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcusbellamy@icloud.com\", \"firstName\": \"M.\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 87.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"danielwhitfield@icloud.com\", \"firstName\": \"D.\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 88.0
+},
+"idv:{\"city\": \"DALLAS\", \"dob\": \"1987-11-20\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"ssn\": \"666701017\", \"state\": \"TX\", \"street1\": \"4400 N CENTRAL EXPY STE 100\", \"zip\": \"75206\"}": {
+"value": "PASS"
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elenacastellanos@icloud.com\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 85.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"castellanos.family@outlook.com\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elena.castellanos@example.com\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 11.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"morrissey.family@outlook.com\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 47.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"ricky.dalton84@gmail.com\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 67.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"dalton.family@outlook.com\", \"firstName\": \"R.\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"whitfield.family@outlook.com\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"ricky.dalton84@gmail.com\", \"firstName\": \"R.\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 67.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"daniel.whitfield55@gmail.com\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 31.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elena.castellanos60@gmail.com\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"daniel.whitfield55@gmail.com\", \"firstName\": \"D.\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 31.0
+},
+"idv:{\"city\": \"MIAMI\", \"dob\": \"1977-06-12\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"ssn\": \"666701016\", \"state\": \"FL\", \"street1\": \"1200 BRICKELL BAY DR APT 2203\", \"zip\": \"33131\"}": {
+"value": "STEP_UP"
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuel.oyelaran@example.com\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 50.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samueloyelaran@icloud.com\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 65.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuel.oyelaran84@gmail.com\", \"firstName\": \"S.\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"dalton.family@outlook.com\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"castellanos.family@outlook.com\", \"firstName\": \"E.\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"morrissey.family@outlook.com\", \"firstName\": \"A.\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 47.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"oyelaran.family@outlook.com\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"oyelaran.family@outlook.com\", \"firstName\": \"S.\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcusbellamy@icloud.com\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 87.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcus.bellamy24@gmail.com\", \"firstName\": \"M.\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey29@gmail.com\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey29@gmail.com\", \"firstName\": \"A.\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuel.oyelaran84@gmail.com\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samueloyelaran@icloud.com\", \"firstName\": \"S.\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 65.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elenacastellanos@icloud.com\", \"firstName\": \"E.\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 85.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"bellamy.family@outlook.com\", \"firstName\": \"M.\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"rickydalton@icloud.com\", \"firstName\": \"R.\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elena.castellanos60@gmail.com\", \"firstName\": \"E.\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"whitfield.family@outlook.com\", \"firstName\": \"D.\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angelamorrissey@icloud.com\", \"firstName\": \"A.\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 31.0
+},
+"idv:{\"city\": \"KNOXVILLE\", \"dob\": \"1999-12-24\", \"firstName\": \"KAYLA\", \"lastName\": \"BRENNAN\", \"ssn\": \"666701013\", \"state\": \"TN\", \"street1\": \"9021 KINGSTON PIKE\", \"zip\": \"37923\"}": {
+"value": "FAIL"
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"brennan.family@outlook.com\", \"firstName\": \"KAYLA\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101006\"}": {
+"value": 97.0
+},
+"idv:{\"city\": \"NEW YORK\", \"dob\": \"1968-08-08\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"ssn\": \"666701012\", \"state\": \"NY\", \"street1\": \"55 WATER ST FL 20\", \"zip\": \"10041\"}": {
+"value": "FAIL"
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"victor.anand45@gmail.com\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"deals4u_330@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"anand.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101012\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"x325@mail.ru\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 97.0
+},
+"idv:{\"city\": \"DAYTON\", \"dob\": \"1948-01-19\", \"firstName\": \"HAROLD\", \"lastName\": \"PETTIGREW\", \"ssn\": \"666701014\", \"state\": \"OH\", \"street1\": \"310 ELM ST\", \"zip\": \"45402\"}": {
+"value": "FAIL"
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"harold.pettigrew29@gmail.com\", \"firstName\": \"HAROLD\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"harold.pettigrew29@gmail.com\", \"firstName\": \"H.\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"harold.pettigrew29@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101014\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101016\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"daniel.whitfield55@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101002\"}": {
+"value": 31.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"ricky.dalton84@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101005\"}": {
+"value": 67.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"pettigrew.family@outlook.com\", \"firstName\": \"HAROLD\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuel.oyelaran84@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101016\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"rickyd@protonmail.com\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"HAROLD\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 86.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"ricky.dalton84@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101005\"}": {
+"value": 67.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"oyelaran.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101016\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kayla.brennan4@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101013\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"R.\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"x330@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"victor.anand45@gmail.com\", \"firstName\": \"V.\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kayla.brennan4@gmail.com\", \"firstName\": \"K.\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"deals4u_204@yahoo.com\", \"firstName\": \"M.\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kb.9921x@example.com\", \"firstName\": \"KAYLA\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"anand.family@outlook.com\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuel.oyelaran84@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101016\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuelo@protonmail.com\", \"firstName\": \"S.\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 4.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"victor.anand45@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101012\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"v.anand.1968@example.com\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 85.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"dalton.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"x204@mail.ru\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"anand.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101012\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"deals4u_299@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101006\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"H.\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 86.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"x325@mail.ru\", \"firstName\": \"D.\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"daniel.whitfield55@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101002\"}": {
+"value": 31.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"deals4u_330@yahoo.com\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"deals4u_299@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101016\"}": {
+"value": 89.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101014\"}": {
+"value": 86.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"x330@mail.ru\", \"firstName\": \"E.\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"pettigrew.family@outlook.com\", \"firstName\": \"H.\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"S.\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 89.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"deals4u_330@yahoo.com\", \"firstName\": \"E.\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kaylab@protonmail.com\", \"firstName\": \"KAYLA\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"x325@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101002\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"pettigrew.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"haroldp@protonmail.com\", \"firstName\": \"HAROLD\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"x325@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101002\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"haroldp@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101014\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"A.\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"deals4u_184@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angelam@protonmail.com\", \"firstName\": \"A.\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 50.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey29@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101006\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"x330@mail.ru\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"x184@mail.ru\", \"firstName\": \"KAYLA\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kayla.brennan4@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101013\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"RICKY\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"harold.pettigrew29@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101014\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elena.castellanos60@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101017\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"anand.family@outlook.com\", \"firstName\": \"V.\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcus.bellamy24@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101007\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"rickyd@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"x184@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"harold.pettigrew@example.com\", \"firstName\": \"HAROLD\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 80.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kayla.brennan4@gmail.com\", \"firstName\": \"KAYLA\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"bellamy.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101016\"}": {
+"value": 89.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elenac@protonmail.com\", \"firstName\": \"ELENA\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angelam@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101006\"}": {
+"value": 50.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101006\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elenac@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"danielw@protonmail.com\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"bellamy.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elena.castellanos60@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101017\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"x204@mail.ru\", \"firstName\": \"M.\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kaylab@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"x315@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101012\"}": {
+"value": 91.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"deals4u_204@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey29@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101006\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"danielw@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101002\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"S.\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcusb@protonmail.com\", \"firstName\": \"M.\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"oyelaran.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101016\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuelo@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101016\"}": {
+"value": 4.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"brennan.family@outlook.com\", \"firstName\": \"K.\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"deals4u_204@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcusb@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"x315@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101012\"}": {
+"value": 91.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"x315@mail.ru\", \"firstName\": \"V.\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 91.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"dalton.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"x184@mail.ru\", \"firstName\": \"K.\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"deals4u_315@yahoo.com\", \"firstName\": \"V.\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcus.bellamy24@gmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101007\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elenac@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"deals4u_299@yahoo.com\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"brennan.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"deals4u_299@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"victora@protonmail.com\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 92.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"x204@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"castellanos.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"danielw@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101002\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcusb@protonmail.com\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"x204@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"brennan.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"deals4u_184@yahoo.com\", \"firstName\": \"K.\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"deals4u_325@yahoo.com\", \"firstName\": \"D.\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"x299@mail.ru\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101014\"}": {
+"value": 86.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"rickyd@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"rickyd@protonmail.com\", \"firstName\": \"R.\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"deals4u_315@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101012\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"castellanos.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"x184@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuelo@protonmail.com\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 4.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"pettigrew.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"deals4u_184@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"deals4u_299@yahoo.com\", \"firstName\": \"H.\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"deals4u_204@yahoo.com\", \"firstName\": \"MARCUS\", \"lastName\": \"BELLAMY\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kaylab@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"R.\", \"lastName\": \"DALTON\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"haroldp@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101014\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"x330@mail.ru\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"victora@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101012\"}": {
+"value": 92.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101016\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elenac@protonmail.com\", \"firstName\": \"E.\", \"lastName\": \"CASTELLANOS\", \"phoneNumber\": \"5550101017\"}": {
+"value": 96.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"deals4u_264@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"x264@mail.ru\", \"firstName\": \"SAMUEL\", \"lastName\": \"OYELARAN\", \"phoneNumber\": \"5550101016\"}": {
+"value": 89.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"whitfield.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"x315@mail.ru\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 91.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"deals4u_330@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"victor.anand45@gmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101012\"}": {
+"value": 98.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"deals4u_299@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101006\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"morrissey.family@outlook.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101006\"}": {
+"value": 47.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kaylab@protonmail.com\", \"firstName\": \"K.\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"deals4u_325@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"whitfield.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"haroldp@protonmail.com\", \"firstName\": \"H.\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 88.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"morrissey.family@outlook.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101006\"}": {
+"value": 47.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angelam@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101006\"}": {
+"value": 50.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"deals4u_315@yahoo.com\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"daniel.whitfield@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"deals4u_325@yahoo.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"deals4u_315@yahoo.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101012\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"deals4u_299@yahoo.com\", \"firstName\": \"HAROLD\", \"lastName\": \"PETTIGREW\", \"phoneNumber\": \"5550101014\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuelo@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101016\"}": {
+"value": 4.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101006\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"deals4u_325@yahoo.com\", \"firstName\": \"DANIEL\", \"lastName\": \"WHITFIELD\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"88 LAKESHORE BLVD\", \"city\": \"AUSTIN\", \"postalCode\": \"78746\", \"state\": \"TX\"}, \"email\": \"daniel.whitfield@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101002\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"deals4u_184@yahoo.com\", \"firstName\": \"KAYLA\", \"lastName\": \"BRENNAN\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angelam@protonmail.com\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 50.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kb.9921x@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"victora@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101012\"}": {
+"value": 92.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"v.anand.1968@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101012\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101006\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuel.oyelaran@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101016\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcus.bellamy@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcus.bellamy@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101007\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"v.anand.1968@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101012\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"harold.pettigrew@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101014\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1507 PEACHTREE INDUSTRIAL BLVD\", \"city\": \"ATLANTA\", \"postalCode\": \"30341\", \"state\": \"GA\"}, \"email\": \"marcusb@protonmail.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101007\"}": {
+"value": 97.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"ricky.dalton@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"7031 SUNSET RIDGE RD\", \"city\": \"ORLANDO\", \"postalCode\": \"32819\", \"state\": \"FL\"}, \"email\": \"ricky.dalton@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101005\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"1200 BRICKELL BAY DR APT 2203\", \"city\": \"MIAMI\", \"postalCode\": \"33131\", \"state\": \"FL\"}, \"email\": \"samuel.oyelaran@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101016\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elena.castellanos@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"310 ELM ST\", \"city\": \"DAYTON\", \"postalCode\": \"45402\", \"state\": \"OH\"}, \"email\": \"harold.pettigrew@example.com\", \"firstName\": \"JORDAN\", \"lastName\": \"LEE\", \"phoneNumber\": \"5550101014\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"9021 KINGSTON PIKE\", \"city\": \"KNOXVILLE\", \"postalCode\": \"37923\", \"state\": \"TN\"}, \"email\": \"kb.9921x@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101013\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"4400 N CENTRAL EXPY STE 100\", \"city\": \"DALLAS\", \"postalCode\": \"75206\", \"state\": \"TX\"}, \"email\": \"elena.castellanos@example.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101017\"}": {
+"value": 100.0
+},
+"ff:{\"address\": {\"addressLine1\": \"55 WATER ST FL 20\", \"city\": \"NEW YORK\", \"postalCode\": \"10041\", \"state\": \"NY\"}, \"email\": \"vic.anand@protonmail.com\", \"firstName\": \"VICTOR\", \"lastName\": \"ANAND\", \"phoneNumber\": \"5550101012\"}": {
+"value": 92.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"angela.morrissey1@gmail.com\", \"firstName\": \"ANGELA\", \"lastName\": \"MORRISSEY\", \"phoneNumber\": \"5550101006\"}": {
+"value": 99.0
+},
+"ff:{\"address\": {\"addressLine1\": \"960 MAPLEWOOD AVE\", \"city\": \"COLUMBUS\", \"postalCode\": \"43209\", \"state\": \"OH\"}, \"email\": \"quickdeals@protonmail.com\", \"firstName\": \"ALEX\", \"lastName\": \"SMITH\", \"phoneNumber\": \"5550101006\"}": {
+"value": 97.0
+}
+}

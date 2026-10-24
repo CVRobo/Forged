@@ -1,0 +1,16 @@
+# What the hosted game runs (Dockerfile at the repo root): the backend and the shipped fraud model.
+# The ML stack is pinned like ml/online/requirements.txt, so the saved models load as they were trained.
+# Left out on purpose: training-only packages, Deepgram (the game's voice uses the browser) and Arize
+# Phoenix (not imported at runtime), which keeps the image small enough for a free instance.
+lightgbm==4.7.0
+pandas==3.1.0
+numpy==2.5.4
+scikit-learn==1.9.1
+joblib==1.6.0
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.1
+python-dotenv==1.2.4
+redis>=5.2
+anthropic>=0.40  # Claude's lines, when ANTHROPIC_API_KEY is set
+sentry-sdk[fastapi]>=2.18  # error tracking, when SENTRY_DSN is set

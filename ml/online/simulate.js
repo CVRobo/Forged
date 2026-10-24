@@ -73,7 +73,8 @@ function honestAnswers(level, h) {
 const out = [];
 for (let s = 0; s < sessions; s++) {
   const level = pick([1, 2]), care = clever ? 0.95 : Math.random(), hist = O.newHistory();
-  const regular = { ...pick(O.HOLDERS), card: pick(O.CARDS) }; // an honest customer comes back with their own card
+  // an honest customer comes back with their own card; a ghost identity (deceased, synthetic, someone else's SSN) never shops
+  const regular = { ...pick(O.HOLDERS.filter(h => !h.ghost)), card: pick(O.CARDS) };
   const rounds = 1 + Math.floor(Math.random() * 5);
   for (let round = 1; round <= rounds; round++) {
     const holder = honest ? regular : { ...pick(O.HOLDERS), card: pick(O.CARDS) };

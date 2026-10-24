@@ -124,17 +124,19 @@ const SCREENS = {
 };
 
 /* ---------- leaderboard data ---------- */
-let boardData = null; // { players, shame, live }
+let boardData = null; // { players, shame, live, room }
+let room = null; // a LAN game's players (lan.js, ForgedMenu.setRoom): the boards show them instead
 function localBoard() {
   const s = host.getStats && host.getStats();
   const me = playerName();
-  const players = s && s.round ? [...SAMPLE_PLAYERS, { name: me, money: s.money || 0, patches: s.patches || 0 }] : [...SAMPLE_PLAYERS];
   const mine = (s && s.shame || []).slice().reverse().map(x => ({ ...x, player: me, mine: true }));
+  if (room) return { players: room.map(p => ({ name: p.name, money: +p.money || 0, patches: +p.patches || 0 })), shame: mine, live: true, room: true };
+  const players = s && s.round ? [...SAMPLE_PLAYERS, { name: me, money: s.money || 0, patches: s.patches || 0 }] : [...SAMPLE_PLAYERS];
   return { players, shame: [...mine, ...SAMPLE_SHAME], live: false };
 }
 async function loadBoard() {
   boardData = localBoard(); paintBoard(); paintPlayerList();
-  if (!API) return;
+  if (!API || room) return;
   try {
     const r = await (await fetch(API + "/leaderboard")).json();
     const list = Array.isArray(r) ? r : r.players ?? r.leaderboard ?? [];
@@ -147,7 +149,7 @@ async function loadBoard() {
 function paintBoard() {
   const pane = $("#fm-pane", root); if (!pane || !boardData) return;
   const me = playerName();
-  $("#fm-source", root).textContent = boardData.live ? "● Live from the server" : "Offline: sample players, plus your current run";
+  $("#fm-source", root).textContent = boardData.room ? "● This LAN game" : boardData.live ? "● Live from the server" : "Offline: sample players, plus your current run";
   if (boardTab === "leaders") {
     const rows = [...boardData.players].sort((a, b) => b.money - a.money);
     pane.innerHTML = rows.length ? `<table class="fm-table"><tr><th>#</th><th>Forger</th><th class="num">Siphoned</th><th class="num">Patches caused</th></tr>
@@ -167,7 +169,7 @@ function paintPlayerList() {
   const el = $("#fm-plist"); if (!el || !boardData) return;
   const me = playerName();
   const rows = [...boardData.players].sort((a, b) => b.money - a.money).slice(0, 8);
-  el.innerHTML = `<div class="fm-plist-head">Forgers${boardData.live ? "" : " · offline"}</div>` +
+  el.innerHTML = `<div class="fm-plist-head">Forgers${boardData.room ? " · LAN" : boardData.live ? "" : " · offline"}</div>` +
     rows.map((p, i) => `<div class="fm-plist-row ${p.name === me ? "me" : ""}"><span>${i + 1}. ${esc(p.name)}</span><span>${money(p.money)} · ${p.patches} ⚙</span></div>`).join("");
 }
 
@@ -279,6 +281,12 @@ window.ForgedMenu = {
     const el = $("#fm-plist"); if (!el) return;
     if (on && !el.classList.contains("show")) { if (!boardData) boardData = localBoard(); paintPlayerList(); loadBoard(); }
     el.classList.toggle("show", on);
+  },
+  /** a LAN game's players [{ name, money, patches }] for the boards, or null to go back to solo */
+  setRoom(players) {
+    room = players && players.length ? players : null;
+    if (!host) return;
+    boardData = localBoard(); paintBoard(); paintPlayerList();
   },
 };
 K.onChange(() => { if (isOpen() && !capture) render(); });

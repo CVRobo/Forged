@@ -21,7 +21,6 @@ import time
 import numpy as np
 import pandas as pd
 
-from ml.online import features as F
 from ml.online import game_rows as G
 from ml.online import model as M
 from ml.online import train as T
@@ -59,11 +58,7 @@ def _capped(df: pd.DataFrame) -> pd.DataFrame:
 
 def learned(old: M.Version, new: M.Version) -> list[str]:
     """The tells whose share of the model's attention grew most: the patch notes."""
-    def share(v):
-        g = pd.Series(v.model.booster_.feature_importance("gain"), index=F.FEATURES)
-        g = g.groupby(g.index.map(lambda f: M.TELL_OF.get(f, f))).sum()
-        return g / g.sum()
-    d = (share(new) - share(old)).sort_values(ascending=False)
+    d = (new.attention() - old.attention()).sort_values(ascending=False)
     return [t for t, x in d.items() if x > 0.005][:3]
 
 
@@ -90,8 +85,8 @@ def retrain(players: pd.DataFrame | None = None, force: bool = False) -> dict:
     w = T.weights(b["train"], extra=len(tr))
     w[len(train) - len(tr):] = np.where(got_through.to_numpy(), EVASION_WEIGHT, 1.0)
 
-    mdl, _ = M.fit(train, w, voc=live.vocab)  # the same vocabulary, so versions score alike
-    new = M.Version((max(r["version"] for r in M.registry()) + 1), mdl, live.vocab, 0.0)
+    mdl, voc = M.fit(train, w, voc=live.vocab)  # the same vocabulary (plus any new inputs'), so versions score alike
+    new = M.Version((max(r["version"] for r in M.registry()) + 1), mdl, voc, 0.0)
     T.calibrate(new, b["val"])
 
     held = pd.concat([p["val"], p["test"]], ignore_index=True)  # held-out player sessions (see note on _recall_floor)

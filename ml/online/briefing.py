@@ -39,7 +39,8 @@ def gather() -> dict:
     return {
         "versions": [{k: r.get(k) for k in ("version", "promoted", "note", "learned")} for r in M.registry()],
         "real_fraud_eval": E.evaluate(),
-        "attacks": R.report(players) if not players.empty else {"families": [], "orders": 0, "got_through": 0},
+        "attacks": R.report(players) if not players.empty else {"families": [], "orders": 0, "got_through": 0,
+                                                                  "attack_catch": R.learning_curve()},
     }
 
 
