@@ -129,6 +129,7 @@
       <div class="dock-label">TOOLBOX<span id="edits-left">Edits 0/4</span></div>
       <div id="tools"></div>
       <div class="dock-sep"></div>
+      <button class="btn btn-ghost btn-small" id="btn-dossier" title="Your collected intel">📂 Dossier</button>
       <button class="btn btn-ghost btn-small" id="btn-tutorial" title="Walk through the desk">❔ Tutorial</button>
       <button class="btn btn-ghost btn-small" id="btn-debug" title="What the detector sees (D)">🔍 Detector view</button>
       <div id="envelope" title="Drag me into the outbox"><div class="env-flap"></div><span class="env-label">DRAG TO OUTBOX</span></div>
@@ -263,6 +264,16 @@
         <li><b>Inspection.</b> PAID or FLAGGED. Either way, the inspector learns. Spend your money in the shop between rounds.</li>
       </ol>
       <div class="between-foot"><span class="fineprint" id="howto-keys">Hotkeys: 1–6 tools · Esc drop tool · D detector view · Space hide invoice</span><button class="btn btn-big" data-close>Got it</button></div>
+    </div>
+  </div>
+
+  <div id="overlay-dossier" class="overlay">
+    <div class="modal dossier-modal">
+      <div class="modal-kicker">DOSSIER</div>
+      <h2>Collected Intel</h2>
+      <p class="modal-sub">Tips and tricks you've discovered while forging.</p>
+      <div id="dossier-entries" class="dossier-list"></div>
+      <div class="between-foot"><button class="btn btn-big" data-close>Close</button></div>
     </div>
   </div>
 

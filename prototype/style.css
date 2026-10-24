@@ -493,7 +493,29 @@ kbd { background: var(--win); color: var(--ink); border: 2px solid var(--ink); b
 #toasts { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast { background: var(--ink); color: #fff; padding: 8px 18px; border-radius: 20px; font-weight: 700; font-size: 14px; border: 2px solid #fff; animation: toast 2.6s forwards; }
 .toast.bad { background: var(--flag); } .toast.good { background: var(--paid); }
+.toast.tip { background: #1a5276; border-left: 4px solid #f4d03f; }
+.toast.dossier { background: #1a7a6a; }
 @keyframes toast { 0% { transform: translateY(-20px); opacity: 0; } 10%, 85% { transform: none; opacity: 1; } 100% { opacity: 0; } }
+
+/* dossier */
+.dossier-modal { width: 760px; max-height: 760px; }
+.dossier-list { max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.dossier-entry { display: flex; gap: 12px; padding: 12px 14px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
+.dossier-entry b { font-size: 15px; display: block; margin-bottom: 2px; }
+.dossier-entry p { font-size: 13px; margin: 0; line-height: 1.45; opacity: .85; }
+.dossier-icon { font-size: 28px; flex: none; width: 40px; text-align: center; }
+.dossier-locked { opacity: .45; }
+.dossier-locked b { font-style: italic; }
+.dossier-footer { text-align: center; font-size: 13px; opacity: .6; margin-top: 8px; }
+#btn-dossier { position: relative; }
+.dossier-badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--flag); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; border: 2px solid var(--win); }
+
+/* guided first-round card */
+.guide-card { position: absolute; z-index: 160; width: 420px; background: var(--win); border: 4px solid var(--ink); border-radius: 14px; box-shadow: 8px 8px 0 var(--ink); padding: 16px 20px; animation: rise .3s cubic-bezier(.2,1.4,.4,1); }
+.guide-step { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; color: var(--paid); text-transform: uppercase; }
+.guide-instr { font-size: 15px; line-height: 1.5; margin: 6px 0 0; }
+.guide-instr b { color: var(--accent-2); }
+.guide-skip { margin-top: 10px; }
 
 /* guided tutorial */
 #tutorial { position: absolute; inset: 0; z-index: 150; display: none; }
