@@ -15,7 +15,7 @@ const FW = window.FW;
 if (!FW) return;
 const EXIT_X = FW.EXIT_X ?? 0; // where the emergency exit is on the south wall
 const { THREE, P, B, player, npcs } = FW;
-const { kevin, dana, inspector, clerk, boss } = npcs;
+const { kevin, dana, priya, marcus, inspector, clerk, boss } = npcs;
 const rand = FW.rand, pick = FW.pick, clamp = FW.clamp;
 const COFFEE = { x: -10, z: 15 };                                   // break room coffee spot
 
@@ -111,8 +111,8 @@ addEventListener("keydown", e => {
 const mx = x => (x - MX0) * MS, mz = z => (z - MZ0) * MS;
 // static layer: rooms, doorways, furniture. Drawn once.
 const bg = document.createElement("canvas"); bg.width = mapCv.width; bg.height = mapCv.height;
-(function drawStatic() {
-  const g = bg.getContext("2d"); g.scale(dpr, dpr);
+function drawStatic() {
+  const g = bg.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = "#cbbd9f"; g.fillRect(0, 0, MW, MH);
   const rooms = [
     { x0: -13, x1: 13, z0: -9, z1: 9, fill: "#f3e8cf", label: "" },
@@ -130,7 +130,7 @@ const bg = document.createElement("canvas"); bg.width = mapCv.width; bg.height =
   g.fillRect(mx(13) - 2, mz(5.5 - 1), 4, 2 * MS);
   // furniture
   g.fillStyle = "#8a5a35";
-  for (const [x, z] of [[FW.MY_DESK.x, FW.MY_DESK.z], [-3, 2], [-3, -3], [FW.CLERK_DESK.x, FW.CLERK_DESK.z]]) g.fillRect(mx(x - 1.1), mz(z - .55), 2.2 * MS, 1.1 * MS);
+  for (const [x, z] of [...(FW.DESKS || [FW.MY_DESK]).map(d => [d.x, d.z]), [FW.CLERK_DESK.x, FW.CLERK_DESK.z]]) g.fillRect(mx(x - 1.1), mz(z - .55), 2.2 * MS, 1.1 * MS);
   g.fillStyle = "#1f8a8a"; g.fillRect(mx(FW.BOOTH.x - 1.8), mz(FW.BOOTH.z - .6), 3.6 * MS, 1.2 * MS);
   g.fillStyle = "#2e2a28"; g.fillRect(mx(FW.PRINTER.x - .5), mz(FW.PRINTER.z - .4), MS, .8 * MS);
   g.fillStyle = "#1d9a4b"; g.fillRect(mx(EXIT_X - .6), mz(9) - 3, 1.2 * MS, 4);           // exit sign
@@ -138,7 +138,9 @@ const bg = document.createElement("canvas"); bg.width = mapCv.width; bg.height =
   g.font = "bold 8px 'Space Mono', monospace"; g.fillStyle = "rgba(43,29,20,.55)"; g.textAlign = "center";
   for (const r of rooms) if (r.label) g.fillText(r.label, mx((r.x0 + r.x1) / 2), mz(r.z1) - 4);
   g.fillText("YOU", mx(FW.MY_DESK.x), mz(FW.MY_DESK.z) + 3);
-})();
+}
+drawStatic();
+if (FW.onDeskChange) FW.onDeskChange(drawStatic);
 
 function dot(x, z, r, fill) {
   mg.beginPath(); mg.arc(mx(x), mz(z), r, 0, 6.2832); mg.fillStyle = fill; mg.fill();
@@ -170,8 +172,10 @@ function drawMap(now) {
     dot(bp.x, bp.z, 4.5, "#e0352b");
   }
   // NPCs
-  dot(kevin.g.position.x, kevin.g.position.z, 3, "#7a5cff");
-  dot(dana.g.position.x, dana.g.position.z, 3, "#3fae6a");
+  if (kevin.g.visible) dot(kevin.g.position.x, kevin.g.position.z, 3, "#7a5cff");
+  if (dana.g.visible) dot(dana.g.position.x, dana.g.position.z, 3, "#3fae6a");
+  if (marcus && marcus.g.visible) dot(marcus.g.position.x, marcus.g.position.z, 3, "#ffd23f");
+  if (priya && priya.g.visible) dot(priya.g.position.x, priya.g.position.z, 3, "#e75aa3");
   dot(inspector.g.position.x, inspector.g.position.z, 3, "#ffffff");
   dot(clerk.g.position.x, clerk.g.position.z, 3, "#f4a63a");
   // you: an arrow pointing where you face
@@ -222,6 +226,8 @@ const AP = FW.ASSEMBLY || { x: EXIT_X - 2.4, z: 15.2 };
 const OUTSIDE = (FW.RD ?? 18) / 2 + 1.4;  // just past the exit
 const NPCS = [
   makeNpc(kevin, "Kevin", .75, [[-5, 4.4]], [[0.6, 6.4], [EXIT_X - .6, 7.8], [EXIT_X - .3, OUTSIDE], [AP.x - .9, AP.z + .4]]),
+  ...(marcus ? [makeNpc(marcus, "Marcus", .75, [[-6.6, 3.8], [-5, 4.4]], [[-6.6, 3.8], [-5, 5.2], [0, 6.6], [EXIT_X - 1.2, 7.8], [EXIT_X - .5, OUTSIDE], [AP.x - 1.7, AP.z - .3]])] : []),
+  ...(priya ? [makeNpc(priya, "Priya", .75, [[-5.2, -1.2], [-5, 4.4]], [[-5.2, -1.2], [-5, 5.2], [0, 6.6], [EXIT_X, 7.8], [EXIT_X, OUTSIDE], [AP.x + 1.4, AP.z + 1.7]])] : []),
   makeNpc(dana, "Dana", .75, [[-5, -1.0], [-5, 4.4]], [[-0.9, -0.6], [-0.6, 6.4], [EXIT_X + .6, 7.8], [EXIT_X + .3, OUTSIDE], [AP.x - .1, AP.z + 1.2]]),
 ];
 // Brenda (the clerk) evacuates too; she never goes on coffee runs
@@ -232,7 +238,7 @@ const BOSS_SPOT = { x: AP.x + 1.7, z: AP.z - .4 };
 const clipboard = FW.box(.32, .42, .03, FW.M("#c69a5c"), 0, -.78, .16, boss.armR); clipboard.rotation.x = -.5; clipboard.visible = false;
 FW.box(.26, .3, .01, FW.M("#ffffff"), 0, .02, .02, clipboard);
 const MOVERS = [...NPCS, BRENDA, BOSS_N];
-const npcByName = { kevin: NPCS[0], dana: NPCS[1] };
+const npcByName = Object.fromEntries(NPCS.map(n => [n.name.toLowerCase(), n]));
 
 function walk(n, pts, done) { n.path = pts; n.pi = 0; n.done = done; n.mode = "walk"; }
 function getUp(n) {
@@ -245,6 +251,9 @@ function sitDown(n) {
   n.mode = "seated"; n.trip = false; n.holding = false; n.cup.visible = false;
 }
 const reversed = pts => pts.slice().reverse();
+if (FW.onDeskChange) FW.onDeskChange(() => {
+  for (const n of NPCS) if (n.ch.away && n.mode !== "seated") { n.path = null; n.done = null; n.after = null; n.face = null; sitDown(n); }
+});
 function coffeeRun(n) {
   if (!n || n.mode !== "seated") return false;
   getUp(n); n.trip = true; n.snitched = false;
@@ -264,7 +273,7 @@ let nextCoffee = performance.now() + rand(30000, 50000);
 
 function updateNpcs(dt, now) {
   for (const n of MOVERS) {
-    if (n.mode === "seated") continue;
+    if (n.mode === "seated" || n.ch.away) continue;
     const ch = n.ch, pos = ch.g.position;
     if (n.mode === "walk") {
       const tgt = n.path[n.pi], dx = tgt[0] - pos.x, dz = tgt[1] - pos.z, d = Math.hypot(dx, dz);
@@ -304,19 +313,21 @@ function updateNpcs(dt, now) {
   // schedule the next coffee run, one at a time
   if (now > nextCoffee) {
     nextCoffee = now + rand(40000, 70000);
-    if (P.started && !drill.active && NPCS.every(n => n.mode === "seated")) coffeeRun(pick(NPCS));
+    const here = NPCS.filter(n => !n.ch.away);
+    if (P.started && !drill.active && here.length && here.every(n => n.mode === "seated")) coffeeRun(pick(here));
   }
 }
 
 /* ======================= Desk phone ======================= */
 
-const PHONE_X = FW.MY_DESK.x - .78, PHONE_Z = FW.MY_DESK.z + .22;
+let PHONE_X = FW.MY_DESK.x - .78, PHONE_Z = FW.MY_DESK.z + .22;
 const phoneG = new THREE.Group(); phoneG.position.set(PHONE_X, .8, PHONE_Z); FW.scene.add(phoneG);
 const phoneRed = FW.M("#c8322a"), phoneDark = FW.M("#2e2a28");
 FW.box(.3, .09, .24, phoneRed, 0, .045, 0, phoneG);
 FW.box(.12, .02, .1, phoneDark, .05, .1, .04, phoneG);                // keypad
 const handset = FW.box(.34, .06, .09, phoneRed, 0, .13, -.06, phoneG);
 FW.box(.08, .05, .1, phoneRed, -.15, .1, -.06, phoneG); FW.box(.08, .05, .1, phoneRed, .15, .1, -.06, phoneG);
+if (FW.onDeskChange) FW.onDeskChange(d => { PHONE_X = d.x - .78; PHONE_Z = d.z + .22; phoneG.position.set(PHONE_X, .8, PHONE_Z); });
 const phone = { ringing: false, ringEnd: 0, nextRing: performance.now() + rand(50000, 75000), nextPulse: 0, calls: 0, sinceTip: 0, busy: false };
 
 const CALLS = [
@@ -440,12 +451,20 @@ function startDrill(now) {
   FW.say(boss, "FIRE DRILL! Everybody OUT! Single file!", 3000);
   // coworkers and Brenda head for the assembly point
   for (const n of [...NPCS, BRENDA]) {
-    if (n.mode !== "seated") continue;
-    getUp(n);
-    walk(n, n.toExit, () => { n.mode = "idle"; n.face = BOSS_SPOT; });
+    if (n.ch.away) continue;
+    const arrive = () => { n.mode = "idle"; n.face = BOSS_SPOT; };
+    if (n.mode === "seated") { getUp(n); walk(n, n.toExit, arrive); continue; }
+    // mid coffee run: drop it and go. From the break room, back out through its door first.
+    n.after = null; n.done = null; n.trip = false; n.holding = false; n.cup.visible = false;
+    const pos = n.ch.g.position, viaBreak = pos.z > 8 ? [[-6.6, 12.6], [-6, 10.4], [-6, 7.8]] : [];
+    walk(n, [...viaBreak, ...n.toExit.slice(-4)], arrive);
+    n.leftFromTrip = true;
   }
-  setTimeout(() => FW.say(kevin, pick(["Is this a drill?!", "Not again!", "I left my sandwich!"]), 2000), 600);
-  setTimeout(() => FW.say(dana, pick(["Walk, don't run.", "Ugh. I was on a roll.", "Does this count as a break?"]), 2000), 2200);
+  const sayIfHere = (ch, lines, at) => ch && setTimeout(() => { if (!ch.away) FW.say(ch, pick(lines), 2000); }, at);
+  sayIfHere(kevin, ["Is this a drill?!", "Not again!", "I left my sandwich!"], 600);
+  sayIfHere(dana, ["Walk, don't run.", "Ugh. I was on a roll.", "Does this count as a break?"], 2200);
+  sayIfHere(marcus, ["Is this part of onboarding?!", "I'll lead the way! Follow me!", "I've got my lanyard!"], 1400);
+  sayIfHere(priya, ["Saving my spreadsheet first. Priorities.", "Third drill this month.", "Somebody grab the donuts!"], 3000);
   setTimeout(() => FW.say(clerk, pick(["Finally, a real lunch break.", "Is the parking lot catering?"]), 2200), 3600);
   FW.say(inspector, "I'm not leaving my stapler.", 2600);
 }
@@ -472,7 +491,8 @@ function endDrill(now) {
   const walked = (n, route) => n.mode === "walk" && n.path === route ? route.slice(0, n.pi) : route;
   for (const n of [...NPCS, BRENDA]) {
     if (n.mode === "seated") continue;
-    const back = [...reversed(walked(n, n.toExit)), n.stand];
+    const back = n.leftFromTrip ? [...reversed(n.toExit), n.stand] : [...reversed(walked(n, n.toExit)), n.stand];
+    n.leftFromTrip = false;
     n.mode = "idle"; n.face = null;
     setTimeout(() => walk(n, back, () => sitDown(n)), rand(600, 1800));
   }

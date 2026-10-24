@@ -717,7 +717,7 @@ const deskPF = prefab(K => {
 
 function desk(x, z, { flip = false, screen = screenMat, chair = true } = {}) {
   const g = deskPF(scene, x, 0, z, flip ? Math.PI : 0);
-  const scr = new THREE.Mesh(SCREEN_GEO, screen); scr.position.set(0, 1.38, -.296); g.add(scr);
+  const scr = new THREE.Mesh(SCREEN_GEO, screen); scr.position.set(0, 1.38, -.296); g.add(scr); g.userData.screen = scr;
   blob(0, -.05, 2.6, 1.5, g);
   if (chair) { chairPF(g, 0, 0, .95); blob(0, .95, .95, .95, g); }
   collide(x, z, 2.3, 1.2);
@@ -810,15 +810,38 @@ const myScreenTex = canvasTex(512, 296, (g, w, h) => {
   g.fillStyle = "#f4a63a"; g.font = "64px Bungee, Impact"; g.textAlign = "center"; g.fillText("FORGED", w / 2, h / 2 + 10);
   g.fillStyle = "#2b1d14"; g.font = "bold 20px 'Space Mono'"; g.fillText("press E to sit", w / 2, h / 2 + 60);
 });
-const MY_DESK = { x: -8, z: 2 };
-desk(MY_DESK.x, MY_DESK.z, { screen: new THREE.MeshStandardMaterial({ map: myScreenTex, emissive: "#ffffff", emissiveMap: myScreenTex, emissiveIntensity: .7 }) });
+/* ======================= Desks: four cubicles, one per player =======================
+ * A 2 × 2 block of cubicles. Players take desks in join order (single-player is desk 1);
+ * a desk nobody plays at has its NPC coworker working at it. MY_DESK and CHAIR are shared
+ * objects that move to whichever desk is yours (setMyDesk), so everything that reads them
+ * (sitting, the seated camera, the boss's "behind your chair" check, the desk mess, the
+ * minimap, the phone via onDeskChange) follows automatically.
+ *
+ *          x −8         x −3
+ *  z −3   desk 4       desk 3      (north)
+ *  z  2   desk 1       desk 2
+ *
+ * The boss patrols the lanes at x −10.4 and x −5.5, past every chair. */
+const DESKS = [{ x: -8, z: 2 }, { x: -3, z: 2 }, { x: -3, z: -3 }, { x: -8, z: -3 }].map((d, i) => ({ ...d, n: i + 1, npc: null, player: null }));
+const deskScreenMat = new THREE.MeshStandardMaterial({ map: myScreenTex, emissive: "#ffffff", emissiveMap: myScreenTex, emissiveIntensity: .7 });
+DESKS.forEach(d => {
+  d.g = desk(d.x, d.z);
+  cubicle(d.x, d.z);
+  d.plate = signPlane("", null, .7, .2, "#2b1d14"); d.plate.position.set(d.x - .7, .9, d.z + .56); scene.add(d.plate);
+});
+const MY_DESK = { x: DESKS[0].x, z: DESKS[0].z, n: 1 };
 const CHAIR = new THREE.Vector3(MY_DESK.x, 0, MY_DESK.z + .95);
-const nameplate = signPlane("YOU", null, .7, .2, "#2b1d14"); nameplate.position.set(MY_DESK.x - .7, .9, MY_DESK.z + .56); scene.add(nameplate);
-
-/* --- coworkers --- */
-desk(-3, 2); desk(-3, -3);
-cubicle(-3, 2); cubicle(-3, -3);
-{ // rug under the coworker pod (flat, walkable; ends 0.8 m short of the boss's x = -5.5 lane)
+function setPlate(d, label) {
+  const tex = d.plate.material.map;
+  tex.cv.draw = (g, cw, ch) => {
+    g.fillStyle = "#2b1d14"; g.fillRect(0, 0, cw, ch);
+    g.strokeStyle = "#e8c27a"; g.lineWidth = 16; g.strokeRect(8, 8, cw - 16, ch - 16);
+    g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = `${Math.round(ch * .42)}px Bungee, Impact, sans-serif`;
+    g.fillText(label.toUpperCase().slice(0, 12), cw / 2, ch / 2);
+  };
+  redraw(tex);
+}
+{ // rugs under each pair of cubicles (flat, walkable; clear of the boss's lanes)
   const rugTex = canvasTex(256, 512, (g, w, h) => {
     g.fillStyle = "#a9483a"; g.fillRect(0, 0, w, h);
     g.strokeStyle = "#e8c27a"; g.lineWidth = 10; g.strokeRect(14, 14, w - 28, h - 28);
@@ -826,13 +849,59 @@ cubicle(-3, 2); cubicle(-3, -3);
     g.fillStyle = "#c9654f";
     for (let j = 0; j < 7; j++) { const y = 70 + j * 62; g.beginPath(); g.moveTo(w / 2, y - 24); g.lineTo(w / 2 + 40, y); g.lineTo(w / 2, y + 24); g.lineTo(w / 2 - 40, y); g.closePath(); g.fill(); }
   });
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 8), M("#ffffff", { map: rugTex }));
-  rug.rotation.x = -Math.PI / 2; rug.position.set(-3, .008, -.3); rug.receiveShadow = true; scene.add(rug);
+  [-3, -8].forEach(x => {
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 8), M("#ffffff", { map: rugTex }));
+    rug.rotation.x = -Math.PI / 2; rug.position.set(x, .008, -.3); rug.receiveShadow = true; scene.add(rug);
+  });
 }
+
+/* --- coworkers: one NPC per desk; a desk's NPC leaves while a player sits there --- */
+const marcus = makeChar({ shirt: "#ffd23f", pants: "#5a5f69", tie: "#2f6fd6", look: { hair: "neat", hairColor: "#5a3a22", glasses: true, mouth: "grin", brows: "raised", teeth: true }, name: "MARCUS", tagColor: "#555" });
 const kevin = makeChar({ shirt: "#7a5cff", look: { hair: "bowl", hairColor: "#c98a3a", glasses: true, teeth: true, mouth: "grin", brows: "raised" }, name: "KEVIN", tagColor: "#555" });
-kevin.g.position.set(-3, 0, 2.95); kevin.g.rotation.y = Math.PI; seatPose(kevin, true);
 const dana = makeChar({ shirt: "#3fae6a", skin: "#a8714a", look: { hair: "bun", hairColor: "#1e1410", lids: true, mouth: "flat", brows: "flat" }, name: "DANA", tagColor: "#555" });
-dana.g.position.set(-3, 0, -2.05); dana.g.rotation.y = Math.PI; seatPose(dana, true);
+const priya = makeChar({ shirt: "#e75aa3", pants: "#3d5a80", skin: "#c68642", look: { hair: "curly", hairColor: "#1a1210", earrings: true, mouth: "smirk", brows: "worried" }, name: "PRIYA", tagColor: "#555" });
+[[DESKS[0], marcus, "Marcus"], [DESKS[1], kevin, "Kevin"], [DESKS[2], dana, "Dana"], [DESKS[3], priya, "Priya"]].forEach(([d, ch, name]) => {
+  d.npc = ch; d.npcName = name;
+  ch.g.position.set(d.x, 0, d.z + .95); ch.g.rotation.y = Math.PI; seatPose(ch, true);
+});
+const deskChangeHooks = [];
+// who sits where: `players` maps desk number → player name (single-player: { 1: "You" })
+let deskPlayers = {};
+function assignDesks(players, mine) {
+  deskPlayers = { ...players };
+  for (const d of DESKS) {
+    d.player = players[d.n] || null;
+    if (d.npc) { d.npc.away = !!d.player; d.npc.g.visible = !d.player; }
+    setPlate(d, d.player ? (d.n === mine ? "YOU" : d.player) : d.npcName || "VACANT");
+    d.g.userData.screen.material = d.n === mine ? deskScreenMat : screenMat;
+  }
+  const d = DESKS[mine - 1];
+  MY_DESK.x = d.x; MY_DESK.z = d.z; MY_DESK.n = d.n;
+  CHAIR.set(d.x, 0, d.z + .95);
+  deskChangeHooks.forEach(fn => { try { fn(MY_DESK); } catch (e) { console.error("[forged] desk change hook", e); } });
+}
+assignDesks({ 1: "You" }, 1);
+// move yourself to desk n if no other player is there (single-player starts at desk 1;
+// multiplayer calls assignDesks with everyone's desks, and listens to onDeskChange to tell the others)
+const DESK_LINES = {
+  Marcus: ["Oh! Sure! I'll go… shadow someone!", "Taking my laptop to the break room. Synergy!"],
+  Kevin: ["Hey, that's my— fine. Coffee break.", "My chair's still warm. You're welcome."],
+  Dana: ["Ugh. I'll work from the break room.", "Don't touch my stapler."],
+  Priya: ["Take it. I needed a walk anyway.", "Mind the spreadsheet, it's fragile."],
+};
+function setMyDesk(n, { announce = false } = {}) {
+  n = clamp(Math.round(n), 1, DESKS.length);
+  if (n === MY_DESK.n) return true;
+  const other = deskPlayers[n];
+  if (other && other !== "You") return false; // another player's desk
+  if (P.seated) stand();
+  const leaving = DESKS[n - 1].npc, name = DESKS[n - 1].npcName;
+  if (announce && leaving && leaving.g.visible) say(leaving, pick(DESK_LINES[name] || ["All yours."]), 2400);
+  const players = { ...deskPlayers }; delete players[MY_DESK.n]; players[n] = "You";
+  // the coworker steps away after their line; the one whose desk you left sits back down
+  setTimeout(() => assignDesks(players, n), announce ? 900 : 0);
+  return true;
+}
 
 /* --- printer --- */
 const PRINTER = { x: -8, z: -7.6 };
@@ -1308,7 +1377,7 @@ const tvTex = canvasTex(1024, 576, (g, w, h) => {
 }
 
 // canvases drawn at startup used fallback fonts: redraw them once Bungee / Space Mono are loaded
-if (document.fonts) document.fonts.ready.then(() => [tvTex, corkTex, myScreenTex].forEach(t => redraw(t)));
+if (document.fonts) document.fonts.ready.then(() => [tvTex, corkTex, myScreenTex, ...DESKS.map(d => d.plate.material.map)].forEach(t => redraw(t)));
 
 /* --- objective marker: a bobbing diamond + floor ring on whatever to do next --- */
 const markerMat = new THREE.MeshBasicMaterial({ color: "#ffd23f" });
@@ -2240,6 +2309,12 @@ function updateDoors(dt, now) {
     d.hinge.rotation.y += (target - d.hinge.rotation.y) * Math.min(1, dt * 9);
   }
 }
+for (const d of DESKS) INTERACTIONS.push({
+  label: () => `Take this desk${d.npcName && d.npc && d.npc.g.visible ? ` (${d.npcName}'s)` : ""}`,
+  can: () => !P.seated && d.n !== MY_DESK.n && !deskPlayers[d.n] && !P.carrying && !P.printing && !P.envelopeReady
+    && near({ x: d.x, z: d.z + 1.5 }, 1.1),
+  act: () => { setMyDesk(d.n, { announce: true }); sfx("pickup"); wtoast(`Desk ${d.n} is yours now`, "good"); },
+});
 for (const d of doorObjs) INTERACTIONS.push({
   label: () => `${d.open ? "Close" : "Open"} the ${d.name} door`,
   can: () => !P.seated && near(d.center, 1.5),
@@ -2254,7 +2329,7 @@ function loop(now) {
   updatePlayer(dt, now);
   updateBoss(dt, now);
   // idle life: coworkers type, inspector bobs, printer blinks
-  [kevin, dana].forEach((c, i) => { c.armL.rotation.x = -1.1 + Math.sin(now / 90 + i) * .12; c.armR.rotation.x = -1.1 + Math.cos(now / 80 + i) * .12; });
+  [kevin, dana, priya, marcus].forEach((c, i) => { c.armL.rotation.x = -1.1 + Math.sin(now / 90 + i) * .12; c.armR.rotation.x = -1.1 + Math.cos(now / 80 + i) * .12; });
   inspector.head.position.y = 2.02 + Math.sin(now / 700) * .04;
   if (P.seated) { player.armL.rotation.x = -1.1 + Math.sin(now / 85) * .1; player.armR.rotation.x = -1.1 + Math.cos(now / 95) * .1; }
   printerLight.material.emissiveIntensity = P.printing ? (Math.sin(now / 80) > 0 ? 1.5 : .1) : P.envelopeReady ? 1.2 : .3;
@@ -2276,7 +2351,7 @@ function loop(now) {
   updateConfetti(dt);
   updateFaces(now, _look.set(player.g.position.x, 1.9, player.g.position.z));
   // name tags ignore depth, so hide them when the camera gets right on top of someone
-  [kevin, dana, inspector, clerk, boss].forEach(c => { c.tag.visible = camera.position.distanceTo(c.g.position) > 3.2; });
+  [kevin, dana, priya, marcus, inspector, clerk, boss].forEach(c => { c.tag.visible = camera.position.distanceTo(c.g.position) > 3.2; });
   updateHands(dt, now);
   updateCamera(dt);
   updatePrompt();
@@ -2289,7 +2364,7 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy in the devtools console while prototyping
-window.forged = { P, player, boss: B, camera, CINE, sit, stand, setPhase, grab, deliver };
+window.forged = { P, player, boss: B, camera, CINE, sit, stand, setPhase, grab, deliver, setMyDesk }; // setMyDesk(1–4): test another desk
 
 /* ======================= Plugin API =======================
  * Rooms and features live in their own files (prototype/rooms/*.js, audio.js,
@@ -2304,7 +2379,9 @@ window.FW = {
   getLook: () => ({ ...playerLook }), setLook: setPlayerLook, DEFAULT_LOOK,
   // state
   P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,
-  npcs: { kevin, dana, inspector, clerk, boss },
+  npcs: { kevin, dana, priya, marcus, inspector, clerk, boss },
+  // desks: DESKS[i] = { n, x, z, npc, player }; assignDesks({ 1: "Ana", 3: "Ben" }, myDeskNumber); onDeskChange(fn)
+  DESKS, assignDesks, setMyDesk, onDeskChange: fn => deskChangeHooks.push(fn),
   // actions and effects
   say, wtoast, sfx, toOS, setPhase, sit, stand, grab, deliver, near, flashVignette, burstConfetti,
   rand, pick, clamp, money,
