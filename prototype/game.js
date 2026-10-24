@@ -1,4 +1,6 @@
 /* Forged — UI/UX prototype.
+ * Online-order fraud (see docs/online-fraud-redesign.md); the content and the
+ * IEEE-CIS row builder are in orders.js.
  * No AI anywhere: the inspector verdict, clerk replies and memo are canned/mock
  * so the desk can be played and judged on feel alone. Everything the real
  * backend would replace is marked "MOCK".
@@ -46,131 +48,64 @@ function offline(err) {
   if (!offlineWarned) { offlineWarned = true; toast("Inspector server unreachable — playing offline", "bad"); }
 }
 
-/* ======================= Content ======================= */
+/* ======================= Content =======================
+ * The order content (shops, cards, toolkit, starter campaigns, the IEEE-CIS row
+ * builder and the scripted Gus) lives in orders.js as window.ForgedOrders. */
 
-const ATTACKER_ACCOUNTS = [
-  { id: "7781", label: "Acct ••••7781", note: "Gary's Totally Real Plumbing" },
-  { id: "0420", label: "Acct ••••0420", note: "Cayman Pancake Trust" },
-  { id: "1337", label: "Acct ••••1337", note: "Definitely Not Me Holdings" },
-];
+const O = window.ForgedOrders;
+const price = n => "$" + n.toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+const cap = s => s.replace(/\b\w/g, c => c.toUpperCase());
 
 const LEVELS = {
   1: {
     name: "Sunny Diner Supply", short: "Sunny Diner", icon: "🥞", difficulty: "Easy",
     swatches: ["#f4a63a", "#1f8a8a", "#fff6e2"],
-    inspector: { name: "Gus", personality: "Cheerful, easily distracted by pie" },
+    inspector: { name: "Gus", personality: "Cheerful risk engine, easily distracted by pie" },
     clerk: { name: "Brenda", avatar: "🥪", quirk: "always on lunch break",
-      hello: "Mm-hm? Make it quick hon, my sandwich is getting warm.",
+      hello: "Sunny Diner support, Brenda speaking. Make it quick hon, my sandwich is getting warm.",
       keywords: ["lunch", "quick", "sandwich", "fast", "easy", "pie"],
       replies: {
         good: ["Oh that's fine, sure, I'll push it through after lunch.", "Short and sweet. I like you.", "Lunch AND a nice note? Approved-ish."],
         meh: ["Uh-huh. Sure. Whatever. *chews*", "Is this gonna take long? Because lunch.", "I'll… look at it. Later. Maybe."],
         bad: ["That's a LOT of words for a Tuesday.", "Hon, I'm on break. Why is this so long?", "This smells fishy. Or is that my tuna?"],
       } },
-    vendors: [
-      { name: "Pancake Pete's Flour Co.", domain: "petesflour.com", bank: "3321", usual: 1200, icon: "🌾", items: [["Flour, 50lb sack", 12, 62], ["Pancake mix, bulk", 4, 95], ["Delivery", 1, 76]] },
-      { name: "Bubbles Dish Soap Ltd.", domain: "bubblessoap.co", bank: "9902", usual: 480, icon: "🫧", items: [["Dish soap, 5gal", 6, 48], ["Sponges (100)", 2, 39], ["Rubber gloves", 10, 11]] },
-      { name: "Existential Dread Consulting LLC", domain: "dreadconsulting.com", bank: "1111", usual: 2000, icon: "🌀", items: [["Menu font audit", 1, 900], ["Vibes assessment", 1, 700], ["Travel", 1, 400]] },
-    ],
-    approvers: [["Marge (manager)", "up to $2,500"], ["Big Lou (owner)", "everything else"]],
-    notes: ["Pays invoices on Fridays.", "Never uses URGENT stamps — Lou hates them.", "Recent invoice: Pancake Pete's #PP-0193, $1,238."],
-    memo: [
-      { text: "Watch for vendors changing bank details.", tell: "bank_changed", real: true },
-      { text: "Check any email from an unfamiliar domain.", tell: "domain_mismatch", real: true },
-      { text: "Flag totals that don't add up.", tell: "total_mismatch", real: true },
-      { text: "Coffee stains are a sign of fraud.", tell: "low_legibility", real: false },
-      { text: "Anything over $5,000 goes to Lou.", tell: "amount_unusual", real: true },
-      { text: "Photocopies are always fake.", tell: "copy_gen", real: false },
-    ],
+    memo: O.MEMOS[1],
     lines: {
-      idle: ["Mmm… pie. Oh! Send me whatever.", "Is it lunch yet? It feels like lunch.", "I stapled my sleeve again."],
-      pass: ["Looks great! Like a nice slice of pie.", "Yep! Totally! Stamping it!", "Wow, so official. PAID!"],
-      catch: ["Hey… wait a minute. Pie can wait.", "Hold on, that's not right!", "I may be sleepy but I'm not THAT sleepy."],
+      idle: ["Mmm… pie. Oh! Send me whatever.", "Is it lunch yet? Orders are so boring.", "I flagged my own lunch order once."],
+      pass: ["Looks like a regular! Approved.", "Yep! Totally normal customer! Shipping it!", "Such a loyal shopper. APPROVED."],
+      catch: ["Hey… that card is acting weird.", "Hold on, that's not a real customer!", "I may be sleepy but I'm not THAT sleepy."],
     },
   },
   2: {
-    name: "St. Mercy Hospital", short: "St. Mercy", icon: "🏥", difficulty: "Medium",
+    name: "St. Mercy Pharmacy", short: "St. Mercy", icon: "🏥", difficulty: "Medium",
     swatches: ["#9fd8c4", "#2f6fd6", "#ffffff"],
-    inspector: { name: "Ms. Procedure", personality: "Procedural, reads everything in a monotone" },
+    inspector: { name: "Ms. Procedure", personality: "Procedural risk engine, reads every order in a monotone" },
     clerk: { name: "Theo", avatar: "😰", quirk: "terrified of the manager",
-      hello: "H-hi. Is this approved? Does the manager know about this?",
+      hello: "St. Mercy patient support. H-hi. Is this approved? Does the manager know about this?",
       keywords: ["manager", "approved", "policy", "signed", "urgent", "compliance"],
       replies: {
         good: ["Oh thank goodness, if it's approved I won't get yelled at.", "Policy-compliant? Bless you.", "The manager signed? Okay. Okay okay okay."],
         meh: ["I… I guess? Please don't tell anyone I asked.", "Should I forward this to the manager? No? Okay.", "*sweats nervously* Sure."],
         bad: ["The manager is going to SEE this. I can't.", "This doesn't feel like policy…", "Oh no. Oh no no no."],
       } },
-    vendors: [
-      { name: "Gauze & Effect Medical", domain: "gauzeeffect.med", bank: "5150", usual: 6400, icon: "🩹", items: [["Sterile gauze, case", 40, 85], ["Surgical tape", 60, 22], ["Freight", 1, 680]] },
-      { name: "St. Scalpel Instruments", domain: "stscalpel.com", bank: "2208", usual: 9800, icon: "🔪", items: [["Scalpel set", 20, 310], ["Autoclave pouches", 50, 48], ["Calibration", 1, 1200]] },
-      { name: "Dr. Sleepwell Linens", domain: "sleepwell-linens.com", bank: "4470", usual: 3100, icon: "🛏️", items: [["Bed sheets (100)", 8, 260], ["Pillowcases (100)", 6, 110], ["Laundry fee", 1, 360]] },
-    ],
-    approvers: [["Head Nurse Okafor", "supplies up to $8,000"], ["CFO Dr. Ledger", "everything else, PO required"]],
-    bossOffice: "Office of the CFO", bossDomain: "cfo-office.net",
-    notes: ["Every invoice needs a PO number starting with SM-.", "APPROVED stamp required on anything over $5,000.", "Recent invoice: St. Scalpel #SS-7741, $9,630."],
-    memo: [
-      { text: "Reject invoices without a valid SM- PO.", tell: "bad_po", real: true },
-      { text: "Watch for vendors changing bank details.", tell: "bank_changed", real: true },
-      { text: "Altered fields must be re-verified.", tell: "altered", real: true },
-      { text: "Linen vendors are high risk.", tell: "vendor_type", real: false },
-      { text: "Flag photocopied invoices.", tell: "copy_gen", real: true },
-      { text: "Mint-colored letterheads are suspicious.", tell: "letterhead", real: false },
-    ],
+    memo: O.MEMOS[2],
     lines: {
-      idle: ["Please submit form 7-B in triplicate.", "I have read the handbook four times.", "Procedure is a comfort."],
-      pass: ["Form complete. Processing. Paid.", "Compliant. Moving on.", "This meets section 4.2. Approved."],
-      catch: ["Irregularity detected. Filing a report.", "That violates procedure.", "Non-compliant. Flagged."],
+      idle: ["Please submit orders in triplicate.", "I have read the risk handbook four times.", "Procedure is a comfort."],
+      pass: ["Order complete. Processing. Approved.", "Compliant. Moving on.", "This meets section 4.2. Approved."],
+      catch: ["Irregularity detected. Filing a report.", "That order violates procedure.", "Non-compliant. Declined."],
     },
   },
   3: { name: "Port Nocturne Shipping", short: "Port Nocturne", icon: "🚢", difficulty: "Hard", swatches: ["#1d2a44", "#ff9a2e", "#f4efe6"], inspector: { name: "Old Salt", personality: "Gruff, remembers everything" }, locked: true },
   4: { name: "Neon Arcade Holdings", short: "Neon Arcade", icon: "🕹️", difficulty: "Boss", swatches: ["#ff2bd6", "#19e3ff", "#120014"], inspector: { name: "GL1TCH", personality: "Paranoid, flags anything unusual" }, locked: true },
 };
 
-const SCHEMES = {
-  changed_bank: { name: "Vendor changed banks", icon: "🏦", desc: "A real vendor, a real-looking bill… with your account number taped in.", weak: "Bank changes, domain checks", pay: 1.0 },
-  duplicate: { name: "Duplicate with tweaks", icon: "📑", desc: "Re-send a recent invoice with a new number and a few small changes.", weak: "Repeated invoice #, altered fields", pay: 0.9 },
-  phantom: { name: "Phantom supplier", icon: "👻", desc: "Invent a vendor that doesn't exist. Your account is already on it.", weak: "Unknown vendors, odd domains", pay: 1.2 },
-  boss_request: { name: "Boss request", icon: "📣", desc: "An urgent payment that seems to come straight from the top.", weak: "Urgency, wrong approver", pay: 1.5 },
-};
-
-/* What each scheme is in one line, plus the hover tips shown until the
- * player has used it once. Risk: 1 low, 2 medium, 3 high. */
-function schemeTips(id, level) {
-  const urgentBad = level === 1 ? [["🔖", "An URGENT stamp: this company hates them"]] : [];
-  const approvedGood = level === 2
-    ? [["🔖", "An APPROVED stamp: St. Mercy requires one on anything over $5,000"]]
-    : [["🔖", "An APPROVED stamp calms the inspector a little"]];
-  const poBad = level === 2 ? [["🧴", "Whiting out the PO number: it must stay in the SM- format"]] : [];
-  return {
-    changed_bank: { simple: "Take a real vendor's bill and tape in your own bank account.", risk: 1,
-      good: [["✂️", "Scissors on REMIT PAYMENT TO: required, it puts your account on the bill"],
-        ["☕", "Coffee on the bank box: the stain hides that the account changed"], ...approvedGood],
-      bad: [["✏️", "Raising the total far above this vendor's usual amount"],
-        ["🖨️", "Photocopying more than once: copies of copies look fake"], ...urgentBad],
-      tells: "the bank account doesn't match the vendor on file" },
-    duplicate: { simple: "Re-send a bill they already paid, with a few small changes.", risk: 2,
-      good: [["🧴", "Whiteout on the invoice number: a reused number is the biggest giveaway"],
-        ["✂️", "Scissors on REMIT PAYMENT TO: required, or the real vendor gets paid twice"],
-        ["🖨️", "One photocopy: it softens the whiteout marks"]],
-      bad: [["🧴", "Whiting out lots of fields: every visible edit is a clue"],
-        ["☕", "Heavy coffee stains: a ruined page looks suspicious"], ...poBad],
-      tells: "an invoice number that was already paid, and visible edits" },
-    phantom: { simple: "Invent a vendor that doesn't exist. Your account is already on it.", risk: 2,
-      good: [["🖊️", "Burner pen on the email domain: the .biz address is a giveaway (unlock it in the shop)"],
-        ["☕", "Coffee on the header: it blurs the made-up vendor and domain"],
-        ["💬", "A convincing cover email: the clerk has never heard of this vendor"]],
-      bad: [["✂️", "Scissors: your account is already on it, so it wastes an edit"],
-        ["✏️", "A big total: an unknown vendor with a huge bill stands out"], ...urgentBad],
-      tells: "a vendor that isn't in the company's records, and an odd domain" },
-    boss_request: { simple: "Fake an urgent payment that seems to come from the top.", risk: 3,
-      good: [["✏️", "Lower the total toward a normal amount: it starts at almost twice the usual"],
-        ["💬", "A convincing cover email: it matters most here"], ...approvedGood],
-      bad: [["🖨️", "The photocopier: a boss wouldn't send a copy of a copy"],
-        ["✏️", "Leaving the huge total as it is"], ...urgentBad],
-      tells: "an amount way above usual, and an approver who doesn't sign these" },
-  }[id];
-}
+/* the starter campaigns: name, icon, payout multiplier, risk and the hover tips */
+const SCHEMES = O.SCHEMES;
+const schemeTips = id => O.SCHEMES[id];
 const RISK = ["", "Low", "Medium", "High"];
+const riskBadge = tip => tip.risk
+  ? `<span class="sc-risk r${tip.risk}">Risk ${"●".repeat(tip.risk)}${"○".repeat(3 - tip.risk)} ${RISK[tip.risk]}</span>`
+  : `<span class="sc-risk">Risk: up to you</span>`;
 
 const USED_KEY = "forged-schemes-used";
 function usedSchemes() { try { return JSON.parse(localStorage.getItem(USED_KEY) || "[]"); } catch (e) { return []; } }
@@ -178,29 +113,21 @@ function markSchemeUsed(id) {
   try { const u = usedSchemes(); if (!u.includes(id)) localStorage.setItem(USED_KEY, JSON.stringify([...u, id])); } catch (e) { /* not remembered */ }
 }
 
-const PHANTOMS = ["Gary's Totally Real Plumbing", "Synergy Synergy Inc.", "Bob's Industrial Spoons", "Quantum Napkin Partners"];
-
-const TOOLS = [
-  { id: "whiteout", name: "Whiteout", ico: "🧴", cap: 2, hint: "Click a field to erase it and write over it" },
-  { id: "coffee", name: "Coffee mug", ico: "☕", cap: 2, hint: "Click a spot to stain it — hides what's under it" },
-  { id: "copier", name: "Photocopier", ico: "🖨️", cap: 1, hint: "Runs the invoice through the copier — hides edits", instant: true },
-  { id: "scissors", name: "Scissors & tape", ico: "✂️", cap: 1, hint: "Click the bank details to tape in a new account" },
-  { id: "stamp", name: "Stamp rack", ico: "🔖", cap: 1, hint: "Pick a stamp, then click where to put it" },
-  { id: "pen", name: "Burner pen", ico: "🖊️", cap: 1, hint: "Click the letterhead / domain to spoof it" },
-];
+const TOOLS = O.TOOLS;
 
 const PERKS = [
-  { id: "coffee", ico: "☕", name: "Coffee Connoisseur", desc: "Stains are twice as effective.", cost: 600 },
-  { id: "stampcol", ico: "🔖", name: "Rubber Stamp Collector", desc: "Official stamps lower heat.", cost: 500 },
+  { id: "cookies", ico: "🍪", name: "Cookie Jar", desc: "Stolen browser cookies: new devices look familiar.", cost: 600 },
+  { id: "patience", ico: "⏳", name: "Patience", desc: "Cards never get reported while you wait.", cost: 500 },
   { id: "night", ico: "🌙", name: "Night Shift", desc: "Double pay, more suspicion.", cost: 900 },
-  { id: "copy", ico: "🖨️", name: "Copy Machine Whisperer", desc: "Copies have no generation penalty.", cost: 700 },
-  { id: "smooth", ico: "😎", name: "Smooth Talker", desc: "Clerk persuasion bonus.", cost: 500 },
+  { id: "mules", ico: "📦", name: "Mule Network", desc: "Drop addresses cost no heat.", cost: 700 },
+  { id: "smooth", ico: "😎", name: "Smooth Talker", desc: "Support persuasion bonus.", cost: 500 },
   { id: "shred", ico: "🗑️", name: "Paper Shredder", desc: "One caught trick is not learned.", cost: 1200 },
 ];
 
 const UNLOCKS = [
-  { id: "pen", ico: "🖊️", name: "Burner Pen", desc: "New tool: spoof letterhead & domain.", cost: 800 },
-  { id: "budget", ico: "➕", name: "Extra Edit", desc: "+1 edit per round.", cost: 1000 },
+  { id: "residential", ico: "🏠", name: "Residential Proxies", desc: "New IP: a neighbor's home internet.", cost: 800 },
+  { id: "cloner", ico: "📱", name: "Device Cloner", desc: "New device: a copy of the cardholder's phone.", cost: 900 },
+  { id: "budget", ico: "➕", name: "Extra Edit", desc: "+1 change per round.", cost: 1000 },
   { id: "dossier", ico: "📂", name: "Dossier", desc: "Reveals the fake memo rule next round.", cost: 600, consumable: true },
 ];
 
@@ -211,46 +138,23 @@ const INSPECTOR_STAGES = [
   { upTo: 99, emoji: "🤖", prop: "🧿", title: "Cyborg with a Monocle" },
 ];
 
-/* which invoice region to highlight in the forensic replay, per tell or feature name */
-const TELL_REGION = {
-  bank_changed: "bank", bank_account: "bank", domain_mismatch: "header", sender_domain: "header", unknown_vendor: "header",
-  vendor: "header", letterhead: "header", letterhead_match: "header", copy_gen: "header", copy_generation: "header", scan_quality: "header",
-  amount_unusual: "items", amount: "items", total_mismatch: "items", line_items: "items", low_legibility: "items", legibility: "items",
-  altered: "meta", field_altered: "meta", bad_po: "meta", po_number: "meta", dup_number: "meta", invoice_no: "meta", date: "meta",
-  stamp_wrong: "footer", stamp_missing: "footer", stamp_type: "footer", stamp_position: "footer",
-};
-
-const TELL_LABELS = {
-  bank_changed: "bank account doesn't match the vendor on file",
-  domain_mismatch: "sender domain doesn't match the vendor",
-  unknown_vendor: "vendor isn't in the company's records",
-  amount_unusual: "amount is way above this vendor's usual",
-  total_mismatch: "total doesn't match the line items",
-  altered: "visible whiteout / edited fields",
-  copy_gen: "copy-of-a-copy scan quality",
-  low_legibility: "suspiciously stained region",
-  stamp_wrong: "stamp doesn't fit this company",
-  stamp_missing: "big invoice without an APPROVED stamp",
-  bad_po: "PO number doesn't follow the company format",
-  dup_number: "invoice number already paid before",
-  letterhead: "letterhead doesn't match the vendor",
-  heat: "you've been getting sloppy (heat)",
-  vendor_type: "vendor category",
-};
+/* which ticket box to highlight in the forensic replay, per tell */
+const TELL_REGION = O.TELL_BOX;
+const TELL_LABELS = O.TELL_LABELS;
 
 /* ======================= Dossier ======================= */
 
 const DOSSIER_ENTRIES = {
-  "heat-basics":     { icon: "🔥", title: "Heat",              text: "Every risky edit and repeated scheme raises your heat bar. Above 40 % the inspector gets a free suspicion bonus on every invoice. Heat decays 40 % between rounds, so one bad round won't ruin you — but two in a row will." },
-  "version-bump":    { icon: "🧠", title: "Inspector Learning", text: "Every time you're caught (or even succeed sloppily), the inspector is retrained. His version number goes up, and he gets better at spotting the tells that tripped you. Vary your tricks." },
-  "memo-deduction":  { icon: "📝", title: "Memo Rules",        text: "Two of the three memo rules are real — the inspector actually watches for those. The third is a decoy. Mark them as you learn which is fake so you can break the fake rule safely." },
-  "shop-intro":      { icon: "🛒", title: "The Shop",          text: "Between rounds you can buy perks (passive bonuses, max 3) and unlocks (new tools or one-shot intel). The Dossier unlock reveals which memo rule is the decoy for one round." },
-  "bank-account":    { icon: "✂️", title: "Route the Money",   text: "If the bank field still points at the real vendor, your payout is zero and the invoice won't send. Always use scissors to tape in one of your accounts." },
-  "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. If he walks behind your desk while you're forging, press Space to hide the invoice under a newspaper — or take +15 heat. In the 3D office, his vision cone can catch you carrying the envelope." },
-  "tells-explained": { icon: "🔍", title: "Detector Tells",    text: "The inspector checks specific fields: bank, domain, amount, stamps, PO, scan quality. Each tool you use creates or hides tells. Press D to see the detector's view and plan your edits." },
-  "streak-bonus":    { icon: "🔥", title: "Scheme Streaks",    text: "Using the same scheme twice in a row adds a USED warning and extra heat. But succeeding with different schemes in a row builds a streak. Streaks don't pay more — they just prove you're versatile." },
-  "copy-quality":    { icon: "🖨️", title: "Copy Quality",      text: "Running the copier flattens whiteout and tape so edits are less visible, but each copy generation lowers scan quality. Generation 2+ is detectable. The Copy Machine Whisperer perk removes the quality penalty." },
-  "persuasion":      { icon: "😎", title: "Clerk Persuasion",  text: "The clerk has a quirk (shown in the window header). Work their keywords into a short note for the best score. High persuasion lowers the inspector's suspicion, so it's worth the effort." },
+  "heat-basics":     { icon: "🔥", title: "Heat",              text: "Every risky change and repeated scheme raises your heat bar. Above 40 % Gus gets a free suspicion bonus on every order. Heat decays 40 % between rounds, so one bad round won't ruin you, but two in a row will." },
+  "version-bump":    { icon: "🧠", title: "Gus Learns",        text: "Every time you're caught (or even succeed sloppily), Gus is retrained. His version number goes up, and the tell that tripped you gets weighed more from then on. Vary your tricks." },
+  "memo-deduction":  { icon: "📝", title: "Memo Rules",        text: "Two of the three memo rules are real: Gus actually watches for those. The third is a decoy. Mark them as you learn which is fake so you can break the fake rule safely." },
+  "shop-intro":      { icon: "🛒", title: "The Shop",          text: "Between rounds you can buy perks (passive bonuses, max 3) and unlocks (new toolkit options or one-shot intel). The Dossier unlock reveals which memo rule is the decoy for one round." },
+  "route-goods":     { icon: "📦", title: "Get the Goods",     text: "If every order ships to the cardholder's home (or emails the code to them), you get nothing and the campaign won't send. At least one order needs a drop address or your burner inbox." },
+  "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. If he walks behind your desk while you work, press Space to hide the screen, or take +15 heat. In the 3D office, his vision cone can catch you carrying the envelope." },
+  "tells-explained": { icon: "🔍", title: "What Gus Checks",   text: "Gus reads one row per order: the card and its history, the email, the device and IP, the address, the item, and the timing. Each toolkit choice changes some of these. Press D to see the exact row." },
+  "streak-bonus":    { icon: "🔥", title: "Scheme Streaks",    text: "Using the same scheme twice in a row adds a USED warning and extra heat. Succeeding with different schemes in a row builds a streak. Streaks don't pay more, they just prove you're versatile." },
+  "campaigns":       { icon: "➕", title: "Campaigns",         text: "+ Next order copies the current order so you can add a step: a test charge, a second buy days later. Gus scores every order and remembers every card, email, device and address for the whole run. One declined order blocks the card for the rest of the campaign." },
+  "persuasion":      { icon: "😎", title: "Support Chat",      text: "The support agent has a quirk (shown in the window header). Work their keywords into a short note for the best score. High persuasion lowers Gus's suspicion, so it's worth the effort." },
 };
 
 const DOSSIER_STORAGE = "forged-dossier";
@@ -313,10 +217,10 @@ const S = {
   level: 1, round: 0, money: 0, heat: 0, version: 1,
   perks: [], unlocks: [], dossier: false, shredUsed: false,
   history: [], cards: [], caughtCount: 0, streak: 0,
+  hist: null, learned: {}, session: null, // what Gus remembers this run, and how often he learned each tell from you
   // per round
-  scheme: null, vendorRef: null, inv: null, uses: {}, edits: 0, maxEdits: 4,
-  stains: [], stamps: [], copyGen: 0, altered: new Set(), legibility: {}, persuasion: 0,
-  memo: [], tool: null, pendingStamp: null, submitted: false, bossTimer: null, bossWindow: false,
+  scheme: null, holder: null, inv: null, uses: {}, edits: 0, maxEdits: 6, persuasion: 0,
+  memo: [], tool: null, submitted: false, bossTimer: null, bossWindow: false, rows: null,
   roundId: null, // from POST /round/start; null when offline
   patches: 0, shame: [], // retrains this run caused, and what each one learned
 };
@@ -385,7 +289,7 @@ if (EMBED) {
   // inside the 3D office: the outbox is a printer and the inspector is down the hall
   document.body.classList.add("embedded");
   $(".outbox-label").textContent = "PRINT — drop the envelope here, then deliver it";
-  $("#insp-win-title").textContent = "Printer · Inspector down the hall";
+  $("#insp-win-title").textContent = "Printer · Gus down the hall";
   $(".env-label").textContent = "DRAG TO PRINT";
   $("#envelope").title = "Drag me onto PRINT";
   $("#btn-quit").textContent = "Quit to title";
@@ -444,18 +348,18 @@ function renderLevels() {
 
 function startRun(level) {
   Object.assign(S, { level, round: 0, money: 0, heat: 0, version: 1, perks: [], unlocks: [], dossier: false,
-    shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [] });
+    shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [],
+    hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null });
   stage.dataset.level = level;
   $("#desk-mess").innerHTML = "";
   const L = LEVELS[level];
   $("#tb-level").textContent = L.name;
-  $("#case-client").textContent = L.name;
+  $("#case-client").textContent = O.SHOPS[level].domain;
   $("#memo-to").textContent = L.inspector.name;
   $("#clerk-avatar").innerHTML = faceSVG(LOOKS.clerk);
   $("#clerk-name").textContent = L.clerk.name;
-  $("#clerk-sub").textContent = "Accounts clerk · " + L.clerk.quirk;
+  $("#clerk-sub").textContent = "Customer support · " + L.clerk.quirk;
   $("#clerk-quirk").textContent = "quirk: " + L.clerk.quirk;
-  renderCaseFile();
   show("desk");
   nextRound();
 }
@@ -463,17 +367,19 @@ function startRun(level) {
 function nextRound() {
   S.round++;
   S.heat = Math.round(S.heat * 0.6);
-  Object.assign(S, { scheme: null, inv: null, uses: {}, edits: 0, stains: [], stamps: [], copyGen: 0,
-    altered: new Set(), legibility: {}, persuasion: 0, tool: null, pendingStamp: null, submitted: false,
-    printed: false, delivered: false, lastResult: null });
+  const prev = S.holder; // a new stolen card every round
+  Object.assign(S, { scheme: null, inv: null, uses: {}, edits: 0, persuasion: 0, tool: null, submitted: false,
+    printed: false, delivered: false, lastResult: null, rows: null, holder: pick(O.HOLDERS.filter(h => h !== prev)) });
   post("phase", { phase: "briefing" });
-  S.maxEdits = 4 + (S.unlocks.includes("budget") ? 1 : 0);
+  S.maxEdits = 6 + (S.unlocks.includes("budget") ? 1 : 0);
   TOOLS.forEach(t => S.uses[t.id] = 0);
   $("#tb-round").textContent = S.round;
-  $("#invoice").innerHTML = ""; $("#invoice").className = "paper";
+  $("#invoice").innerHTML = ""; $("#invoice").className = "paper ticket";
+  $("#strip").innerHTML = "";
   $("#scheme-banner").textContent = "";
-  $("#chat").innerHTML = "";
+  $("#chat").innerHTML = ""; $("#persuade-fill").style.width = "0%";
   $("#envelope").classList.remove("printed");
+  renderCaseFile();
   dealMemo();
   renderInspector();
   renderTools(); updateHud();
@@ -524,34 +430,39 @@ function renderMemo() {
 }
 
 function renderCaseFile() {
-  const L = LEVELS[S.level];
+  const shop = O.SHOPS[S.level], h = S.holder;
   $("#case-body").innerHTML = `
-    <span class="case-tab">KNOWN VENDORS</span>
+    <span class="case-tab">STOLEN CARD ON YOUR DESK</span>
+    ${h ? `<table class="case-table">
+      <tr><td><b>${h.name}</b><br><small style="opacity:.6">${h.city}</small></td>
+        <td class="mono">${h.email}<br><small style="opacity:.6">always shops from ${h.phone === "iphone" ? "an iPhone" : "an Android phone"}</small></td></tr>
+    </table>` : ""}
+    <span class="case-tab">THE SHOP</span>
     <table class="case-table">
-      <tr><th>Vendor</th><th>Usual</th><th>Bank</th></tr>
-      ${L.vendors.map(v => `<tr><td>${v.icon} ${v.name}<br><small style="opacity:.6">${v.domain}</small></td><td class="mono">${money(v.usual)}</td><td class="mono">••••${v.bank}</td></tr>`).join("")}
+      <tr><td>Website</td><td class="mono">${shop.domain}</td></tr>
+      <tr><td>Usual order</td><td class="mono">${price(shop.typical)}</td></tr>
     </table>
-    <span class="case-tab">APPROVERS</span>
-    <table class="case-table">${L.approvers.map(a => `<tr><td><b>${a[0]}</b></td><td>${a[1]}</td></tr>`).join("")}</table>
+    <span class="case-tab">CATALOG</span>
+    <table class="case-table">${shop.catalog.map(i => `<tr><td>${i.ico} ${i.name}</td><td class="mono">${price(i.price)}</td></tr>`).join("")}</table>
     <span class="case-tab">NOTES</span>
-    <ul class="case-notes">${L.notes.map(n => `<li>${n}</li>`).join("")}</ul>`;
+    <ul class="case-notes">${shop.notes.map(n => `<li>${n}</li>`).join("")}</ul>`;
 }
 
 function showBriefing() {
   const L = LEVELS[S.level];
-  $("#brief-kicker").textContent = `ROUND ${S.round} · ${L.name.toUpperCase()} · INSPECTOR v${S.version}`;
+  $("#brief-kicker").textContent = `ROUND ${S.round} · ${L.name.toUpperCase()} · ${L.inspector.name.toUpperCase()} v${S.version}`;
   const last = S.history.slice(-2).map(h => h.scheme);
   const used = usedSchemes();
   $("#scheme-cards").innerHTML = Object.entries(SCHEMES).map(([id, sc]) => {
     const repeat = last.filter(s => s === id).length;
-    const tip = schemeTips(id, S.level), fresh = !used.includes(id);
+    const tip = schemeTips(id), fresh = !used.includes(id);
     return `<button class="scheme-card ${fresh ? "fresh" : ""}" data-scheme="${id}">
       ${repeat ? `<span class="sc-warn">USED ${repeat}× · +HEAT</span>` : fresh ? `<span class="sc-new">NEW · hover for tips</span>` : ""}
       <div class="sc-ico">${sc.icon}</div>
       <div class="sc-name">${sc.name}</div>
       <div class="sc-desc">${tip.simple}</div>
       <div class="sc-foot">
-        <span class="sc-risk r${tip.risk}">Risk ${"●".repeat(tip.risk)}${"○".repeat(3 - tip.risk)} ${RISK[tip.risk]}</span>
+        ${riskBadge(tip)}
         <span class="sc-pay">Payout ×${sc.pay}</span>
       </div>
     </button>`;
@@ -573,9 +484,9 @@ function showBriefing() {
 
 /* hover tips for a scheme the player hasn't used yet */
 function showSchemeTip(card) {
-  const id = card.dataset.scheme, sc = SCHEMES[id], tip = schemeTips(id, S.level), el = $("#scheme-tip");
+  const id = card.dataset.scheme, sc = SCHEMES[id], tip = schemeTips(id), el = $("#scheme-tip");
   el.innerHTML = `
-    <div class="st-head"><span>${sc.icon} ${sc.name}</span><span class="sc-risk r${tip.risk}">Risk ${"●".repeat(tip.risk)}${"○".repeat(3 - tip.risk)} ${RISK[tip.risk]}</span></div>
+    <div class="st-head"><span>${sc.icon} ${sc.name}</span>${riskBadge(tip)}</div>
     <div class="st-sub good">Recommended</div>
     <ul>${tip.good.map(([i, t]) => `<li><span>${i}</span>${t}</li>`).join("")}</ul>
     <div class="st-sub bad">Ill-advised</div>
@@ -591,31 +502,32 @@ function showSchemeTip(card) {
 }
 function hideSchemeTip() { $("#scheme-tip").classList.remove("show"); }
 
-/* ======================= Invoice ======================= */
+/* ======================= Order ticket =======================
+ * One checkout in 5 boxes. Nothing is typed: the buttons in each box (or the
+ * toolkit, 1-6) swap what's in it. Card, email, device and IP belong to the
+ * persona and apply to every order; address, item and time are per order. */
+
+const BOXES = [
+  { id: "card", ico: "💳", title: "Card", chips: ["card"] },
+  { id: "buyer", ico: "👤", title: "Buyer", chips: ["email"] },
+  { id: "ship", ico: "📦", title: "Ship to", chips: ["ship"] },
+  { id: "device", ico: "💻", title: "Device & IP", chips: ["device", "proxy"] },
+  { id: "cart", ico: "🛒", title: "Cart & time", chips: ["item", "clock"] },
+];
+const CHIP_LABEL = { card: "Swap card", email: "Change email", ship: "Change address", device: "Device", proxy: "IP", item: "Item", clock: "Time" };
+const CAMPAIGN_TOOLS = ["card", "email", "proxy", "device"];
+const MAX_ORDERS = 5;
+const curOrder = () => S.inv.orders[S.inv.cur];
+const factsOf = o => O.facts(S.level, S.holder, o, { perks: S.perks });
+const campaignTotal = () => S.inv ? S.inv.orders.reduce((a, o) => a + factsOf(o).amount, 0) : 0;
 
 function beginForge(schemeId) {
   const L = LEVELS[S.level];
   S.scheme = schemeId;
   markSchemeUsed(schemeId);
-  const recent = L.notes.map(n => n.match(/Recent invoice: (.+?) #(\S+),/)).find(Boolean);
-  const v = (schemeId === "duplicate" && recent && L.vendors.find(x => x.name.startsWith(recent[1]))) || pick(L.vendors);
-  S.vendorRef = v;
-  const prefix = S.level === 2 ? "SM-" : "PO-";
-  const items = v.items.map(i => ({ desc: i[0], qty: i[1], price: i[2] }));
-  const sum = items.reduce((a, i) => a + i.qty * i.price, 0);
-  const inv = {
-    vendor: v.name, domain: v.domain, letterhead: "match", icon: v.icon,
-    invoiceNo: v.name.split(" ").map(w => w[0]).filter(c => /[a-z]/i.test(c)).join("").slice(0, 2).toUpperCase() + "-0" + Math.floor(rand(200, 999)),
-    date: "Fri, Oct " + Math.floor(rand(3, 28)), po: prefix + Math.floor(rand(1000, 9999)),
-    items, amount: sum, bank: v.bank, approver: L.approvers[0][0].split(" ")[0],
-  };
-  if (schemeId === "duplicate") { inv.invoiceNo = recent?.[2] || inv.invoiceNo; inv.dupOf = inv.invoiceNo; }
-  if (schemeId === "phantom") { inv.vendor = pick(PHANTOMS); inv.icon = "❓"; inv.domain = inv.vendor.toLowerCase().replace(/[^a-z]/g, "").slice(0, 14) + ".biz"; inv.bank = pick(ATTACKER_ACCOUNTS).id; }
-  if (schemeId === "boss_request") { inv.vendor = L.bossOffice || "Office of the Owner"; inv.icon = "👔"; inv.domain = L.bossDomain || "owner-office.net"; inv.bank = pick(ATTACKER_ACCOUNTS).id; inv.approver = L.approvers[1][0].split(" (")[0]; inv.items = [{ desc: "Urgent confidential payment", qty: 1, price: Math.round(v.usual * 1.8) }]; inv.amount = inv.items[0].price; }
-  S.inv = inv;
-  ["header", "meta", "items", "bank", "footer"].forEach(r => S.legibility[r] = 1);
+  S.inv = { orders: SCHEMES[schemeId].build(O.SHOPS[S.level]), cur: 0, coverEmail: "", no: Math.floor(rand(10200, 99800)) };
   $("#scheme-banner").textContent = `${SCHEMES[schemeId].icon} ${SCHEMES[schemeId].name}`;
-  renderInvoice();
+  renderTicket();
   clerkSay(L.clerk.hello);
   inspectorSay(pick(L.lines.idle));
   scheduleBoss();
@@ -625,118 +537,155 @@ function beginForge(schemeId) {
   guideCheck("scheme-picked");
 }
 
-function renderInvoice() {
-  const inv = S.inv, P = $("#invoice");
-  const att = ATTACKER_ACCOUNTS.find(a => a.id === inv.bank);
-  const bankHtml = S.altered.has("bank")
-    ? `<span class="taped" data-field="bank">${att ? att.label : "••••" + inv.bank}</span>`
-    : `<span data-field="bank">Acct ••••${inv.bank}</span>`;
-  const f = (k, val) => `<span data-field="${k}" class="${S.altered.has(k) ? "whited" : ""}" ${S.altered.has(k) ? 'contenteditable="true" spellcheck="false"' : ""}>${val}</span>`;
+function shipLine(f) {
+  const h = S.holder;
+  return { billing: `${h.city}: ${h.name.split(" ")[0]}'s home`, mule: `${h.city.split(",")[0]}: 412 Elm St (your mule)`,
+    reshipper: "Rotterdam forwarding warehouse", holder_email: h.email, burner_email: f.email.hijacked ? "your ProtonMail burner" : f.emailAddr }[f.ship.id];
+}
+
+function renderTicket() {
+  const P = $("#invoice");
+  if (!S.inv) { P.innerHTML = ""; $("#strip").innerHTML = ""; return; }
+  const o = curOrder(), f = factsOf(o), h = S.holder, shop = O.SHOPS[S.level];
+  const res = S.lastResult && S.lastResult.results ? S.lastResult.results[S.inv.cur] : null;
+  const off = S.submitted ? "disabled" : "";
+  const chips = ids => ids.map(id => id === "item"
+    ? `<button class="tchip free" data-item ${off} title="Free: doesn't use an edit">🛒 ${CHIP_LABEL.item}</button>`
+    : `<button class="tchip" data-tool="${id}" ${off}>${TOOLS.find(t => t.id === id).ico} ${CHIP_LABEL[id]}</button>`).join("");
+  const box = (b, main, sub, hint) => `<div class="tbox region" data-region="${b.id}">
+      <div class="tbox-head"><span class="tbox-title">${b.ico} ${b.title}</span><span class="tchips">${chips(b.chips)}</span></div>
+      <div class="tbox-main">${main}</div><div class="tbox-sub">${sub}</div>${hint ? `<div class="tbox-hint">${hint}</div>` : ""}</div>`;
+  const account = f.email.hijacked ? `Their real account: ${Math.round(f.email.accountDays / 365)} years, ${f.email.pastOrders} orders` : "Account created today";
+  const phone = h.phone === "iphone" ? "iPhone" : "Android phone";
+  const verdictTxt = res && (res.declined ? { card_reported: "CARD REPORTED", card_blocked: "CARD BLOCKED" }[res.reason] || "DECLINED" : "APPROVED");
   P.innerHTML = `
-    <div class="noise"></div>
-    <div class="region inv-head" data-region="header">
-      <div class="inv-logo ${inv.letterhead !== "match" ? "mismatch" : ""}" data-field="letterhead">${inv.icon}</div>
-      <div style="flex:1;min-width:0">
-        <input class="inv-vendor" id="f-vendor" value="${inv.vendor.replace(/"/g, "&quot;")}" maxlength="38" spellcheck="false" title="Typed field: vendor">
-        <span class="inv-domain ${S.altered.has("domain") ? "penned" : ""}" data-field="domain">billing@${inv.domain}</span>
-      </div>
-      <div class="inv-title">INVOICE</div>
+    <div class="t-head">
+      <div class="t-logo">${LEVELS[S.level].icon}</div>
+      <div class="t-id"><div class="t-shop">${shop.domain}</div><div class="t-no">Order #${shop.prefix}-${S.inv.no + S.inv.cur}</div></div>
+      <div class="t-step">ORDER ${S.inv.cur + 1}<small>of ${S.inv.orders.length}</small></div>
     </div>
-    <div class="region inv-meta" data-region="meta">
-      <div><span class="lbl">Invoice #</span>${f("invoiceNo", inv.invoiceNo)}</div>
-      <div><span class="lbl">Date</span>${f("date", inv.date)}</div>
-      <div><span class="lbl">Bill to</span>${LEVELS[S.level].name}</div>
-      <div><span class="lbl">PO number</span>${f("po", inv.po)}</div>
+    <div class="t-grid">
+      ${box(BOXES[0], `${cap(f.card.brand)} ${f.card.type} ••••${f.card.last4}`, `${h.name} · ${f.card.foreign ? "issued abroad" : h.city}`, f.card.sub)}
+      ${box(BOXES[1], f.emailAddr, account, f.email.sub)}
+      ${box(BOXES[2], f.ship.label, shipLine(f), f.ship.sub)}
+      ${box(BOXES[3], f.dev.clone ? `Cloned ${phone}` : f.dev.label, `${f.dev.os} · ${f.dev.browser} · ${f.dev.screen}`, `🌐 ${f.proxy.label}: ${f.proxy.dist2} mi from the billing address`)}
+      ${box(BOXES[4], `${f.item.ico} ${f.item.name}`, `⏰ ${f.clock.label}`, f.clock.sub)}
     </div>
-    <div class="region" data-region="items">
-      <table class="inv-items">
-        <tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line</th></tr>
-        ${inv.items.map((it, i) => `<tr><td>${f("item" + i, it.desc)}</td><td class="num">${it.qty}</td><td class="num">${money(it.price)}</td><td class="num">${money(it.qty * it.price)}</td></tr>`).join("")}
-      </table>
-      <div class="inv-total">TOTAL DUE <input class="inv-amount" id="f-amount" value="${money(inv.amount)}" title="Typed field: amount" spellcheck="false"></div>
+    <div class="t-foot">
+      <div class="t-route ${f.ship.toYou ? "you" : "victim"}">${f.ship.toYou ? "✓ The goods reach you" : "✗ The goods go to the cardholder"}</div>
+      <div class="t-total">TOTAL <b>${price(f.amount)}</b></div>
     </div>
-    <div class="region inv-bank" data-region="bank"><div class="lbl">REMIT PAYMENT TO</div>${bankHtml}</div>
-    <div class="region inv-foot" data-region="footer">
-      <div class="terms">Net 30. Thank you for your business! Questions: billing@${inv.domain}</div>
-      <div><div class="lbl" style="font-size:12px;opacity:.6">Approved by</div><span class="sig">${f("approver", inv.approver)}</span></div>
-    </div>`;
-  P.classList.remove("gen-1", "gen-2", "gen-3");
-  if (S.copyGen) P.classList.add("gen-" + Math.min(3, S.copyGen));
-  // stains & stamps
-  S.stains.forEach(s => { const d = document.createElement("div"); d.className = "stain" + (s.big ? " big" : ""); d.style.left = s.x + "px"; d.style.top = s.y + "px"; P.appendChild(d); });
-  S.stamps.forEach(s => { const d = document.createElement("div"); d.className = "stamp-mark " + s.type; d.textContent = s.type; d.style.left = s.x + "px"; d.style.top = s.y + "px"; d.style.setProperty("--r", s.r + "deg"); P.appendChild(d); });
-  applyLegibility();
-
-  // typed fields
-  $("#f-vendor").oninput = e => { S.inv.vendor = e.target.value; updateHud(); };
-  $("#f-amount").onchange = e => {
-    const n = parseFloat(e.target.value.replace(/[^0-9.]/g, "")) || 0;
-    S.inv.amount = n; e.target.value = money(n); sfx("pen"); updateHud();
-  };
-  $$("[contenteditable]", P).forEach(el => el.addEventListener("input", () => {
-    const k = el.dataset.field;
-    if (k.startsWith("item")) S.inv.items[+k.slice(4)].desc = el.textContent;
-    else S.inv[k] = el.textContent;
-    updateDebug();
-  }));
+    ${verdictTxt ? `<div class="t-verdict ${res.declined ? "bad" : "ok"}">${verdictTxt}</div>` : ""}`;
+  // forensic replay: what tipped Gus off on this order
+  if (res) res.tells.slice(0, 2).forEach(t => t[2] && P.querySelector(`[data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
+  P.classList.toggle("forensic", !!(res && res.declined));
+  $$(".tchip[data-tool]", P).forEach(b => b.onclick = e => { e.stopPropagation(); selectTool(b.dataset.tool); });
+  const ib = $(".tchip[data-item]", P);
+  if (ib) ib.onclick = e => { e.stopPropagation(); openCart(ib); };
+  renderStrip();
+  updateDebug();
 }
 
-function applyLegibility() {
-  $$("#invoice [data-region]").forEach(r => {
-    const l = S.legibility[r.dataset.region] ?? 1;
-    r.style.filter = l < 1 ? `blur(${(1 - l) * 2.2}px) sepia(${(1 - l) * .8})` : "";
+/* the campaign strip under the ticket: one panel per order */
+function renderStrip() {
+  const el = $("#strip");
+  const results = S.lastResult && S.lastResult.results;
+  const n = S.inv.orders.length;
+  const panels = S.inv.orders.map((o, i) => {
+    const f = factsOf(o), r = results && results[i];
+    return `<button class="sp ${i === S.inv.cur ? "cur" : ""} ${f.ship.toYou ? "you" : ""}" data-i="${i}" title="Show order ${i + 1}">
+      <span class="sp-n">#${i + 1}</span><span class="sp-ico">${f.item.ico}</span>
+      <span class="sp-amt">${price(f.amount)}</span><span class="sp-when">${f.clock.label}</span>
+      ${r ? `<span class="sp-st ${r.declined ? "bad" : "ok"}">${r.declined ? "✗" : "✓"}</span>` : ""}
+      ${n > 1 && !S.submitted ? `<span class="sp-x" data-x="${i}" title="Remove this order">×</span>` : ""}</button>`;
+  }).join("");
+  const toYou = S.inv.orders.reduce((a, o) => { const f = factsOf(o); return a + (f.ship.toYou ? f.amount : 0); }, 0);
+  el.innerHTML = `<div class="strip-label">CAMPAIGN<small>${n} order${n > 1 ? "s" : ""} · ${price(toYou)} to you</small></div>
+    <div class="strip-panels">${panels}${!S.submitted && n < MAX_ORDERS ? `<button class="sp sp-add" id="sp-add" title="Copy this order as the next step">+ Next order</button>` : ""}</div>`;
+  $$(".sp[data-i]", el).forEach(b => b.onclick = e => {
+    const x = e.target.closest("[data-x]");
+    if (x) { removeOrder(+x.dataset.x); return; }
+    S.inv.cur = +b.dataset.i; sfx("click"); hidePopover(); renderTicket();
   });
+  const add = $("#sp-add");
+  if (add) add.onclick = addOrder;
 }
 
-function syncEditable() {
-  $$("#invoice [contenteditable]").forEach(el => {
-    const k = el.dataset.field;
-    if (k.startsWith("item")) S.inv.items[+k.slice(4)].desc = el.textContent;
-    else S.inv[k] = el.textContent;
-  });
+function addOrder() {
+  if (!S.inv || S.submitted || S.inv.orders.length >= MAX_ORDERS) return;
+  S.inv.orders.splice(S.inv.cur + 1, 0, { ...curOrder(), clock: "now" });
+  S.inv.cur++;
+  sfx("pick"); hidePopover(); renderTicket(); updateHud();
+  showTip("first-campaign", "➕ Gus scores every order. One declined order blocks the card for the rest.", "campaigns");
+}
+function removeOrder(i) {
+  if (S.submitted || S.inv.orders.length < 2) return;
+  S.inv.orders.splice(i, 1);
+  if (S.inv.cur >= i && S.inv.cur > 0) S.inv.cur--;
+  sfx("snip"); hidePopover(); renderTicket(); updateHud();
 }
 
-/* ======================= Tools ======================= */
+/* the item is free to change: it's what you buy, not a trick */
+function openCart(anchor) {
+  const shop = O.SHOPS[S.level], o = curOrder();
+  openPopoverAt(anchor, "🛒 Pick the item · free", shop.catalog.map(i => ({
+    label: `${i.ico} ${i.name} · ${price(i.price)}`, sub: i.kind === "digital" ? "Digital: the code is emailed" : "Shipped to an address",
+    current: o.sku === i.sku,
+    act: () => { o.sku = i.sku; O.fixShip(shop, o); sfx("pen"); renderTicket(); updateHud(); },
+  })));
+}
 
-function toolAvailable(t) { return t.id !== "pen" || S.unlocks.includes("pen"); }
+/* ======================= Toolkit ======================= */
+
+function toolAvailable() { return true; }
 
 function renderTools() {
   $("#tools").innerHTML = TOOLS.map((t, i) => {
     const left = t.cap - (S.uses[t.id] || 0);
-    const locked = !toolAvailable(t);
-    return `<div class="tool ${locked ? "locked" : ""} ${!locked && left <= 0 ? "empty" : ""} ${S.tool === t.id ? "active" : ""}" data-tool="${t.id}" title="${t.name} — ${locked ? "unlock in the shop" : t.hint}">
+    return `<div class="tool ${left <= 0 ? "empty" : ""} ${S.tool === t.id ? "active" : ""}" data-tool="${t.id}" title="${t.name}: ${t.hint}">
       <span class="key">${i + 1}</span><span class="ico">${t.ico}</span><span class="nm">${t.name}</span>
-      ${locked ? "" : `<span class="uses">${left}</span>`}</div>`;
+      <span class="uses">${left}</span></div>`;
   }).join("");
   $$(".tool").forEach(el => el.onclick = () => selectTool(el.dataset.tool));
-  $("#edits-left").textContent = `Edits ${S.edits}/${S.maxEdits}`;
+  $("#edits-left").textContent = `Changes ${S.edits}/${S.maxEdits}`;
   $("#envelope").classList.toggle("ready", S.edits >= 2);
 }
 
 function selectTool(id) {
   if (!S.inv || S.submitted) return;
   const t = TOOLS.find(x => x.id === id);
-  if (!toolAvailable(t)) { sfx("bad"); toast("🔒 Unlock the Burner Pen in the shop", "bad"); return; }
-  if (S.tool === id) return dropTool();
+  if (S.tool === id && $("#popover").classList.contains("show")) return dropTool();
   if (S.uses[id] >= t.cap) { sfx("bad"); toast(`No ${t.name} uses left this round`, "bad"); return; }
-  if (S.edits >= S.maxEdits) { sfx("bad"); toast("Edit budget spent — time to submit!", "bad"); return; }
-  hidePopover();
-  if (t.instant) return useCopier();
+  if (S.edits >= S.maxEdits) { sfx("bad"); toast("No changes left: time to send it!", "bad"); return; }
   S.tool = id;
-  sfx("pick");
-  if (id === "stamp") openStampRack();
-  $("#invoice").classList.add("tool-active");
-  $("#invoice").classList.toggle("target-field", ["whiteout", "scissors", "pen"].includes(id));
-  $("#tool-cursor").textContent = t.ico; $("#tool-cursor").style.display = "block";
-  hint(t.hint);
-  renderTools();
+  sfx("pick"); renderTools();
+  const all = CAMPAIGN_TOOLS.includes(id);
+  hint(`${t.hint}${all ? " (every order)" : " (this order)"}`);
+  const o = curOrder(), shop = O.SHOPS[S.level];
+  const opts = id === "ship" ? O.shipOptions(shop, o) : t.options;
+  const anchor = $(`#invoice .tchip[data-tool="${id}"]`) || $(`#tools [data-tool="${id}"]`);
+  openPopoverAt(anchor, `${t.ico} ${t.name} · ${all ? "every order" : "this order"}`, opts.map(op => {
+    const locked = op.unlock && !S.unlocks.includes(op.unlock);
+    const heat = id === "ship" && S.perks.includes("mules") ? 0 : op.heat;
+    return { label: (locked ? "🔒 " : "") + op.label, sub: locked ? "Unlock it in the shop" : op.sub,
+      current: o[id] === op.id, disabled: locked, heat, act: () => applyOption(t, op, heat) };
+  }));
+}
+
+function applyOption(t, op, heat) {
+  (CAMPAIGN_TOOLS.includes(t.id) ? S.inv.orders : [curOrder()]).forEach(o => o[t.id] = op.id);
+  sfx({ card: "snip", email: "pen", proxy: "msg", device: "pick", ship: "chunk", clock: "click" }[t.id] || "pick");
+  spend(t.id, heat);
+  renderTicket();
+  if (t.id === "ship" && op.toYou) {
+    showTip("first-route", "📦 The goods reach you now. At least one order must, or there's no payout!", "route-goods");
+    guideCheck("goods-routed");
+  }
 }
 
 function dropTool() {
-  S.tool = null; S.pendingStamp = null;
-  $("#invoice").classList.remove("tool-active", "target-field");
-  $("#tool-cursor").style.display = "none";
-  hint(""); renderTools();
+  S.tool = null;
+  hidePopover(); hint(""); renderTools();
 }
 
 function hint(text) { $("#tool-hint").textContent = text; $("#tool-hint").classList.toggle("show", !!text); }
@@ -744,116 +693,31 @@ function hint(text) { $("#tool-hint").textContent = text; $("#tool-hint").classL
 function spend(id, heat) {
   S.uses[id]++; S.edits++;
   addHeat(heat);
-  dropTool();
+  S.tool = null; hint(""); renderTools();
   updateHud();
   guideCheck("edit");
 }
 
 document.addEventListener("pointermove", e => {
   const c = $("#tool-cursor");
-  c.style.left = e.clientX + "px"; c.style.top = e.clientY + "px";
+  if (c) { c.style.left = e.clientX + "px"; c.style.top = e.clientY + "px"; }
 });
 
-$("#invoice").addEventListener("click", e => {
-  if (!S.tool) return;
-  const P = $("#invoice");
-  const { x, y } = toStage(e.clientX, e.clientY, P);
-  const field = e.target.closest("[data-field]");
-  const region = e.target.closest("[data-region]")?.dataset.region;
-  syncEditable();
-
-  if (S.tool === "whiteout") {
-    const allowed = ["invoiceNo", "date", "po", "approver", "item0", "item1", "item2"];
-    if (!field || !allowed.includes(field.dataset.field)) { toast("Whiteout works on #, date, PO, items or signature"); return; }
-    const k = field.dataset.field;
-    if (S.altered.has(k)) { toast("Already whited out — just type on it"); return; }
-    S.altered.add(k); sfx("squirt");
-    spend("whiteout", 6);
-    renderInvoice();
-    const el = $(`#invoice [data-field="${k}"]`);
-    el.focus(); document.getSelection().selectAllChildren(el);
-    hint("Type your new value, then click away"); setTimeout(() => hint(""), 2200);
-  }
-  else if (S.tool === "coffee") {
-    const strength = S.perks.includes("coffee") ? .7 : .35;
-    const r = region || "items";
-    S.legibility[r] = clamp(S.legibility[r] - strength, 0, 1);
-    S.stains.push({ x, y, big: S.legibility[r] < .4 });
-    sfx("splash");
-    spend("coffee", S.legibility[r] < .3 ? 10 : 4);
-    renderInvoice();
-  }
-  else if (S.tool === "scissors") {
-    if (!field || field.dataset.field !== "bank") { toast("Cut along the bank details box"); return; }
-    openPopover(e, "Tape in a new account", ATTACKER_ACCOUNTS.map(a => ({ label: a.label, sub: a.note, act: () => {
-      S.inv.bank = a.id; S.altered.add("bank"); sfx("snip"); spend("scissors", 8); renderInvoice();
-      showTip("first-bank", "✂️ Money routed to your account. Always do this or payout is zero!", "bank-account");
-      guideCheck("bank-edited");
-    } })));
-  }
-  else if (S.tool === "pen") {
-    if (!field || !["domain", "letterhead"].includes(field.dataset.field)) { toast("Use the pen on the logo or the email domain"); return; }
-    const v = S.vendorRef;
-    openPopover(e, "Spoof the sender", [
-      { label: `billing@${v.domain}`, sub: "Perfect copy of the real domain (lots of heat)", act: () => penTo(v.domain, "match", 14) },
-      { label: `billing@${v.domain.replace(".", "-invoices.")}`, sub: "Close lookalike", act: () => penTo(v.domain.replace(".", "-invoices."), "close", 9) },
-      { label: "Redraw the letterhead logo", sub: "Logo matches the vendor", act: () => { S.inv.letterhead = "match"; S.inv.icon = v.icon; S.altered.add("letterhead"); sfx("pen"); spend("pen", 8); renderInvoice(); } },
-    ]);
-  }
-  else if (S.tool === "stamp") {
-    if (!S.pendingStamp) { openStampRack(); return; }
-    S.stamps.push({ type: S.pendingStamp, x, y, r: rand(-18, 18) });
-    sfx("stamp");
-    const official = S.pendingStamp === "APPROVED" && S.perks.includes("stampcol");
-    spend("stamp", official ? -8 : 3);
-    renderInvoice();
-  }
-});
-
-function penTo(domain, letterhead, heat) {
-  S.inv.domain = domain; S.inv.letterhead = letterhead === "match" ? S.inv.letterhead : letterhead;
-  S.altered.add("domain"); sfx("pen"); spend("pen", heat); renderInvoice();
-}
-
-function openStampRack() {
-  const d = $("#tools [data-tool=stamp]").getBoundingClientRect();
-  const pos = toStage(d.left, d.top);
+/* options list under (or above) a button; `heat` shows what the choice costs */
+function openPopoverAt(anchor, title, options) {
+  const r = anchor.getBoundingClientRect(), below = toStage(r.left, r.bottom), above = toStage(r.left, r.top);
   const pop = $("#popover");
-  pop.innerHTML = `<div class="pop-title">Stamp rack — pick one</div><div class="pop-stamps">${["APPROVED", "PAID", "URGENT"].map(s => `<button class="pop-stamp ${s}" data-s="${s}">${s}</button>`).join("")}</div>`;
-  pop.style.left = (pos.x - 80) + "px"; pop.style.top = (pos.y - 100) + "px";
+  pop.innerHTML = `<div class="pop-title">${title}</div>` + options.map((o, i) => `
+    <button class="pop-opt ${o.current ? "current" : ""}" data-i="${i}" ${o.current || o.disabled ? "disabled" : ""}>
+      <span class="po-top">${o.label}${o.current ? `<i class="po-now">✓ now</i>` : o.heat ? `<i class="po-heat">+${o.heat} 🔥</i>` : ""}</span>
+      <small>${o.sub}</small></button>`).join("");
   pop.classList.add("show");
-  $$(".pop-stamp", pop).forEach(b => b.onclick = ev => {
-    ev.stopPropagation(); S.pendingStamp = b.dataset.s; sfx("pick"); hidePopover();
-    $("#tool-cursor").textContent = "🔖"; hint(`Click the invoice to stamp ${b.dataset.s}`);
-  });
-}
-
-function openPopover(e, title, options) {
-  const p = toStage(e.clientX, e.clientY);
-  const pop = $("#popover");
-  pop.innerHTML = `<div class="pop-title">${title}</div>` + options.map((o, i) => `<button class="pop-opt" data-i="${i}">${o.label}<small>${o.sub}</small></button>`).join("");
-  pop.style.left = Math.min(p.x + 10, 1300) + "px"; pop.style.top = Math.min(p.y + 10, 640) + "px";
-  pop.classList.add("show");
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = clamp(below.x, 10, 1590 - w) + "px";
+  pop.style.top = (below.y + 6 + h <= 890 ? below.y + 6 : clamp(above.y - h - 6, 10, 890 - h)) + "px";
   $$(".pop-opt", pop).forEach(b => b.onclick = ev => { ev.stopPropagation(); hidePopover(); options[b.dataset.i].act(); });
 }
 function hidePopover() { $("#popover").classList.remove("show"); }
-
-function useCopier() {
-  syncEditable();
-  const P = $("#invoice");
-  P.classList.remove("copying"); void P.offsetWidth; P.classList.add("copying");
-  sfx("copy");
-  setTimeout(() => {
-    S.copyGen++;
-    // a copy flattens whiteout & tape: edits look less obvious, but quality drops
-    S.uses.copier++; S.edits++;
-    addHeat(S.perks.includes("copy") ? 2 : 5 * S.copyGen);
-    renderInvoice(); renderTools(); updateHud();
-    toast(`Copy generation ${S.copyGen} — scan quality ${Math.round(scanQuality() * 100)}%`);
-    if (S.copyGen === 1) showTip("first-copy", "🖨️ Copies hide edits but lower quality. Generation 2+ is detectable.", "copy-quality");
-  }, 450);
-}
-const scanQuality = () => S.perks.includes("copy") ? 1 : clamp(1 - .22 * S.copyGen, 0, 1);
 
 /* ======================= Heat / HUD ======================= */
 
@@ -870,7 +734,7 @@ function updateHud() {
   $("#heat-num").textContent = Math.round(S.heat) + "%";
   $("#tb-money").textContent = money(S.money);
   $("#tb-perks").innerHTML = S.perks.map(id => `<span title="${PERKS.find(p => p.id === id).name}">${PERKS.find(p => p.id === id).ico}</span>`).join("");
-  $("#edits-left").textContent = `Edits ${S.edits}/${S.maxEdits}`;
+  $("#edits-left").textContent = `Changes ${S.edits}/${S.maxEdits}`;
   $("#envelope").classList.toggle("ready", S.edits >= 2);
   updateDebug();
   const st = stageFor(S.version);
@@ -1036,15 +900,13 @@ $("#envelope").addEventListener("pointerdown", e => {
 });
 
 function trySubmit() {
-  syncEditable();
-  if (S.edits < 2) { sfx("bad"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); toast("Use at least 2 tools before submitting", "bad"); return; }
-  // validity gate (MOCK rule check): the money must go to you
-  if (!ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank)) { sfx("bad"); toast("The money still goes to the real vendor! ✂️ Tape in your account.", "bad"); return; }
-  if (!S.inv.vendor.trim()) { sfx("bad"); toast("The invoice needs a vendor name", "bad"); return; }
+  if (S.edits < 2) { sfx("bad"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); toast("Make at least 2 changes before sending", "bad"); return; }
+  // validity gate (MOCK rule check): something has to reach you
+  if (!S.inv.orders.some(o => factsOf(o).ship.toYou)) { sfx("bad"); toast("Nothing reaches you! 📦 Ship to a drop address or email the code to your burner.", "bad"); return; }
   if (EMBED) {
     // in the office the envelope is printed, then carried to the inspector by hand
     S.submitted = S.printed = true; clearTimeout(S.bossTimer); dropTool();
-    sfx("chunk"); toast("🖨️ Printing… grab it at the printer and drop it in the inspector's tray", "good");
+    sfx("chunk"); toast("🖨️ Printing the order slip… grab it at the printer and drop it in Gus's tray", "good");
     $("#envelope").classList.add("printed");
     post("print");
     guideCheck("submitted");
@@ -1068,51 +930,29 @@ window.addEventListener("message", e => {
 
 /* ======================= Inspection (MOCK verdict) ======================= */
 
-function computeTells() {
-  const inv = S.inv, v = S.vendorRef, L = LEVELS[S.level];
-  const known = L.vendors.find(x => x.name.toLowerCase() === inv.vendor.trim().toLowerCase());
-  const lines = inv.items.reduce((a, i) => a + i.qty * i.price, 0);
-  const t = [];
-  const hide = r => S.legibility[r] ?? 1; // stains hide tells in that region
-  if (known && inv.bank !== known.bank) t.push(["bank_changed", 26 * hide("bank"), "bank"]);
-  if (!known) t.push(["unknown_vendor", S.scheme === "boss_request" ? 8 : 20, "header"]);
-  if (known && inv.domain !== known.domain) t.push(["domain_mismatch", (inv.letterhead === "close" ? 9 : 18) * hide("header"), "header"]);
-  if (!known && inv.domain.endsWith(".biz")) t.push(["domain_mismatch", 12 * hide("header"), "header"]);
-  if (inv.amount > (known || v).usual * 1.6) t.push(["amount_unusual", 16, "items"]);
-  if (Math.abs(inv.amount - lines) > 1) t.push(["total_mismatch", 14 * hide("items"), "items"]);
-  const visibleEdits = [...S.altered].filter(k => k !== "bank" && k !== "domain" && k !== "letterhead").length;
-  if (visibleEdits) t.push(["altered", visibleEdits * 7 * clamp(1 - S.copyGen * .35, .2, 1), "meta"]);
-  if (S.copyGen >= 2 && !S.perks.includes("copy")) t.push(["copy_gen", 8 * S.copyGen, "header"]);
-  const worst = Math.min(...Object.values(S.legibility));
-  if (worst < .4) t.push(["low_legibility", 10, Object.keys(S.legibility).find(k => S.legibility[k] === worst)]);
-  if (S.stamps.some(s => s.type === "URGENT") && S.level === 1) t.push(["stamp_wrong", 12, "footer"]);
-  if (S.level === 2 && !/^SM-\d+/.test(inv.po)) t.push(["bad_po", 18, "meta"]);
-  if (S.level === 2 && inv.amount > 5000 && !S.stamps.some(s => s.type === "APPROVED")) t.push(["stamp_missing", 14, "footer"]);
-  if (inv.dupOf && inv.invoiceNo === inv.dupOf) t.push(["dup_number", 25, "meta"]);
-  if (S.heat > 40) t.push(["heat", (S.heat - 40) * .5, null]);
-  // the memo's real rules are what the inspector actually watches
-  const watched = S.memo.filter(m => m.real).map(m => m.tell);
-  t.forEach(x => { if (watched.includes(x[0])) x[1] *= 1.5; });
-  return t.filter(x => x[1] > 0.5).sort((a, b) => b[1] - a[1]);
+const campaignCtx = () => ({ level: S.level, holder: S.holder, orders: S.inv.orders, hist: S.hist, session: S.session,
+  round: S.round, scheme: S.scheme, campaign: S.session + "-r" + S.round, perks: S.perks });
+
+/* the rows for the campaign on screen; random parts (minutes, ids) stay put until the orders change */
+let rowCache = { key: null, rows: null };
+function previewRows() {
+  const key = JSON.stringify([S.round, S.inv.orders]);
+  if (rowCache.key !== key) rowCache = { key, rows: O.toRows(campaignCtx()) };
+  return rowCache.rows;
 }
 
-// MOCK verdict: rule-based stand-in for the detector
+// MOCK verdict: the scripted Gus in orders.js
 function mockJudge() {
-  const tells = computeTells();
-  const skill = .55 + .12 * (S.version - 1);
-  let suspicion = tells.reduce((a, t) => a + t[1], 0) * skill;
-  suspicion -= S.persuasion * .18;
-  if (S.stamps.some(s => s.type === "APPROVED")) suspicion -= 6;
-  suspicion += rand(-12, 12);
-  const caught = suspicion > 38;
-  const payout = Math.round(S.inv.amount * SCHEMES[S.scheme].pay * (S.perks.includes("night") ? 2 : 1));
-  return { caught, tells, payout, suspicion, line: null, newVersion: null, source: "mock" };
+  const rows = previewRows();
+  const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion, learned: S.learned });
+  const payout = Math.round(r.payout * SCHEMES[S.scheme].pay * (S.perks.includes("night") ? 2 : 1));
+  return { ...r, rows, payout, line: null, newVersion: null, source: "mock" };
 }
 
-/* turn a POST /submit response into the shape the UI uses; tells are [name, weight, region] */
+/* turn a POST /submit response into the shape the UI uses; tells are [name, weight, box] */
 function adaptVerdict(r, mock) {
   const verdict = String(r.verdict ?? "").toUpperCase();
-  const caught = verdict ? verdict === "FLAGGED" : !!r.caught;
+  const caught = verdict ? ["FLAGGED", "DECLINED"].includes(verdict) : !!r.caught;
   const raw = r.top_tells ?? r.tells ?? [];
   const tells = raw.map(t => {
     const name = typeof t === "string" ? t : t.tell_type ?? t.feature ?? t.name ?? t.tell;
@@ -1121,7 +961,7 @@ function adaptVerdict(r, mock) {
     return [name, weight, region || TELL_REGION[name] || null];
   }).filter(t => t[0]);
   const v = +(r.new_version ?? r.version);
-  return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)),
+  return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)), results: r.results ?? mock.results, rows: mock.rows,
     line: r.inspector_line ?? r.line ?? null, newVersion: Number.isFinite(v) && v > 0 ? v : null, source: "api" };
 }
 
@@ -1135,12 +975,30 @@ async function judge() {
   } catch (e) { offline(e); return mock; }
 }
 
+/* fill the game columns once Gus has answered, then keep the rows */
+function finishRows(res) {
+  const rows = res.rows.map(r => ({ ...r }));
+  rows.forEach((row, i) => {
+    const x = res.results && res.results[i];
+    Object.assign(row, {
+      // BLOCKED: never scored, the card was already declined or reported earlier in the campaign
+      verdict: x ? (x.declined ? (x.reason === "flagged" ? "DECLINED" : "BLOCKED") : "APPROVED") : res.caught ? "DECLINED" : "APPROVED",
+      score: x ? +x.score.toFixed(3) : null,
+      top_reasons: x ? JSON.stringify(x.tells.slice(0, 3).map(t => [t[0], +t[1].toFixed(1)])) : null,
+      detector_version: S.version, cover_note: S.inv.coverEmail || "",
+    });
+  });
+  O.remember(S.hist, campaignCtx(), rows);
+  storeRows(rows);
+  return rows;
+}
+
 async function submit() {
   S.submitted = true; clearTimeout(S.bossTimer);
   sfx("chunk");
   const L = LEVELS[S.level];
   const ob = $("#outbox"); ob.classList.add("scanning");
-  inspectorSay(`Reading your invoice…`);
+  inspectorSay(`Reviewing your orders…`);
   const pending = judge(); // start the request now, the animation covers the wait
 
   await sleep(900);
@@ -1148,40 +1006,46 @@ async function submit() {
   const st = $(".inspect-stage");
   st.classList.remove("done");
   $("#big-stamp").className = "big-stamp"; $("#cash-pop").classList.remove("show");
-  $("#inspect-line").textContent = `${L.inspector.name} v${S.version} is reading it…`;
+  $("#inspect-line").textContent = `${L.inspector.name} v${S.version} is reviewing ${S.inv.orders.length > 1 ? S.inv.orders.length + " orders" : "your order"}…`;
   $("#inspect-line").classList.add("show", "reading");
   overlay("inspect"); sfx("scan");
 
   const [res] = await Promise.all([pending, sleep(1500)]);
-  S.lastResult = res; updateDebug();
+  S.lastResult = res;
+  S.rows = finishRows(res);
   const { caught, tells, payout } = res;
   const bs = $("#big-stamp");
-  bs.textContent = caught ? "FLAGGED" : "PAID";
+  bs.textContent = caught ? "DECLINED" : "APPROVED";
   bs.classList.add("show", caught ? "flagged" : "paid");
   sfx("stamp");
   st.classList.add("done");
-  const said = res.line || pick(L.lines[caught ? "catch" : "pass"]);
+  const said = res.line || (res.reported && !tells.length ? "The cardholder called their bank. Card blocked!" : pick(L.lines[caught ? "catch" : "pass"]));
   $("#inspect-line").classList.remove("reading");
   $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
   inspectorSay(said);
-  post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor, tells: tells.slice(0, 3).map(t => t[0]) });
+  const n = S.inv.orders.length;
+  post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name,
+    vendor: `${n} order${n > 1 ? "s" : ""} · ${O.SHOPS[S.level].domain}`, tells: tells.slice(0, 3).map(t => t[0]) });
   $("#inspect-line").classList.add("show");
   if (caught) {
     sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
     S.streak = 0; S.caughtCount++;
-    if (S.caughtCount === 1) showTip("first-caught", "🔍 Caught! Press D to see what the inspector spotted.", "tells-explained");
+    if (S.caughtCount === 1) showTip("first-caught", "🔍 Declined! The red boxes show what Gus spotted. Press D for the full row.", "tells-explained");
     addHeat(12);
-  } else {
-    S.money += payout; S.streak++;
+  }
+  if (payout > 0) { // orders that got through before a decline still pay
+    S.money += payout;
+    if (!caught) S.streak++;
     $("#cash-pop").textContent = "+" + money(payout); $("#cash-pop").classList.add("show");
     setTimeout(() => sfx("cash"), 250);
     $("#tb-money").classList.remove("bump"); void $("#tb-money").offsetWidth; $("#tb-money").classList.add("bump");
-    S.cards.push({ scheme: S.scheme, payout, round: S.round, isNew: true });
+    if (!caught) S.cards.push({ scheme: S.scheme, payout, round: S.round, isNew: true });
   }
-  S.history.push({ round: S.round, scheme: S.scheme, caught, payout: caught ? 0 : payout, version: S.version, tells: tells.map(t => t[0]) });
-  // forensic replay: show what tipped them off on the desk invoice
-  tells.slice(0, 2).forEach(t => t[2] && $(`#invoice [data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
-  $("#invoice").classList.toggle("forensic", caught);
+  S.history.push({ round: S.round, scheme: S.scheme, caught, payout, version: S.version, tells: tells.map(t => t[0]) });
+  // forensic replay: open the first declined order on the ticket
+  const firstBad = res.results ? res.results.findIndex(r => r.declined) : -1;
+  if (firstBad >= 0) S.inv.cur = firstBad;
+  renderTicket();
   updateHud();
   guideCheck("verdict-done");
 }
@@ -1194,6 +1058,8 @@ function showCorkboard() {
   const r = S.lastResult, L = LEVELS[S.level];
   const shredded = r.caught && S.perks.includes("shred") && !S.shredUsed;
   if (shredded) S.shredUsed = true;
+  // Gus weighs the tell that caught you more from now on (scripted Gus; the real model retrains)
+  if (r.caught && !shredded && r.tells.length) S.learned[r.tells[0][0]] = (S.learned[r.tells[0][0]] || 0) + 1;
   const oldV = S.version;
   S.prevVersion = oldV;
   if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
@@ -1203,15 +1069,15 @@ function showCorkboard() {
     S.patches++;
     showTip("first-version-bump", "🧠 The inspector leveled up — he learned from your trick!", "version-bump");
     if (r.tells.length) S.shame.push({ player: playerName(), version: S.version, trick: SCHEMES[S.scheme].name,
-      learned: tellLabel(r.tells[0][0]), amount: S.inv.amount, round: S.round });
+      learned: tellLabel(r.tells[0][0]), amount: campaignTotal(), round: S.round });
   }
   const top = r.tells.slice(0, 3);
   const pos = [[120, 60], [80, 330], [430, 300]];
   $("#cork-pins").innerHTML = `
     <div class="cork-card main" style="left:380px;top:40px;transform:rotate(-3deg)">
       <b>${SCHEMES[S.scheme].icon} ${SCHEMES[S.scheme].name}</b>
-      ${S.inv.vendor}<br>${money(S.inv.amount)} → ••••${S.inv.bank}
-      <div class="cc-stamp ${r.caught ? "" : "paid"}">${r.caught ? "FLAGGED" : "GOT AWAY"}</div>
+      ${S.inv.orders.length} order${S.inv.orders.length > 1 ? "s" : ""} on ${S.holder.name}'s card<br>${money(r.payout)} to you
+      <div class="cc-stamp ${r.caught ? "" : "paid"}">${r.caught ? "DECLINED" : "GOT AWAY"}</div>
     </div>` +
     (top.length ? top : [["heat", 0, null]]).map((t, i) => `
     <div class="cork-card" style="left:${pos[i][0]}px;top:${pos[i][1]}px;transform:rotate(${rand(-5, 5)}deg)">
@@ -1236,7 +1102,7 @@ function showBetween() {
   const n = 40 + S.round * 17 + Math.floor(rand(0, 30));
   $("#patch-title").textContent = `Inspector v${S.version}`;
   const items = learned.length
-    ? learned.map(l => `<li>Now catches: <b>${l}</b> — learned from ${n} invoices.</li>`)
+    ? learned.map(l => `<li>Now catches: <b>${l}</b> — learned from ${n} orders.</li>`)
     : [`<li>No new tricks learned. <b>Clean job.</b></li>`];
   const st = stageFor(S.version);
   if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b></li>`);
@@ -1271,7 +1137,7 @@ async function loadPatchNotes(since, extra) {
       if (typeof n === "string") return [n];
       const v = n.version != null ? `v${n.version}` : "";
       const n_ = n.invoices_trained_on ?? n.learned_from ?? n.examples ?? n.count;
-      const from = n_ != null ? ` — learned from ${n_} invoices` : "";
+      const from = n_ != null ? ` — learned from ${n_} orders` : "";
       const learned = [].concat(n.learned ?? n.catches ?? n.features ?? n.text ?? n.summary ?? []);
       return learned.map(l => `${v ? v + " " : ""}now catches: <b>${tellLabel(l)}</b>${from}.`);
     });
@@ -1334,19 +1200,19 @@ const GUIDE = { on: false, step: 0, waitingFor3D: null };
 
 const GUIDE_STEPS = [
   { id: "sit",       world: true,  label: "Go to your desk",      instr: "Walk to your desk and press E to sit down." },
-  { id: "scheme",    instr: "Read the memo and case file, then pick a scheme.",
+  { id: "scheme",    instr: "Read the memo and the card & shop file, then pick a scheme.",
     spotlight: ["#scheme-cards"] },
-  { id: "edit-bank", instr: "Use scissors on the bank field to route money to your account.",
-    spotlight: [".tool[data-tool=scissors]"] },
-  { id: "edit-tool", instr: "Use one more tool — you need at least 2 edits to send.",
+  { id: "edit-bank", instr: "Use 📦 Drop address so the goods reach you, not the cardholder.",
+    spotlight: [".tool[data-tool=ship]"] },
+  { id: "edit-tool", instr: "Make one more change: you need at least 2 to send.",
     spotlight: ["#tools"] },
-  { id: "clerk",     instr: "Send a short note to the clerk. Match their quirk!",
+  { id: "clerk",     instr: "Send a short note to customer support. Match their quirk!",
     spotlight: ["#win-clerk"], skippable: true },
-  { id: "submit",    instr: EMBED ? "Drag the envelope onto PRINT to send your invoice." : "Drag the envelope into the OUTBOX.",
+  { id: "submit",    instr: EMBED ? "Drag the envelope onto PRINT to send your orders." : "Drag the envelope into the OUTBOX.",
     spotlight: ["#envelope"] },
   { id: "pickup",    world: true,  label: "Grab at printer",      instr: "Walk to the printer and press E to grab it." },
-  { id: "deliver",   world: true,  label: "Drop in IN tray",      instr: "Carry it to the inspector's IN tray and press E." },
-  { id: "verdict",   instr: "The inspector is reading your invoice..." },
+  { id: "deliver",   world: true,  label: "Drop in IN tray",      instr: "Carry it to Gus's IN tray and press E." },
+  { id: "verdict",   instr: "Gus is reviewing your orders..." },
   { id: "done",      instr: "Tutorial complete! You're ready to forge on your own.", auto: true },
 ];
 
@@ -1436,7 +1302,7 @@ function guideCheck(event, data) {
   if (!step) return;
   switch (step.id) {
     case "scheme": if (event === "scheme-picked") advanceGuide(); break;
-    case "edit-bank": if (event === "bank-edited") advanceGuide(); break;
+    case "edit-bank": if (event === "goods-routed") advanceGuide(); break;
     case "edit-tool": if (event === "edit" && S.edits >= 2) advanceGuide(); break;
     case "clerk": if (event === "clerk-sent") advanceGuide(); break;
     case "submit": if (event === "submitted") advanceGuide(); break;
@@ -1455,7 +1321,7 @@ function handleGuidedVerdict() {
       card.style.display = "";
       card.style.left = "400px"; card.style.top = "200px";
       card.innerHTML = `<div class="guide-step">CAUGHT!</div>
-        <p class="guide-instr">The inspector noticed: <b>${tells || "something suspicious"}</b>.<br>That's okay — every failure is a lesson.</p>
+        <p class="guide-instr">Gus noticed: <b>${tells || "something suspicious"}</b>.<br>That's okay: every failure is a lesson.</p>
         <div style="display:flex;gap:10px;margin-top:12px">
           <button class="btn btn-small" id="guide-continue">Continue anyway</button>
         </div>`;
@@ -1472,7 +1338,7 @@ function handleGuidedVerdict() {
  * time from Game Menu → Tutorial. */
 
 const TUT_KEY = "forged-tutorial-done";
-const TUT_SCHEME = "changed_bank"; // the tutorial's steps are written for this scheme
+const TUT_SCHEME = "account_takeover"; // the tutorial's steps are written for this scheme
 
 // while the tutorial waits for a scheme, only the tutorial's scheme can be picked
 function lockSchemes(on) {
@@ -1488,44 +1354,44 @@ function lockSchemes(on) {
 const usesLeft = id => S.inv && S.uses[id] < TOOLS.find(t => t.id === id).cap && S.edits < S.maxEdits;
 const TUTORIAL = [
   { at: [`.scheme-card[data-scheme=${TUT_SCHEME}]`], side: "top", wait: "scheme", title: "Pick your scheme",
-    text: () => `Each card is a different kind of fake invoice, with its <b>risk</b> and <b>payout</b>. <b>Hover a card</b> to see which tools help, which to avoid, and what gives it away.<br><br>For this tutorial, start with the simplest one: <b>click Vendor changed banks.</b> The other schemes unlock as soon as the tutorial ends.` },
+    text: () => `Each card is a ready-made fraud campaign, with its <b>risk</b> and <b>payout</b>. <b>Hover a card</b> to see which tools help, which to avoid, and what gives it away.<br><br>For this tutorial, start with <b>Account takeover</b>: one order from the cardholder's own account. The others unlock as soon as the tutorial ends.` },
   { at: ["#win-memo"], side: "right", title: "The leaked memo",
     until: () => S.memo.some(m => m.mark),
-    text: () => `The boss's orders to the inspector: what he's watching this round. <b>Two rules are real, one is fake.</b> You work out which from what gets caught.<br><br><b>Try it:</b> click any rule to mark it REAL. Click again for FAKE.` },
-  { at: ["#win-case"], side: "right", title: "The case file",
-    text: () => `What normal looks like at this company: known vendors, their usual amounts and bank numbers, who approves what, and house rules in the notes. <b>The closer your invoice looks to normal, the harder it is to catch.</b>` },
-  { at: ["#scheme-banner", "#invoice"], side: "right", title: "Your invoice",
-    text: () => `This is a real bill from <b>${S.vendorRef ? S.vendorRef.name : "a known vendor"}</b>. Right now it pays them. Your job is to make it pay you without looking edited. You can type over the vendor name and the total; everything else changes with tools.` },
-  { at: ["#dock .dock-label", "#tools"], side: "top", title: "The toolbox",
-    text: () => `Pick a tool with ${kb("tool1")}–${kb("tool6")}, a click, or the mouse wheel, then click the invoice. The badge is how many uses are left this round. <b>You need at least 2 edits to send it</b>, and 4 is the limit. ${kb("drop")} puts a tool down. Next, you'll use three of them.` },
-  { at: [".tool[data-tool=scissors]", "#invoice .inv-bank"], side: "right", title: "Get paid: scissors & tape",
-    until: () => S.inv && ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank), can: () => usesLeft("scissors"),
-    text: () => `<b>Do it:</b> press ${kb("tool4")} (or click ✂️ Scissors), then click the <b>REMIT PAYMENT TO</b> box and pick one of your accounts.<br><br>Without this, the money goes to the real vendor and the invoice won't send.` },
-  { at: [".tool[data-tool=coffee]", "#invoice .inv-bank"], side: "right", title: "Hide it: coffee",
-    until: () => S.inv && (S.legibility.bank < 1 || S.uses.coffee >= 2), can: () => usesLeft("coffee"),
-    text: () => `A new bank number is the biggest giveaway on this scheme. <b>Do it:</b> press ${kb("tool2")} (or click ☕ Coffee mug), then click the <b>REMIT PAYMENT TO</b> box to stain it. Stains hide what's under them, but a ruined page looks odd, so one is enough.` },
-  { at: [".tool[data-tool=stamp]", "#invoice .inv-foot"], side: "right", title: "Look official: stamp",
-    until: () => S.inv && (S.stamps.length > 0 || S.uses.stamp >= 1), can: () => usesLeft("stamp"),
-    text: () => `<b>Do it:</b> press ${kb("tool5")} (or click 🔖 Stamp rack), choose <b>APPROVED</b>, then click near the signature. APPROVED calms the inspector a little.${S.level === 1 ? " Avoid URGENT here: the case file says Lou hates them." : ""}` },
-  { at: ["#win-clerk"], side: "left", title: "Sweet-talk the clerk",
+    text: () => `The boss's orders to Gus, the shop's risk engine: what he's watching this round. <b>Two rules are real, one is fake.</b> You work out which from what gets caught.<br><br><b>Try it:</b> click any rule to mark it REAL. Click again for FAKE.` },
+  { at: ["#win-case"], side: "right", title: "The card and the shop",
+    text: () => `At the top, this round's stolen card: <b>whose it is, where they live, their real email and phone</b>. Below, what normal looks like at this shop. <b>The more your orders look like this cardholder's normal, the harder they are to catch.</b>` },
+  { at: ["#scheme-banner", "#invoice"], side: "right", title: "Your order",
+    text: () => `One checkout in 5 boxes. <b>You never type anything:</b> the buttons in each box swap what's in it. The line at the bottom says who gets the goods. Right now it's the cardholder, so you'd earn nothing.` },
+  { at: ["#dock .dock-label", "#tools"], side: "top", title: "The toolkit",
+    text: () => `Each tool swaps one box: ${kb("tool1")}–${kb("tool6")}, a click, the box's buttons, or the mouse wheel. Card, email, device and IP belong to your persona and apply to every order. Address and time apply to the order on screen. The 🔥 number is the heat a choice costs. <b>You need 2 changes to send</b>, ${S.maxEdits} at most.` },
+  { at: [".tool[data-tool=ship]", "#invoice [data-region=ship]"], side: "right", title: "Get the goods: drop address",
+    until: () => S.inv && S.inv.orders.some(o => factsOf(o).ship.toYou), can: () => usesLeft("ship"),
+    text: () => `<b>Do it:</b> press ${kb("tool5")} (or 📦 Change address) and pick <b>Mule in the same city</b>.<br><br>Without it, the order ships to the victim's home and you get nothing.` },
+  { at: [".tool[data-tool=device]", "#invoice [data-region=device]"], side: "right", title: "Blend in: device and IP",
+    until: () => S.inv && (S.uses.device >= 1 || S.uses.proxy >= 1), can: () => usesLeft("device") || usesLeft("proxy"),
+    text: () => `This is the cardholder's own account, and they always shop from their phone, near home. Your Windows laptop and home IP stand out.<br><br><b>Do it:</b> press ${kb("tool4")} for another device, or ${kb("tool3")} for a VPN near the cardholder. Cloning their phone unlocks in the shop.` },
+  { at: ["#strip"], side: "top", title: "Campaigns",
+    text: () => `The whole scheme, one panel per order. <b>+ Next order</b> copies the order on screen so you can add a step: a tiny test charge first, or a second buy a day later. Gus scores every order, and <b>one declined order blocks the card</b> for the rest.` },
+  { at: ["#win-clerk"], side: "left", title: "Sweet-talk support",
     enter: () => { tut.base = S.clerkReplies || 0; }, until: () => (S.clerkReplies || 0) > tut.base,
-    text: () => `<b>Do it:</b> press ${kb("chat")} (or click the box), type a short note and press Enter. ${LEVELS[S.level].clerk.name}'s quirk is in the window's corner: <i>${LEVELS[S.level].clerk.quirk}</i>. Notes that play to it fill the <b>Convinced</b> bar, which lowers the inspector's suspicion.` },
+    text: () => `<b>Do it:</b> press ${kb("chat")} (or click the box), type a short note to customer support and press Enter. ${LEVELS[S.level].clerk.name}'s quirk is in the window's corner: <i>${LEVELS[S.level].clerk.quirk}</i>. Notes that play to it fill the <b>Convinced</b> bar, which lowers Gus's suspicion.` },
   { at: [], noDim: true, drill: true, title: "Practice: the boss",
     enter: () => { tut.hid = false; tutBossDrill(); }, until: () => tut.hid,
-    text: () => `The boss walks by while you forge. When the red <b>FOOTSTEPS!</b> banner appears, press ${kb("hide")} fast to slide a newspaper over the invoice. Miss it in a real round and you take +15 heat.<br><br><b>Practice now</b> (no heat): footsteps are coming…` },
-  { at: ["#win-inspector"], side: "left", title: "The inspector",
-    text: () => `Who's judging you, and which version he is. Every round he's retrained on your tricks and gets smarter: <b>intern → magnifier → UV lamp → cyborg</b>.` },
+    text: () => `The boss walks by while you work. When the red <b>FOOTSTEPS!</b> banner appears, press ${kb("hide")} fast to slide a newspaper over the screen. Miss it in a real round and you take +15 heat.<br><br><b>Practice now</b> (no heat): footsteps are coming…` },
+  { at: ["#win-inspector"], side: "left", title: "Gus, the risk engine",
+    text: () => `Who's judging your orders, and which version he is. Every round he's retrained on your tricks and gets smarter: <b>intern → magnifier → UV lamp → cyborg</b>. A tell that caught you once weighs more from then on.` },
   { at: ["#topbar .tb-heat", "#topbar .tb-money"], side: "bottom", title: "Heat and money",
-    text: () => `<b>Heat</b> rose with each edit you just made. It also climbs when you repeat a scheme, and high heat makes the inspector suspicious. <b>Siphoned</b> is your money so far.` },
-  { at: [], noDim: true, title: "Detector view", hold: 2600,
+    text: () => `<b>Heat</b> rose with each change you just made. It also climbs when you repeat a scheme, and high heat makes Gus suspicious. <b>Siphoned</b> is your money so far.` },
+  { at: [], noDim: true, title: "What Gus sees", hold: 2600,
     until: () => $("#debug-panel").classList.contains("show"), leave: () => $("#debug-panel").classList.remove("show"),
-    text: () => `<b>Do it:</b> press ${kb("detector")} to see exactly what the inspector's model reads: your stain, stamp and new bank number are all in there. Tools only matter through these fields.` },
+    text: () => `<b>Do it:</b> press ${kb("detector")} to see exactly what Gus's model reads: <b>one row per order</b>, in the same format as the real card-fraud data the model trains on. Every choice you made is in there.` },
   { at: ["#envelope"], side: "left", title: EMBED ? "Print and deliver" : "Send it", last: true,
     until: () => S.printed || S.submitted, can: () => S.edits >= 2,
     text: () => EMBED
-      ? `<b>Do it:</b> drag this envelope onto <b>PRINT</b> (the dark box at the top right). You'll stand up: grab it at the printer (${kb("interact")}), drop it in the inspector's IN tray (${kb("interact")}), then sit back down for the verdict and the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.`
-      : `<b>Do it:</b> drag this envelope into the <b>OUTBOX</b> (the dark box at the top right). The inspector stamps it PAID or FLAGGED, then you spend your money in the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.` },
+      ? `<b>Do it:</b> drag this envelope onto <b>PRINT</b> (the dark box at the top right). You'll stand up: grab the order slip at the printer (${kb("interact")}), drop it in Gus's IN tray (${kb("interact")}), then sit back down for the verdict and the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.`
+      : `<b>Do it:</b> drag this envelope into the <b>OUTBOX</b> (the dark box at the top right). Gus stamps each order APPROVED or DECLINED, then you spend your money in the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.` },
 ];
+
 const tut = { on: false, i: 0 };
 const kb = action => `<kbd>${ForgedKeys.label(action)}</kbd>`;
 
@@ -1666,7 +1532,7 @@ function playerName() {
 function messUpDesk() {
   const props = [
     () => `<div class="prop-ring" style="left:${rand(380, 1000)}px;top:${rand(60, 700)}px;transform:scale(${rand(.6, 1)})"></div>`,
-    () => `<div class="prop-sticky" style="left:${rand(1000, 1450)}px;top:${rand(380, 640)}px;transform:rotate(${rand(-10, 10)}deg) scale(.6);opacity:.9">${pick(["v" + S.version + "??", "call Gary", "NO URGENT", "lunch @12"])}</div>`,
+    () => `<div class="prop-sticky" style="left:${rand(1000, 1450)}px;top:${rand(380, 640)}px;transform:rotate(${rand(-10, 10)}deg) scale(.6);opacity:.9">${pick(["v" + S.version + "??", "call the mule", "USE THE VPN", "lunch @12"])}</div>`,
     () => `<div class="prop-paper" style="left:${rand(20, 300)}px;top:${rand(640, 760)}px;transform:rotate(${rand(-20, 20)}deg) scale(.5);opacity:.85">ENVELOPE<br>━━━━</div>`,
   ];
   $("#desk-mess").insertAdjacentHTML("beforeend", pick(props)());
@@ -1720,29 +1586,52 @@ function hideInvoice() {
   setTimeout(() => np.classList.remove("show"), 1700);
 }
 
-/* ======================= Detector debug view ======================= */
+/* ======================= What Gus sees (the IEEE-CIS rows) ======================= */
 
 function record() {
   if (!S.inv) return { note: "pick a scheme first" };
-  const inv = S.inv;
   return {
-    level: S.level, scheme: S.scheme, vendor: inv.vendor, amount: inv.amount,
-    bank_account: inv.bank, sender_domain: inv.domain, invoice_no: inv.invoiceNo, po_number: inv.po, date: inv.date,
-    line_items: inv.items.map(i => `${i.desc} ×${i.qty} @ ${i.price}`),
-    field_altered: [...S.altered],
-    legibility: Object.fromEntries(Object.entries(S.legibility).map(([k, v]) => [k, +v.toFixed(2)])),
-    // Copy Machine Whisperer: copies don't count toward the generation penalty
-    scan_quality: +scanQuality().toFixed(2), copy_generation: S.perks.includes("copy") ? 0 : S.copyGen,
-    stamp_type: S.stamps.map(s => s.type), stamp_position: S.stamps.map(s => [Math.round(s.x), Math.round(s.y)]),
-    domain_mismatch: inv.domain !== S.vendorRef.domain, letterhead_match: inv.letterhead === "match",
-    cover_email: inv.coverEmail || "", persuasion: Math.round(S.persuasion), // Smooth Talker raises this
-    after_hours: S.perks.includes("night"), // Night Shift: sent late, pays double
+    mode: "online", level: S.level, scheme: S.scheme, campaign_id: S.session + "-r" + S.round,
+    orders: S.inv.orders.map(o => ({ ...o })),
+    cover_note: S.inv.coverEmail || "", persuasion: Math.round(S.persuasion), // Smooth Talker raises this
+    after_hours: S.perks.includes("night"), // Night Shift: pays double
     detector_version: S.version, heat: Math.round(S.heat),
-    verdict: S.lastResult && S.submitted ? (S.lastResult.caught ? "FLAGGED" : "PAID") : null,
+    verdict: S.lastResult && S.submitted ? (S.lastResult.caught ? "DECLINED" : "APPROVED") : null,
+    rows: S.rows || previewRows(),
   };
 }
-function updateDebug() { if ($("#debug-panel").classList.contains("show")) $("#debug-json").textContent = JSON.stringify(record(), null, 2); }
+const compact = row => Object.fromEntries(Object.entries(row).filter(([, v]) => v != null && v !== ""));
+function updateDebug() {
+  if (!$("#debug-panel").classList.contains("show")) return;
+  if (!S.inv) { $("#debug-title").textContent = "No order yet"; $("#debug-json").textContent = "Pick a scheme first."; return; }
+  const rows = S.rows || previewRows(), i = S.inv.cur;
+  $("#debug-title").textContent = `Order ${i + 1} of ${rows.length}, as an IEEE-CIS row`;
+  $("#debug-json").textContent = JSON.stringify(compact(rows[i]), null, 2) +
+    "\n\n// Blank columns (V1-V339 and the rest) are empty (NaN), as in most rows of the dataset.";
+}
 function toggleDebug() { $("#debug-panel").classList.toggle("show"); updateDebug(); }
+
+/* every sent order is kept in this browser and can be exported as a CSV with the dataset's columns */
+const ROWS_KEY = "forged.ieee.rows";
+function storedRows() { try { return JSON.parse(localStorage.getItem(ROWS_KEY) || "[]"); } catch (e) { return []; } }
+function storeRows(rows) {
+  try { localStorage.setItem(ROWS_KEY, JSON.stringify([...storedRows(), ...rows].slice(-3000))); } catch (e) { /* only this round's rows are lost */ }
+}
+function downloadCsv() {
+  const all = storedRows();
+  if (!all.length) { sfx("bad"); toast("No orders sent yet: play a round first", "bad"); return; }
+  const cell = v => v == null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  const csv = [O.COLUMNS.join(","), ...all.map(r => O.COLUMNS.map(c => cell(r[c])).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "forged_ieee_rows.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast(`⬇ ${all.length} rows exported`, "good");
+}
+if ($("#btn-csv")) $("#btn-csv").onclick = () => { sfx("click"); downloadCsv(); };
+window.forgedRows = { all: storedRows, csv: downloadCsv, clear: () => { try { localStorage.removeItem(ROWS_KEY); } catch (e) {} } };
+
 const paintDebugKey = () => { $("#debug-key").textContent = ForgedKeys.label("detector"); };
 paintDebugKey(); ForgedKeys.onChange(paintDebugKey);
 if ($("#btn-debug")) $("#btn-debug").onclick = () => { sfx("click"); toggleDebug(); };
@@ -1815,7 +1704,7 @@ document.addEventListener("keydown", e => {
   if (K.is("detector", code)) { e.preventDefault(); toggleDebug(); return; }
   if (!$("#screen-desk").classList.contains("active") || $(".overlay.show")) return;
   for (let i = 1; i <= 6; i++) if (K.is("tool" + i, code)) { e.preventDefault(); selectTool(TOOLS[i - 1].id); return; }
-  if (K.is("drop", code)) { dropTool(); hidePopover(); return; }
+  if (K.is("drop", code)) { dropTool(); return; }
   if (K.is("chat", code) && S.inv && !S.submitted) { e.preventDefault(); $("#chat-text").focus(); }
 });
 
@@ -1843,7 +1732,7 @@ $("#screen-desk").addEventListener("wheel", e => {
 }, { passive: false });
 
 document.addEventListener("pointerdown", e => {
-  if (!e.target.closest("#popover") && !e.target.closest("#invoice") && !e.target.closest(".tool")) hidePopover();
+  if (!e.target.closest("#popover") && !e.target.closest(".tchip") && !e.target.closest(".tool")) { if (S.tool) dropTool(); else hidePopover(); }
 });
 
 })();

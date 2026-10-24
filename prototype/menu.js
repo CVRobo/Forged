@@ -88,24 +88,24 @@ const SCREENS = {
     const steps = office ? [
       `<b>Sit down.</b> Walk to your desk (${K.labels("forward")}/${K.label("left")}/${K.label("back")}/${K.label("right")}, ${kbd("sprint")} to sprint) and press ${kbd("interact")} at your computer.`,
       `<b>Pick a scheme.</b> Each card shows its risk and payout. Hover a new one for tips. Repeating a scheme raises heat.`,
-      `<b>Read the memo and case file.</b> One memo rule is fake: click rules to mark them real or fake.`,
-      `<b>Forge.</b> Pick a tool (${kbd("tool1")}–${kbd("tool6")} or the mouse wheel), click the invoice. 2 edits minimum, 4 max. Tape your own account into the bank box or you won't get paid. ${kbd("drop")} puts a tool down.`,
-      `<b>Pitch.</b> ${kbd("chat")} to write to the clerk. Play to their quirk.`,
+      `<b>Read the memo and the card &amp; shop file.</b> One memo rule is fake: click rules to mark them real or fake.`,
+      `<b>Build the orders.</b> The toolkit (${kbd("tool1")}–${kbd("tool6")}, the mouse wheel or the buttons on the ticket) swaps the card, email, device, IP, address or time. 2 changes minimum. At least one order must reach you: use a drop address or your burner inbox. <b>+ Next order</b> adds a step to the campaign. ${kbd("drop")} closes the list.`,
+      `<b>Pitch.</b> ${kbd("chat")} to write to customer support. Play to their quirk.`,
       `<b>Print.</b> Drag the envelope onto PRINT. You stand up automatically (or press ${kbd("standUp")}).`,
-      `<b>Deliver.</b> Grab it at the printer and drop it in the inspector's IN tray (${kbd("interact")}). Keep it out of the boss's sight.`,
-      `<b>Verdict.</b> PAID or FLAGGED, and the inspector learns either way. Sit back down for patch notes and the shop.`,
+      `<b>Deliver.</b> Grab the order slip at the printer and drop it in Gus's IN tray (${kbd("interact")}). Keep it out of the boss's sight.`,
+      `<b>Verdict.</b> Gus approves or declines each order and learns either way. Sit back down for patch notes and the shop.`,
     ] : [
       `<b>Pick a scheme.</b> Each card shows its risk and payout. Hover a new one for tips. Repeating a scheme raises heat.`,
-      `<b>Read the memo and case file.</b> One memo rule is fake: click rules to mark them real or fake.`,
-      `<b>Forge.</b> Pick a tool (${kbd("tool1")}–${kbd("tool6")} or the mouse wheel), click the invoice. 2 edits minimum, 4 max. Tape your own account into the bank box or you won't get paid. ${kbd("drop")} puts a tool down.`,
-      `<b>Pitch.</b> ${kbd("chat")} to write to the clerk. Play to their quirk.`,
+      `<b>Read the memo and the card &amp; shop file.</b> One memo rule is fake: click rules to mark them real or fake.`,
+      `<b>Build the orders.</b> The toolkit (${kbd("tool1")}–${kbd("tool6")}, the mouse wheel or the buttons on the ticket) swaps the card, email, device, IP, address or time. 2 changes minimum. At least one order must reach you: use a drop address or your burner inbox. <b>+ Next order</b> adds a step to the campaign. ${kbd("drop")} closes the list.`,
+      `<b>Pitch.</b> ${kbd("chat")} to write to customer support. Play to their quirk.`,
       `<b>Submit.</b> Drag the envelope into the outbox.`,
-      `<b>Verdict.</b> PAID or FLAGGED, and the inspector learns either way. Spend your money in the shop between rounds.`,
+      `<b>Verdict.</b> Gus approves or declines each order and learns either way. Spend your money in the shop between rounds.`,
     ];
     return `
       <h2 class="fm-title">How to Play</h2>
       <ol class="fm-steps">${steps.map(s => `<li>${s}</li>`).join("")}</ol>
-      <p class="fm-note"><b>The boss</b> walks by now and then. If he comes up behind you while you forge, press ${kbd("hide")} fast to hide the invoice. ${kbd("detector")} shows what the inspector's model reads. Esc opens this menu.</p>
+      <p class="fm-note"><b>The boss</b> walks by now and then. If he comes up behind you while you work, press ${kbd("hide")} fast to hide the screen. ${kbd("detector")} shows the exact data row Gus's model reads. Esc opens this menu.</p>
       <div class="fm-grid two">
         <button class="fm-btn" data-fm-act="reset-tips">Reset Tutorial &amp; Tips</button>
         <button class="fm-btn primary" data-fm-act="done">Done</button>

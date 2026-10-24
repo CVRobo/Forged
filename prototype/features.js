@@ -47,7 +47,7 @@ function tone(f, d, type = "square", v = .05, at = 0) {
 
 const ACH = [
   { id: "first", name: "First forgery", desc: "Get your first verdict" },
-  { id: "paid", name: "Paid in full", desc: "Get an invoice PAID" },
+  { id: "paid", name: "Paid in full", desc: "Get a campaign APPROVED" },
   { id: "ghost", name: "Ghost", desc: "Deliver without the boss ever noticing" },
   { id: "speed", name: "Speedrunner", desc: "Print to IN tray in under 20 s" },
   { id: "coffee", name: "Caffeinated", desc: "Visit the coffee spot" },

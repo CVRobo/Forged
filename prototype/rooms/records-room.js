@@ -325,10 +325,10 @@ function sendTube() {
   FW.P.carrying = false;
   const ce = carryEnv(); if (ce) ce.visible = false;
   FW.setPhase("judging"); // no boss stop-and-search, no marker while it travels
-  setObjective("Whoosh! Your invoice is in the tube…");
+  setObjective("Whoosh! Your order slip is in the tube…");
   Object.assign(tube, { state: "out", t: performance.now(), lastSec: -1 });
   SND.whoosh();
-  FW.say(FW.player, pick(["Fly, little invoice. Fly.", "Express mail. Very express.", "Nobody saw that. Probably."]), 2200);
+  FW.say(FW.player, pick(["Fly, little order slip. Fly.", "Express mail. Very express.", "Nobody saw that. Probably."]), 2200);
 }
 function pick(a) { return FW.pick ? FW.pick(a) : a[Math.floor(Math.random() * a.length)]; }
 
@@ -383,7 +383,7 @@ function updateTube(now, dt) {
       const i = tubeAt(s, cap.position); cap.quaternion.setFromUnitVectors(UP, TUBE_DIR[i]); cap.visible = true;
     } else cap.visible = false;
     const left = Math.ceil((T_TOTAL - e) / 1000);
-    if (left !== tube.lastSec && left >= 0) { tube.lastSec = left; setObjective(`Your invoice is in the tube… ${left}s`); }
+    if (left !== tube.lastSec && left >= 0) { tube.lastSec = left; setObjective(`Your order slip is in the tube… ${left}s`); }
     if (e >= T_TOTAL) {
       if (FW.CINE && FW.CINE.active) return; // wait for any close-up to finish
       if (Math.random() < .25) jam(now); else arrive();
@@ -417,15 +417,18 @@ FW.addInteraction({
 });
 
 /* ======================= The archive: the inspector's catch log ======================= */
-const TELLS = { domain_mismatch: "odd sender domain", unknown_vendor: "unknown vendor", letterhead: "wrong logo", bank_changed: "bank account changed",
+const TELLS = { ...((window.ForgedOrders && window.ForgedOrders.TELL_LABELS) || {}), new_card: "brand-new card", foreign_card: "foreign card",
+  velocity: "too many orders too fast", email_risky: "anonymous email", ip_far: "IP far from home", proxy: "VPN spotted",
+  emulator: "emulator", new_device: "new device", device_reuse: "device reused", far_ship: "shipped far away", gift_card: "big gift card",
+  amount_jump: "card testing", night: "3 AM order", domain_mismatch: "odd sender domain", unknown_vendor: "unknown vendor", letterhead: "wrong logo", bank_changed: "bank account changed",
   amount_unusual: "amount way too big", total_mismatch: "totals don't add up", altered: "whiteout spotted", dup_number: "invoice # already paid",
   bad_po: "bad PO number", stamp_wrong: "wrong signature/stamp", copy_gen: "copy of a copy", low_legibility: "too smudged", heat: "you looked nervous" };
 const tellText = t => TELLS[t] || String(t || "").replace(/_/g, " ");
 let caseNo = 41;
 const LOG = [
-  { n: 38, scheme: "Vendor changed banks", vendor: "Pancake Pete's Flour Co.", caught: true, tells: ["bank_changed", "domain_mismatch"], old: true },
-  { n: 39, scheme: "Duplicate with tweaks", vendor: "Bubbles Dish Soap Ltd.", caught: true, tells: ["dup_number", "altered"], old: true },
-  { n: 40, scheme: "Phantom supplier", vendor: "Totally Real Napkins Inc.", caught: false, tells: [], old: true },
+  { n: 38, scheme: "Card testing", vendor: "3 orders · sunnydiner.shop", caught: true, tells: ["amount_jump", "new_card"], old: true },
+  { n: 39, scheme: "Gift card flip", vendor: "1 order · sunnydiner.shop", caught: true, tells: ["email_risky", "gift_card"], old: true },
+  { n: 40, scheme: "Account takeover", vendor: "1 order · sunnydiner.shop", caught: false, tells: [], old: true },
 ];
 const LOG_W = 640, LOG_H = 800;
 const logTex = FW.canvasTex(LOG_W, LOG_H, drawLog);
@@ -452,7 +455,7 @@ function drawLog(g, w, h) {
     const col = r.caught ? "#e0352b" : "#1d9a4b";
     g.save(); g.translate(118, y + 42); g.rotate(-.12);
     g.strokeStyle = col; g.lineWidth = 5; g.strokeRect(-62, -20, 124, 40);
-    g.fillStyle = col; g.font = "22px Bungee, Impact, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(r.caught ? "FLAGGED" : "PAID", 0, 2);
+    g.fillStyle = col; g.font = "22px Bungee, Impact, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(r.caught ? "DECLINED" : "APPROVED", 0, 2);
     g.restore(); g.textAlign = "left"; g.textBaseline = "alphabetic";
     g.fillStyle = "#888"; g.font = "bold 14px 'Space Mono', monospace"; g.fillText(`#${String(r.n).padStart(3, "0")}${r.old ? " · old file" : ""}`, 64, y + 88);
     g.fillStyle = "#2b1d14"; g.font = "bold 21px 'Space Mono', monospace"; g.fillText(wrapCut(g, r.scheme || "Unknown scheme", w - 260), 196, y + 26);
@@ -541,7 +544,7 @@ safe(() => {
     c.fillStyle = "#fffaf0"; c.fillRect(0, 0, w, h);
     c.fillStyle = "#2b1d14"; for (let i = 0; i < 7; i++) c.fillRect(14, 18 + i * 18, 60 + (i * 23) % 40, 5);
     c.save(); c.translate(w / 2, h * .7); c.rotate(-.25); c.strokeStyle = "#e0352b"; c.lineWidth = 5; c.strokeRect(-52, -16, 104, 32);
-    c.fillStyle = "#e0352b"; c.font = "bold 20px Impact, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("FLAGGED", 0, 1); c.restore();
+    c.fillStyle = "#e0352b"; c.font = "bold 20px Impact, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("DECLINED", 0, 1); c.restore();
   });
   const sheet = new THREE.Mesh(new THREE.PlaneGeometry(.42, .52), new THREE.MeshBasicMaterial({ map: sheetTex, side: THREE.DoubleSide }));
   sheet.visible = false; sheet.rotation.y = Math.PI; scene.add(sheet); shred.sheet = sheet;
@@ -568,7 +571,7 @@ function doShred() {
     s.r.set(FW.rand(-12, 12), FW.rand(-12, 12), FW.rand(-12, 12));
   });
   FW.say(FW.player, pick([
-    "What invoice? I see no invoice.",
+    "What order? I see no order.",
     "Evidence? I barely know her.",
     "Shred it like it's 1999.",
     "And <i>that</i> never happened.",
@@ -602,14 +605,14 @@ function updateShred(now, dt) {
   if (!alive && e > 2000) { shred.busy = false; if (shred.g) shred.g.position.set(SHRED.x, 0, SHRED.z); }
 }
 FW.addInteraction({
-  label: () => "Shred the evidence (last FLAGGED file)",
+  label: () => "Shred the evidence (last DECLINED file)",
   can: () => !!shred.pending && !shred.busy && !FW.P.carrying && FW.P.phase !== "judging" && near(SHRED_SPOT.x, SHRED_SPOT.z, 1.5),
   act: () => safe(doShred),
 });
 FW.addInteraction({
   label: () => "Feed the shredder",
   can: () => !shred.pending && !shred.busy && !FW.P.carrying && near(SHRED_SPOT.x, SHRED_SPOT.z, 1.3),
-  act: () => FW.say(FW.player, pick(["Nothing incriminating to feed it. Yet.", "It looks hungry.", "Come back after a FLAGGED one."]), 2400),
+  act: () => FW.say(FW.player, pick(["Nothing incriminating to feed it. Yet.", "It looks hungry.", "Come back after a DECLINED one."]), 2400),
 });
 
 /* ======================= Verdicts from the computer ======================= */
