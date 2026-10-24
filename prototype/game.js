@@ -110,7 +110,7 @@ const PERKS = [
   { id: "night", ico: "🌙", name: "Night Shift", desc: "Double pay, more suspicion.", cost: 900 },
   { id: "redraw", ico: "🔄", name: "Lucky Draw", desc: "Redraw your hand once per round.", cost: 400 },
   { id: "smooth", ico: "😎", name: "Smooth Talker", desc: "Support chat works better.", cost: 500 },
-  { id: "shred", ico: "🗑️", name: "Paper Shredder", desc: "One caught trick is not learned.", cost: 1200 },
+  { id: "shred", ico: "🗑️", name: "Paper Shredder", desc: "Gus forgets one of your wins.", cost: 1200 },
 ];
 
 const UNLOCKS = [
@@ -1075,7 +1075,7 @@ function showBetween() {
     S.rankUp = null;
   }
   $("#patch-list").innerHTML = items.join("");
-  loadPatchNotes(S.prevVersion, items.slice(learned.length ? learned.length : 1));
+  loadPatchNotes(S.prevVersion, items.filter(li => /rank-up|Promoted|Streak/.test(li))); // server notes replace Gus's lines, these stay
   const caught = S.history.filter(h => h.caught).length;
   $("#round-stats").innerHTML = `
     <div class="stat"><div class="v">${money(S.money)}</div><div class="k">Siphoned</div></div>
