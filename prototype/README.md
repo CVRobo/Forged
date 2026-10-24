@@ -34,7 +34,7 @@ Then open http://localhost:8765. `serve.py` is a plain static server with browse
 - **Why I caught you:** when you drop the envelope, the camera cuts to the counter. The inspector holds up your invoice and scans it, circles the fields that gave you away, and slams the stamp down: confetti on PAID, a red flash on FLAGGED.
 - When the boss's suspicion builds, you hear a heartbeat and the screen edges turn red.
 
-Controls: `WASD` move · `Shift` run · mouse look (click to capture it) · mouse wheel zoom · `E` interact · `Esc` stand up or free the mouse. On the computer: `1`–`6` tools · `D` detector view · `Space` hide the invoice.
+Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Controls**): `WASD` move · `Left Ctrl` sprint (`Left Shift` on Windows/Linux, where Ctrl+W closes the tab) · mouse look (click to capture it) · mouse wheel zoom · `E` or right-click interact · `F5`/`V` first ⇄ third person · hold `Tab` leaderboard · `Esc` Game Menu (pauses the office). On the computer: `1`–`6` or mouse wheel tools · `Q` put the tool down · `T` talk to the clerk · `F3`/`D` detector view · `Space` hide the invoice · `Left Shift` stand up. Bindings live in `keys.js`; the menu is `menu.js`/`menu.css`.
 
 ## How the two halves talk
 
@@ -46,7 +46,11 @@ Both pages use `postMessage`:
 | Computer → office | `phase` | `briefing` or `forging`, which drives the objective text |
 | Computer → office | `print` | The envelope was dropped on the outbox; the printer starts |
 | Computer → office | `verdict` | PAID or FLAGGED, the inspector's line, payout, and `tells` (the top reasons he caught you); drives the booth close-up, the bubble and the corkboard |
-| Computer → office | `stand` | `Esc` was pressed on the computer |
+| Computer → office | `stand` | The Stand up key (default Left Shift) was pressed on the computer |
+| Computer → office | `menu` | Esc on the computer: open the Game Menu (the office page owns it) |
+| Office → computer | `paused` | The Game Menu opened or closed: freeze or resume the computer's timers |
+| Office → computer | `quit` / `tour` | Game Menu → Quit to Title / Tutorial |
+| Office → computer | `heat` | The boss caught you with the envelope: add heat |
 | Office → computer | `heat` `{amount}` | The boss caught you with the envelope. **Not handled by `game.js` yet (C):** add it to the heat meter |
 | Office → computer | `deliver` | The envelope reached the IN tray; the computer runs the inspection |
 | Office → computer | `boss-near` | The boss is behind your chair; the computer starts the hide-the-invoice prompt |

@@ -133,6 +133,51 @@ const SCHEMES = {
   boss_request: { name: "Boss request", icon: "📣", desc: "An urgent payment that seems to come straight from the top.", weak: "Urgency, wrong approver", pay: 1.5 },
 };
 
+/* What each scheme is in one line, plus the hover tips shown until the
+ * player has used it once. Risk: 1 low, 2 medium, 3 high. */
+function schemeTips(id, level) {
+  const urgentBad = level === 1 ? [["🔖", "An URGENT stamp: this company hates them"]] : [];
+  const approvedGood = level === 2
+    ? [["🔖", "An APPROVED stamp: St. Mercy requires one on anything over $5,000"]]
+    : [["🔖", "An APPROVED stamp calms the inspector a little"]];
+  const poBad = level === 2 ? [["🧴", "Whiting out the PO number: it must stay in the SM- format"]] : [];
+  return {
+    changed_bank: { simple: "Take a real vendor's bill and tape in your own bank account.", risk: 1,
+      good: [["✂️", "Scissors on REMIT PAYMENT TO: required, it puts your account on the bill"],
+        ["☕", "Coffee on the bank box: the stain hides that the account changed"], ...approvedGood],
+      bad: [["✏️", "Raising the total far above this vendor's usual amount"],
+        ["🖨️", "Photocopying more than once: copies of copies look fake"], ...urgentBad],
+      tells: "the bank account doesn't match the vendor on file" },
+    duplicate: { simple: "Re-send a bill they already paid, with a few small changes.", risk: 2,
+      good: [["🧴", "Whiteout on the invoice number: a reused number is the biggest giveaway"],
+        ["✂️", "Scissors on REMIT PAYMENT TO: required, or the real vendor gets paid twice"],
+        ["🖨️", "One photocopy: it softens the whiteout marks"]],
+      bad: [["🧴", "Whiting out lots of fields: every visible edit is a clue"],
+        ["☕", "Heavy coffee stains: a ruined page looks suspicious"], ...poBad],
+      tells: "an invoice number that was already paid, and visible edits" },
+    phantom: { simple: "Invent a vendor that doesn't exist. Your account is already on it.", risk: 2,
+      good: [["🖊️", "Burner pen on the email domain: the .biz address is a giveaway (unlock it in the shop)"],
+        ["☕", "Coffee on the header: it blurs the made-up vendor and domain"],
+        ["💬", "A convincing cover email: the clerk has never heard of this vendor"]],
+      bad: [["✂️", "Scissors: your account is already on it, so it wastes an edit"],
+        ["✏️", "A big total: an unknown vendor with a huge bill stands out"], ...urgentBad],
+      tells: "a vendor that isn't in the company's records, and an odd domain" },
+    boss_request: { simple: "Fake an urgent payment that seems to come from the top.", risk: 3,
+      good: [["✏️", "Lower the total toward a normal amount: it starts at almost twice the usual"],
+        ["💬", "A convincing cover email: it matters most here"], ...approvedGood],
+      bad: [["🖨️", "The photocopier: a boss wouldn't send a copy of a copy"],
+        ["✏️", "Leaving the huge total as it is"], ...urgentBad],
+      tells: "an amount way above usual, and an approver who doesn't sign these" },
+  }[id];
+}
+const RISK = ["", "Low", "Medium", "High"];
+
+const USED_KEY = "forged-schemes-used";
+function usedSchemes() { try { return JSON.parse(localStorage.getItem(USED_KEY) || "[]"); } catch (e) { return []; } }
+function markSchemeUsed(id) {
+  try { const u = usedSchemes(); if (!u.includes(id)) localStorage.setItem(USED_KEY, JSON.stringify([...u, id])); } catch (e) { /* not remembered */ }
+}
+
 const PHANTOMS = ["Gary's Totally Real Plumbing", "Synergy Synergy Inc.", "Bob's Industrial Spoons", "Quantum Napkin Partners"];
 
 const TOOLS = [
@@ -266,16 +311,6 @@ if (EMBED) {
   $(".env-label").textContent = "DRAG TO PRINT";
   $("#envelope").title = "Drag me onto PRINT";
   $("#btn-quit").textContent = "Quit to title";
-  $("#howto-title").textContent = "One round, about 90 seconds";
-  $("#howto-steps").innerHTML = `
-    <li><b>Briefing.</b> At your desk, read the leaked memo and the case file. One memo rule is fake: click a rule to mark it real or fake.</li>
-    <li><b>Pick a scheme.</b> Changed bank details, duplicate bill, phantom supplier, boss request. Repeating one raises heat.</li>
-    <li><b>Forge.</b> Click a tool, then click the invoice. Use at least 2 edits (4 max), and make sure the money goes to your account.</li>
-    <li><b>Pitch.</b> Sweet-talk the clerk in the cover email.</li>
-    <li><b>Print.</b> Drag the envelope onto PRINT. You stand up automatically.</li>
-    <li><b>Deliver.</b> Grab it at the printer (<kbd>E</kbd>) and drop it in the inspector's IN tray (<kbd>E</kbd>). If the boss walks behind your chair while you forge, press <kbd>Space</kbd>.</li>
-    <li><b>Verdict.</b> PAID or FLAGGED, either way the inspector learns. Sit back down for the corkboard, patch notes and shop.</li>`;
-  $("#howto-keys").textContent = "On the computer: 1–6 tools · Esc drop tool / stand up · D detector view · Space hide invoice";
 }
 function toStage(cx, cy, el = stage) {
   const r = el.getBoundingClientRect();
@@ -299,10 +334,8 @@ function toast(text, kind = "") {
 document.addEventListener("click", e => {
   const go = e.target.closest("[data-go]");
   if (go) { sfx("click"); if (go.dataset.go === "levels") renderLevels(); show(go.dataset.go); }
-  const op = e.target.closest("[data-open]");
-  if (op) { sfx("click"); overlay(op.dataset.open); }
-  const bd = e.target.closest("[data-board]");
-  if (bd) { sfx("click"); openBoard(); }
+  const mn = e.target.closest("[data-menu]");
+  if (mn) { sfx("click"); openMenu(mn.dataset.menu); }
   const cl = e.target.closest("[data-close]");
   if (cl) { sfx("click"); cl.closest(".overlay").classList.remove("show"); }
 });
@@ -340,7 +373,7 @@ function startRun(level) {
   $("#tb-level").textContent = L.name;
   $("#case-client").textContent = L.name;
   $("#memo-to").textContent = L.inspector.name;
-  $("#clerk-avatar").textContent = L.clerk.avatar;
+  $("#clerk-avatar").innerHTML = faceSVG(LOOKS.clerk);
   $("#clerk-name").textContent = L.clerk.name;
   $("#clerk-sub").textContent = "Accounts clerk · " + L.clerk.quirk;
   $("#clerk-quirk").textContent = "quirk: " + L.clerk.quirk;
@@ -429,26 +462,61 @@ function showBriefing() {
   const L = LEVELS[S.level];
   $("#brief-kicker").textContent = `ROUND ${S.round} · ${L.name.toUpperCase()} · INSPECTOR v${S.version}`;
   const last = S.history.slice(-2).map(h => h.scheme);
+  const used = usedSchemes();
   $("#scheme-cards").innerHTML = Object.entries(SCHEMES).map(([id, sc]) => {
     const repeat = last.filter(s => s === id).length;
-    return `<button class="scheme-card" data-scheme="${id}">
-      ${repeat ? `<span class="sc-warn">USED ${repeat}× · +HEAT</span>` : ""}
+    const tip = schemeTips(id, S.level), fresh = !used.includes(id);
+    return `<button class="scheme-card ${fresh ? "fresh" : ""}" data-scheme="${id}">
+      ${repeat ? `<span class="sc-warn">USED ${repeat}× · +HEAT</span>` : fresh ? `<span class="sc-new">NEW · hover for tips</span>` : ""}
       <div class="sc-ico">${sc.icon}</div>
       <div class="sc-name">${sc.name}</div>
-      <div class="sc-desc">${sc.desc}</div>
-      <div class="sc-weak"><b>Weak to:</b> ${sc.weak}<br><span class="sc-pay">Payout ×${sc.pay}</span></div>
+      <div class="sc-desc">${tip.simple}</div>
+      <div class="sc-foot">
+        <span class="sc-risk r${tip.risk}">Risk ${"●".repeat(tip.risk)}${"○".repeat(3 - tip.risk)} ${RISK[tip.risk]}</span>
+        <span class="sc-pay">Payout ×${sc.pay}</span>
+      </div>
     </button>`;
   }).join("");
-  $$(".scheme-card").forEach(c => c.onclick = () => { sfx("pick"); overlay("briefing", false); beginForge(c.dataset.scheme); });
+  $$(".scheme-card").forEach(c => {
+    c.onclick = () => {
+      if (c.disabled) return; // locked during the tutorial
+      sfx("pick"); hideSchemeTip(); overlay("briefing", false); beginForge(c.dataset.scheme);
+    };
+    if (c.classList.contains("fresh")) {
+      c.onmouseenter = c.onfocus = () => showSchemeTip(c);
+      c.onmouseleave = c.onblur = hideSchemeTip;
+    }
+  });
   overlay("briefing");
   if (!tutorialDone() && S.round === 1) setTimeout(() => startTutorial(0), 350);
 }
+
+/* hover tips for a scheme the player hasn't used yet */
+function showSchemeTip(card) {
+  const id = card.dataset.scheme, sc = SCHEMES[id], tip = schemeTips(id, S.level), el = $("#scheme-tip");
+  el.innerHTML = `
+    <div class="st-head"><span>${sc.icon} ${sc.name}</span><span class="sc-risk r${tip.risk}">Risk ${"●".repeat(tip.risk)}${"○".repeat(3 - tip.risk)} ${RISK[tip.risk]}</span></div>
+    <div class="st-sub good">Recommended</div>
+    <ul>${tip.good.map(([i, t]) => `<li><span>${i}</span>${t}</li>`).join("")}</ul>
+    <div class="st-sub bad">Ill-advised</div>
+    <ul>${tip.bad.map(([i, t]) => `<li><span>${i}</span>${t}</li>`).join("")}</ul>
+    <div class="st-tells"><b>What gives it away:</b> ${tip.tells}</div>`;
+  // beside the card: to the right for the first two, to the left for the last two
+  const sr = stage.getBoundingClientRect(), r = card.getBoundingClientRect();
+  const x = (r.left - sr.left) / scale, y = (r.top - sr.top) / scale, w = r.width / scale, tw = 360;
+  const right = x + w + 14 + tw <= 1600 - 16 && x < 800;
+  el.style.left = (right ? x + w + 14 : x - 14 - tw) + "px";
+  el.classList.add("show");
+  el.style.top = clamp(y - 20, 16, 900 - el.offsetHeight - 16) + "px";
+}
+function hideSchemeTip() { $("#scheme-tip").classList.remove("show"); }
 
 /* ======================= Invoice ======================= */
 
 function beginForge(schemeId) {
   const L = LEVELS[S.level];
   S.scheme = schemeId;
+  markSchemeUsed(schemeId);
   const recent = L.notes.map(n => n.match(/Recent invoice: (.+?) #(\S+),/)).find(Boolean);
   const v = (schemeId === "duplicate" && recent && L.vendors.find(x => x.name.startsWith(recent[1]))) || pick(L.vendors);
   S.vendorRef = v;
@@ -720,14 +788,71 @@ function updateHud() {
   updateDebug();
   const st = stageFor(S.version);
   post("hud", { level: S.level, money: S.money, heat: S.heat, version: S.version, round: S.round,
+    patches: S.patches, shame: S.shame,
     inspector: LEVELS[S.level].inspector.name, emoji: st.emoji, clerk: LEVELS[S.level].clerk });
 }
 
 const tellLabel = name => TELL_LABELS[name] || String(name).replace(/_/g, " ");
 function stageFor(v) { return INSPECTOR_STAGES.find(s => v <= s.upTo); }
+
+/* ======================= Portraits =======================
+ * Front views of the office's blocky characters (world.js buildHead), drawn as SVG so the
+ * computer shows the same people as the 3D office. Same skin, hair and features per person. */
+const LOOKS = {
+  inspector: { skin: "#f1c27d", hair: "messy", hairColor: "#8a5a35", lids: true, mouth: "o", nose: "big", brows: "flat" },
+  clerk: { skin: "#e0a77a", hair: "curly", hairColor: "#b8342a", earrings: true, mouth: "grin", brows: "raised" },
+};
+function shadeHex(hex, k) { // darken (k < 0) or lighten a #rrggbb colour
+  const n = parseInt(hex.slice(1), 16), f = c => clamp(Math.round(c + 255 * k), 0, 255);
+  return "#" + [n >> 16, n >> 8 & 255, n & 255].map(c => f(c).toString(16).padStart(2, "0")).join("");
+}
+// stage: inspector upgrade 0 sleepy intern, 1 reading glasses, 2 UV goggles, 3 cyborg (-1 = plain)
+function faceSVG(look, stage = -1) {
+  const L = look, ink = "#1a1210", o = `stroke="${ink}" stroke-width="3.5" stroke-linejoin="round"`;
+  const lids = L.lids && stage <= 0, cyborg = stage === 3;
+  const parts = [];
+  // ears + earrings
+  parts.push(`<rect x="10" y="46" width="10" height="16" fill="${L.skin}" ${o}/><rect x="80" y="46" width="10" height="16" fill="${L.skin}" ${o}/>`);
+  if (L.earrings) parts.push(`<circle cx="13" cy="66" r="3.4" fill="#ffd23f" ${o.replace("3.5", "2")}/><circle cx="87" cy="66" r="3.4" fill="#ffd23f" ${o.replace("3.5", "2")}/>`);
+  // head with a soft shadow on one side
+  parts.push(`<rect x="18" y="22" width="64" height="68" fill="${L.skin}" ${o}/><rect x="60" y="24" width="20" height="64" fill="${shadeHex(L.skin, -.08)}" opacity=".55"/>`);
+  // hair
+  const hc = L.hairColor;
+  if (L.hair === "messy") parts.push(`<rect x="15" y="14" width="70" height="15" fill="${hc}" ${o}/>
+    <rect x="24" y="5" width="11" height="13" fill="${hc}" ${o} transform="rotate(-14 29 12)"/><rect x="44" y="3" width="11" height="14" fill="${hc}" ${o} transform="rotate(10 49 10)"/><rect x="63" y="5" width="11" height="13" fill="${hc}" ${o} transform="rotate(28 68 12)"/>`);
+  if (L.hair === "curly") parts.push([20, 33, 46, 59, 72, 80].map((x, i) => `<circle cx="${x}" cy="${i % 2 ? 15 : 19}" r="9" fill="${hc}" ${o}/>`).join("") +
+    [26, 50, 74].map(x => `<circle cx="${x}" cy="10" r="8" fill="${hc}" ${o}/>`).join(""));
+  // brows
+  const by = 37, raised = L.brows === "raised";
+  parts.push(`<rect x="28" y="${by}" width="18" height="4.5" fill="${hc}"/><rect x="54" y="${by - (raised ? 4 : 0)}" width="18" height="4.5" fill="${hc}"/>`);
+  // eyes (they blink); the cyborg's right eye is a laser
+  const eye = (cx, laser) => laser
+    ? `<circle cx="${cx}" cy="51" r="8" fill="#ff2b2b" ${o.replace("3.5", "2.5")}/><circle cx="${cx - 2}" cy="49" r="2.4" fill="#fff" opacity=".9"/>`
+    : `<g class="pf-eye"><circle cx="${cx}" cy="51" r="9.5" fill="#fff" ${o.replace("3.5", "2.5")}/><circle cx="${cx}" cy="52" r="4.6" fill="${ink}"/></g>`;
+  parts.push(eye(37, false));
+  if (cyborg) parts.push(`<rect x="51" y="30" width="29" height="46" rx="2" fill="#9aa0a6" ${o.replace("3.5", "2.5")}/><circle cx="56" cy="35" r="1.4" fill="${ink}"/><circle cx="75" cy="71" r="1.4" fill="${ink}"/>`);
+  parts.push(eye(63, cyborg));
+  if (lids) parts.push(`<rect x="26" y="41" width="22" height="9" fill="${L.skin}"/><line x1="26" y1="50" x2="48" y2="50" stroke="${ink}" stroke-width="2.5"/>
+    <rect x="52" y="41" width="22" height="9" fill="${L.skin}"/><line x1="52" y1="50" x2="74" y2="50" stroke="${ink}" stroke-width="2.5"/>`);
+  // nose
+  const nose = shadeHex(L.skin, -.12);
+  parts.push(L.nose === "big" ? `<rect x="43" y="55" width="14" height="16" fill="${nose}" ${o.replace("3.5", "2")}/>` : `<circle cx="50" cy="61" r="5.5" fill="${nose}"/>`);
+  // mouth
+  if (L.mouth === "o") parts.push(`<circle cx="50" cy="79" r="4.6" fill="none" stroke="${ink}" stroke-width="3.2"/>`);
+  else if (L.mouth === "grin") parts.push(`<rect x="36" y="74" width="28" height="9" fill="${ink}"/><rect x="39" y="75" width="22" height="3.6" fill="#fff"/>`);
+  else parts.push(`<rect x="40" y="77" width="20" height="4" fill="${ink}"/>`);
+  // upgrades
+  if (stage === 1) parts.push(`<g fill="none" stroke="${ink}" stroke-width="2.6"><circle cx="37" cy="51" r="12"/><circle cx="63" cy="51" r="12"/><line x1="49" y1="50" x2="51" y2="50"/></g>`);
+  if (stage === 2) parts.push(`<g stroke="#3a1a6a" stroke-width="3.4"><circle cx="37" cy="51" r="13.5" fill="#b77dff" fill-opacity=".55"/><circle cx="63" cy="51" r="13.5" fill="#b77dff" fill-opacity=".55"/><line x1="50" y1="50" x2="50" y2="50"/><line x1="18" y1="50" x2="23.5" y2="50"/><line x1="76.5" y1="50" x2="82" y2="50"/></g>`);
+  if (cyborg) parts.push(`<line x1="34" y1="3" x2="34" y2="16" stroke="#9aa0a6" stroke-width="2.6"/><circle cx="34" cy="3" r="3.2" fill="#ff2b2b"/>`);
+  const bg = ["", "", "#e9dcff", "#ffd6d6"][stage] || "";
+  return `<svg class="portrait" viewBox="0 0 100 100" aria-hidden="true">${bg ? `<rect width="100" height="100" fill="${bg}"/>` : ""}${parts.join("")}</svg>`;
+}
+function stageIndex(v) { return INSPECTOR_STAGES.findIndex(s => v <= s.upTo); }
+
 function renderInspector() {
   const L = LEVELS[S.level], st = stageFor(S.version);
-  $("#insp-emoji").textContent = st.emoji; $("#insp-prop").textContent = st.prop;
+  $("#insp-portrait").innerHTML = faceSVG(LOOKS.inspector, stageIndex(S.version));
   $("#insp-name").textContent = L.inspector.name; $("#insp-title").textContent = st.title;
   $("#insp-version").textContent = "Inspector v" + S.version;
 }
@@ -777,6 +902,7 @@ $("#chat-form").addEventListener("submit", async e => {
   S.persuasion = Math.max(S.persuasion, score);
   $("#persuade-fill").style.width = S.persuasion + "%";
   clerkSay(res.reply);
+  S.clerkReplies = (S.clerkReplies || 0) + 1;
   updateDebug();
 });
 
@@ -843,6 +969,9 @@ window.addEventListener("message", e => {
   if (m.type === "deliver" && S.printed && !S.delivered) { S.delivered = true; submit(); }
   if (m.type === "boss-near") bossWalk();
   if (m.type === "heat" && Number.isFinite(+m.amount)) addHeat(+m.amount);
+  if (m.type === "paused") setPaused(!!m.on);
+  if (m.type === "quit") quitToTitle();
+  if (m.type === "tour") replayTour();
 });
 
 /* ======================= Inspection (MOCK verdict) ======================= */
@@ -977,8 +1106,8 @@ function showCorkboard() {
   renderInspector(); updateHud();
   if (S.version > oldV) {
     S.patches++;
-    if (r.tells.length) S.shame.push({ player: playerName(), version: S.version, trick: SCHEMES[S.scheme].name,
-      learned: r.tells[0][0], amount: S.inv.amount, round: S.round });
+    if (r.tells.length) S.shame.push({ version: S.version, trick: SCHEMES[S.scheme].name,
+      learned: tellLabel(r.tells[0][0]), amount: S.inv.amount, round: S.round });
   }
   const top = r.tells.slice(0, 3);
   const pos = [[120, 60], [80, 330], [430, 300]];
@@ -994,7 +1123,7 @@ function showCorkboard() {
   const cx = 510, cy = 130;
   $("#cork-string").innerHTML = (top.length ? top : [0]).map((_, i) =>
     `<path d="M${cx},${cy} Q${(cx + pos[i][0] + 100) / 2},${(cy + pos[i][1]) / 2 + 60} ${pos[i][0] + 105},${pos[i][1] + 10}"/>`).join("");
-  $("#cork-emoji").textContent = stageFor(S.version).emoji;
+  $("#cork-portrait").innerHTML = faceSVG(LOOKS.inspector, stageIndex(S.version));
   $("#cork-line").textContent = shredded ? "Wait… where did that file go?" : r.caught ? "Gotcha. Never again." : "You fooled me once. Never again.";
   $("#ver-old").textContent = "v" + oldV; $("#ver-new").textContent = "v" + S.version;
   overlay("cork");
@@ -1014,7 +1143,7 @@ function showBetween() {
     ? learned.map(l => `<li>Now catches: <b>${l}</b> — learned from ${n} invoices.</li>`)
     : [`<li>No new tricks learned. <b>Clean job.</b></li>`];
   const st = stageFor(S.version);
-  if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b> ${st.emoji}</li>`);
+  if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b></li>`);
   if (S.streak >= 2) items.push(`<li>🔥 Streak ×${S.streak} — vary your schemes to keep it.</li>`);
   $("#patch-list").innerHTML = items.join("");
   loadPatchNotes(S.prevVersion, items.slice(learned.length ? learned.length : 1));
@@ -1087,58 +1216,116 @@ $("#btn-next-round").onclick = () => {
   // dossier reveals the decoy for exactly one round
   if (hadDossier) { renderMemo(); S.dossier = false; }
 };
-$("#btn-quit").onclick = () => { sfx("click"); overlay("between", false); clearTimeout(S.bossTimer); show("title"); };
+function quitToTitle() {
+  $$(".overlay").forEach(o => o.classList.remove("show"));
+  clearTimeout(S.bossTimer); S.bossWindow = false; $("#boss-prompt").classList.remove("show");
+  if (tut.on) endTutorial(true);
+  dropTool(); hidePopover(); hideSchemeTip(); $("#debug-panel").classList.remove("show");
+  Object.assign(S, { inv: null, submitted: false });
+  show("title");
+}
+$("#btn-quit").onclick = () => { sfx("click"); quitToTitle(); };
 
 /* ======================= Guided tutorial =======================
  * Dims the screen, cuts a hole around one part, and points at it with an
  * arrow and a card. Runs once per browser (the first scheme pick), and any
- * time from the ❔ Tutorial button in the toolbox. */
+ * time from Game Menu → Tutorial. */
 
 const TUT_KEY = "forged-tutorial-done";
+const TUT_SCHEME = "changed_bank"; // the tutorial's steps are written for this scheme
+
+// while the tutorial waits for a scheme, only the tutorial's scheme can be picked
+function lockSchemes(on) {
+  $$(".scheme-card").forEach(c => {
+    const lock = on && c.dataset.scheme !== TUT_SCHEME;
+    c.disabled = lock;
+    c.classList.toggle("tut-locked", lock);
+    c.title = lock ? "Available after the tutorial" : "";
+  });
+}
+// Steps with `until` are hands-on: the player does the thing, the card turns green and
+// moves on. `can` says whether the step is still possible (uses left); if not, "Skip step" shows.
+const usesLeft = id => S.inv && S.uses[id] < TOOLS.find(t => t.id === id).cap && S.edits < S.maxEdits;
 const TUTORIAL = [
-  { at: ["#scheme-cards"], side: "top", wait: "scheme", title: "Pick your scheme",
-    text: () => `Each scheme is a different kind of fake invoice. <b>Weak to</b> says what the inspector can catch it with, and <b>Payout</b> is the money multiplier. Using the same scheme twice in a row raises heat.<br><br><b>Click a scheme to start.</b>` },
+  { at: [`.scheme-card[data-scheme=${TUT_SCHEME}]`], side: "top", wait: "scheme", title: "Pick your scheme",
+    text: () => `Each card is a different kind of fake invoice, with its <b>risk</b> and <b>payout</b>. <b>Hover a card</b> to see which tools help, which to avoid, and what gives it away.<br><br>For this tutorial, start with the simplest one: <b>click Vendor changed banks.</b> The other schemes unlock as soon as the tutorial ends.` },
   { at: ["#win-memo"], side: "right", title: "The leaked memo",
-    text: () => `The boss's orders to the inspector: what he's watching for this round. <b>Two rules are real, one is fake.</b> Click a rule to mark it REAL or FAKE as you work it out from what gets caught.` },
+    until: () => S.memo.some(m => m.mark),
+    text: () => `The boss's orders to the inspector: what he's watching this round. <b>Two rules are real, one is fake.</b> You work out which from what gets caught.<br><br><b>Try it:</b> click any rule to mark it REAL. Click again for FAKE.` },
   { at: ["#win-case"], side: "right", title: "The case file",
     text: () => `What normal looks like at this company: known vendors, their usual amounts and bank numbers, who approves what, and house rules in the notes. <b>The closer your invoice looks to normal, the harder it is to catch.</b>` },
   { at: ["#scheme-banner", "#invoice"], side: "right", title: "Your invoice",
-    text: () => `This is the fake you're building, made from your scheme. You can <b>type over the vendor name and the total</b>. Everything else changes with tools.` },
+    text: () => `This is a real bill from <b>${S.vendorRef ? S.vendorRef.name : "a known vendor"}</b>. Right now it pays them. Your job is to make it pay you without looking edited. You can type over the vendor name and the total; everything else changes with tools.` },
   { at: ["#dock .dock-label", "#tools"], side: "top", title: "The toolbox",
-    text: () => `Click a tool (or press <kbd>1</kbd>–<kbd>6</kbd>), then click the invoice. The badge is how many uses are left this round. <b>You need at least 2 edits to send it</b>, and 4 is the limit. <kbd>Esc</kbd> puts a tool down. The burner pen unlocks in the shop.` },
-  { at: [".tool[data-tool=scissors]"], side: "top", title: "Get paid: scissors & tape",
-    text: () => S.inv && ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank)
-      ? `Your account is already on this invoice, so you're set. On a <b>Vendor changed banks</b> or <b>Duplicate</b> scheme, use scissors on the <b>REMIT PAYMENT TO</b> box to tape in your account, or the money goes to the real vendor.`
-      : `Use scissors on the <b>REMIT PAYMENT TO</b> box to tape in your own account. <b>If you skip this, the money goes to the real vendor</b> and the invoice won't send.` },
-  { at: ["#win-clerk"], side: "left", title: "The cover email",
-    text: () => `Send a short note to the clerk. Play to their quirk (top right of the window). The more <b>Convinced</b> they are, the less suspicious the inspector gets.` },
+    text: () => `Pick a tool with ${kb("tool1")}–${kb("tool6")}, a click, or the mouse wheel, then click the invoice. The badge is how many uses are left this round. <b>You need at least 2 edits to send it</b>, and 4 is the limit. ${kb("drop")} puts a tool down. Next, you'll use three of them.` },
+  { at: [".tool[data-tool=scissors]", "#invoice .inv-bank"], side: "right", title: "Get paid: scissors & tape",
+    until: () => S.inv && ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank), can: () => usesLeft("scissors"),
+    text: () => `<b>Do it:</b> press ${kb("tool4")} (or click ✂️ Scissors), then click the <b>REMIT PAYMENT TO</b> box and pick one of your accounts.<br><br>Without this, the money goes to the real vendor and the invoice won't send.` },
+  { at: [".tool[data-tool=coffee]", "#invoice .inv-bank"], side: "right", title: "Hide it: coffee",
+    until: () => S.inv && (S.legibility.bank < 1 || S.uses.coffee >= 2), can: () => usesLeft("coffee"),
+    text: () => `A new bank number is the biggest giveaway on this scheme. <b>Do it:</b> press ${kb("tool2")} (or click ☕ Coffee mug), then click the <b>REMIT PAYMENT TO</b> box to stain it. Stains hide what's under them, but a ruined page looks odd, so one is enough.` },
+  { at: [".tool[data-tool=stamp]", "#invoice .inv-foot"], side: "right", title: "Look official: stamp",
+    until: () => S.inv && (S.stamps.length > 0 || S.uses.stamp >= 1), can: () => usesLeft("stamp"),
+    text: () => `<b>Do it:</b> press ${kb("tool5")} (or click 🔖 Stamp rack), choose <b>APPROVED</b>, then click near the signature. APPROVED calms the inspector a little.${S.level === 1 ? " Avoid URGENT here: the case file says Lou hates them." : ""}` },
+  { at: ["#win-clerk"], side: "left", title: "Sweet-talk the clerk",
+    enter: () => { tut.base = S.clerkReplies || 0; }, until: () => (S.clerkReplies || 0) > tut.base,
+    text: () => `<b>Do it:</b> press ${kb("chat")} (or click the box), type a short note and press Enter. ${LEVELS[S.level].clerk.name}'s quirk is in the window's corner: <i>${LEVELS[S.level].clerk.quirk}</i>. Notes that play to it fill the <b>Convinced</b> bar, which lowers the inspector's suspicion.` },
+  { at: [], noDim: true, drill: true, title: "Practice: the boss",
+    enter: () => { tut.hid = false; tutBossDrill(); }, until: () => tut.hid,
+    text: () => `The boss walks by while you forge. When the red <b>FOOTSTEPS!</b> banner appears, press ${kb("hide")} fast to slide a newspaper over the invoice. Miss it in a real round and you take +15 heat.<br><br><b>Practice now</b> (no heat): footsteps are coming…` },
   { at: ["#win-inspector"], side: "left", title: "The inspector",
     text: () => `Who's judging you, and which version he is. Every round he's retrained on your tricks and gets smarter: <b>intern → magnifier → UV lamp → cyborg</b>.` },
-  { at: ["#envelope"], side: "left", title: EMBED ? "Print and deliver" : "Send it",
-    text: () => EMBED
-      ? `When you're done, <b>drag this envelope onto PRINT</b> (the dark box at the top right). You'll stand up: grab the invoice at the printer (<kbd>E</kbd>), carry it to the inspector's IN tray (<kbd>E</kbd>), then sit back down for the verdict and the shop.`
-      : `When you're done, <b>drag this envelope into the OUTBOX</b> (the dark box at the top right). The inspector stamps it PAID or FLAGGED, and you spend your money in the shop before the next round.` },
   { at: ["#topbar .tb-heat", "#topbar .tb-money"], side: "bottom", title: "Heat and money",
-    text: () => `<b>Heat</b> rises with risky edits and repeated schemes, and high heat makes the inspector suspicious. <b>Siphoned</b> is your money so far.` },
-  { at: ["#btn-debug"], side: "top", title: "Detector view",
-    text: () => `Press <kbd>D</kbd> to see exactly what the inspector's model reads. Tools only matter through these fields.` },
-  { at: [], title: "One last thing: the boss",
-    text: () => `If the boss walks behind you while you forge, <b>press <kbd>Space</kbd> fast</b> to hide the invoice under a newspaper, or you take +15 heat.${EMBED ? ` <kbd>Esc</kbd> stands you up from the computer.` : ""}<br><br>Replay this tour any time with <b>❔ Tutorial</b> in the toolbox. Good luck.` },
+    text: () => `<b>Heat</b> rose with each edit you just made. It also climbs when you repeat a scheme, and high heat makes the inspector suspicious. <b>Siphoned</b> is your money so far.` },
+  { at: [], noDim: true, title: "Detector view", hold: 2600,
+    until: () => $("#debug-panel").classList.contains("show"), leave: () => $("#debug-panel").classList.remove("show"),
+    text: () => `<b>Do it:</b> press ${kb("detector")} to see exactly what the inspector's model reads: your stain, stamp and new bank number are all in there. Tools only matter through these fields.` },
+  { at: ["#envelope"], side: "left", title: EMBED ? "Print and deliver" : "Send it", last: true,
+    until: () => S.printed || S.submitted, can: () => S.edits >= 2,
+    text: () => EMBED
+      ? `<b>Do it:</b> drag this envelope onto <b>PRINT</b> (the dark box at the top right). You'll stand up: grab it at the printer (${kb("interact")}), drop it in the inspector's IN tray (${kb("interact")}), then sit back down for the verdict and the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.`
+      : `<b>Do it:</b> drag this envelope into the <b>OUTBOX</b> (the dark box at the top right). The inspector stamps it PAID or FLAGGED, then you spend your money in the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.` },
 ];
 const tut = { on: false, i: 0 };
+const kb = action => `<kbd>${ForgedKeys.label(action)}</kbd>`;
 
 function tutorialDone() { try { return localStorage.getItem(TUT_KEY) === "1"; } catch (e) { return false; } }
 function startTutorial(from = 0) {
   dropTool(); hidePopover();
-  Object.assign(tut, { on: true, i: from });
+  Object.assign(tut, { on: true, i: from, entered: -1 });
   $("#tutorial").classList.add("show");
   $("#tut-dots").innerHTML = TUTORIAL.map(() => "<i></i>").join("");
+  clearInterval(tut.poll); tut.poll = setInterval(tutPoll, 200);
   showTutStep();
 }
-function endTutorial() {
+
+// hands-on steps: watch for the player doing the thing
+function tutPoll() {
+  if (!tut.on || S.paused) return;
+  const st = TUTORIAL[tut.i];
+  if (!st.until || tut.done) return;
+  let ok = false; try { ok = st.until(); } catch (e) { ok = false; }
+  if (ok) {
+    tut.done = true; sfx("cash");
+    $(".tut-card").classList.add("done");
+    $("#tut-step").textContent = "✓ Done!";
+    $("#tut-next").style.display = "none";
+    clearTimeout(tut.adv);
+    tut.adv = setTimeout(() => { if (tut.on && TUTORIAL[tut.i] === st) tutNext(true); }, st.hold || 1000);
+  } else if (st.can) {
+    const stuck = !st.can();
+    $("#tut-next").style.display = stuck ? "" : "none"; // out of uses: let them move on
+    $("#tut-next").textContent = "Skip step →";
+  }
+}
+function endTutorial(unfinished = false) {
   tut.on = false;
+  clearInterval(tut.poll); clearTimeout(tut.adv);
+  const st = TUTORIAL[tut.i]; st && st.leave && st.leave();
+  if (S.bossPractice) { S.bossPractice = false; S.bossWindow = false; clearTimeout(S.bossTimer); $("#boss-prompt").classList.remove("show"); }
+  lockSchemes(false);
   $("#tutorial").classList.remove("show", "passthrough");
-  try { localStorage.setItem(TUT_KEY, "1"); } catch (e) { /* it just shows again next time */ }
+  if (!unfinished) try { localStorage.setItem(TUT_KEY, "1"); } catch (e) { /* it just shows again next time */ }
 }
 
 // bounding box of the target elements, in stage coordinates
@@ -1160,10 +1347,19 @@ function showTutStep() {
   $("#tut-title").textContent = step.title;
   $("#tut-text").innerHTML = step.text();
   $$("#tut-dots i").forEach((d, k) => d.classList.toggle("on", k === tut.i));
-  $("#tut-back").style.visibility = tut.i > 0 && !TUTORIAL[tut.i - 1].wait ? "visible" : "hidden";
-  $("#tut-next").style.display = step.wait ? "none" : "";
-  $("#tut-next").textContent = tut.i === TUTORIAL.length - 1 ? "Let's forge ✓" : "Next →";
-  $("#tutorial").classList.toggle("passthrough", !!step.wait);
+  const action = !!step.until;
+  if (tut.entered !== tut.i) { // first time showing this step
+    tut.entered = tut.i; tut.done = false; clearTimeout(tut.adv);
+    $(".tut-card").classList.remove("done");
+    step.enter && step.enter();
+  }
+  if (tut.done) $("#tut-step").textContent = "✓ Done!";
+  $("#tut-back").style.visibility = tut.i > 0 && !TUTORIAL[tut.i - 1].wait && !step.drill ? "visible" : "hidden";
+  $("#tut-next").style.display = step.wait || action ? "none" : "";
+  $("#tut-next").textContent = "Next →";
+  $("#tutorial").classList.toggle("passthrough", !!step.wait || action);
+  $("#tutorial").classList.toggle("nodim", !!step.noDim);
+  lockSchemes(step.wait === "scheme");
 
   const r = tutRect(step.at), hole = $(".tut-hole"), card = $(".tut-card");
   const h = r ? { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 } : { x: 800, y: 450, w: 0, h: 0 };
@@ -1201,95 +1397,29 @@ function showTutStep() {
   line.setAttribute("d", `M${sx},${sy} Q${qx},${qy} ${ex},${ey}`);
 }
 
-function tutNext() {
-  sfx("click");
-  if (tut.i >= TUTORIAL.length - 1) return endTutorial();
+function tutNext(auto = false) {
+  if (!auto) sfx("click");
+  const st = TUTORIAL[tut.i];
+  st.leave && st.leave();
+  if (st.drill && S.bossPractice) { S.bossPractice = false; S.bossWindow = false; clearTimeout(S.bossTimer); $("#boss-prompt").classList.remove("show"); }
+  if (tut.i >= TUTORIAL.length - 1) { endTutorial(); if (auto) toast("Tutorial complete. Good luck out there!", "good"); return; }
   tut.i++; showTutStep();
 }
 $("#tut-next").onclick = tutNext;
-$("#tut-back").onclick = () => { if (tut.i > 0 && !TUTORIAL[tut.i - 1].wait) { sfx("click"); tut.i--; showTutStep(); } };
-$("#tut-skip").onclick = () => { sfx("click"); endTutorial(); };
-$("#btn-tutorial").onclick = () => {
-  sfx("click");
-  if (!S.inv || S.submitted) { toast("Start a round first, then open the tutorial", "bad"); return; }
-  startTutorial(1);
+$("#tut-back").onclick = () => {
+  const st = TUTORIAL[tut.i];
+  if (tut.i > 0 && !TUTORIAL[tut.i - 1].wait && !st.drill) { sfx("click"); st.leave && st.leave(); tut.i--; showTutStep(); }
 };
+$("#tut-skip").onclick = () => { sfx("click"); endTutorial(); };
+const canTour = () => !!S.inv && !S.submitted && $("#screen-desk").classList.contains("active") && !$(".overlay.show");
+function replayTour() { if (canTour()) startTutorial(1); else toast("Start a round first, then open the tutorial", "bad"); }
 addEventListener("resize", () => tut.on && showTutStep());
 
-/* ======================= Leaderboard + Hall of Shame ======================= */
+/* ======================= Player name (the leaderboard itself is in menu.js) ======================= */
 
 const PLAYER_KEY = "forged-player";
 function playerName() {
   try { return (localStorage.getItem(PLAYER_KEY) || "").trim() || "You"; } catch (e) { return "You"; }
-}
-// offline only: sample rivals so the board is never empty (B pre-seeds the real one)
-const SAMPLE_PLAYERS = [
-  { name: "Shredder Sally", money: 18400, patches: 9 },
-  { name: "Two-Copy Tony", money: 11250, patches: 7 },
-  { name: "Notary Nadia", money: 6900, patches: 4 },
-  { name: "Stamp Champ", money: 3150, patches: 2 },
-];
-const SAMPLE_SHAME = [
-  { player: "Two-Copy Tony", version: 7, trick: "Duplicate with tweaks", learned: "copy_gen", n: 340 },
-  { player: "Shredder Sally", version: 4, trick: "Phantom supplier", learned: "unknown_vendor", n: 212 },
-  { player: "Notary Nadia", version: 3, trick: "Boss request", learned: "amount_unusual", n: 96 },
-];
-
-let boardTab = "leaders";
-function openBoard() {
-  const input = $("#player-name");
-  input.value = playerName() === "You" ? "" : playerName();
-  input.placeholder = "You";
-  input.onchange = () => {
-    try { localStorage.setItem(PLAYER_KEY, input.value.trim()); } catch (e) { /* name just isn't remembered */ }
-    S.shame.forEach(x => x.player = playerName());
-    loadBoard();
-  };
-  overlay("board");
-  loadBoard();
-}
-$$(".board-tab").forEach(b => b.onclick = () => {
-  sfx("click"); boardTab = b.dataset.tab;
-  $$(".board-tab").forEach(x => x.classList.toggle("active", x === b));
-  $("#board-leaders").hidden = boardTab !== "leaders"; $("#board-shame").hidden = boardTab !== "shame";
-});
-
-function renderBoard(players, shame, live) {
-  const me = playerName();
-  $("#board-source").textContent = live ? "● Live from the server" : "Offline: sample players, plus your current run";
-  $("#board-foot").textContent = "Patches = times the inspector was retrained because of your tricks";
-  const rows = [...players].sort((a, b) => b.money - a.money);
-  $("#board-leaders").innerHTML = rows.length ? `<table class="board-table">
-    <tr><th>#</th><th>Forger</th><th class="num">Siphoned</th><th class="num">Patches caused</th></tr>
-    ${rows.map((p, i) => `<tr class="${p.name === me ? "me" : ""}"><td class="board-rank">${i + 1}</td><td>${esc(p.name)}</td>
-      <td class="num">${money(p.money)}</td><td class="num">${p.patches}</td></tr>`).join("")}</table>`
-    : `<div class="board-empty">No forgers yet. Be the first.</div>`;
-  $("#board-shame").innerHTML = shame.length ? shame.map(x => `
-    <div class="shame-item ${x.player === me ? "me" : ""}">
-      <div class="shame-ver">v${x.version}</div>
-      <div><b>${esc(x.player)}</b>'s ${esc(x.trick)} taught the inspector to catch: ${esc(tellLabel(x.learned))}
-        <small>${x.round ? "Your run, round " + x.round : ""}</small></div>
-      <div class="shame-n">${x.n != null ? x.n + " invoices<br>retrained on" : x.amount != null ? money(x.amount) : ""}</div>
-    </div>`).join("") : `<div class="board-empty">Nobody has forced a patch yet.</div>`;
-}
-const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-
-// GET /leaderboard: { players: [{name, money, patches}], hall_of_shame: [{player, version, trick, learned, n}] }
-async function loadBoard() {
-  const me = { name: playerName(), money: S.money, patches: S.patches };
-  const localShame = [...S.shame].reverse();
-  renderBoard(S.round ? [...SAMPLE_PLAYERS, me] : SAMPLE_PLAYERS, [...localShame, ...SAMPLE_SHAME], false);
-  if (!API) return;
-  try {
-    const r = await api("GET", "/leaderboard");
-    const list = Array.isArray(r) ? r : r.players ?? r.leaderboard ?? [];
-    const players = list.map(p => ({ name: p.name ?? p.player ?? "?", money: +(p.money ?? p.siphoned ?? 0),
-      patches: +(p.patches ?? p.patches_caused ?? 0) }));
-    const shame = (r.hall_of_shame ?? r.shame ?? []).map(x => ({ player: x.player ?? x.name ?? "?",
-      version: x.version ?? "?", trick: x.trick ?? x.scheme ?? "a trick", learned: x.learned ?? x.feature ?? x.tell ?? "",
-      n: x.n ?? x.learned_from ?? x.examples ?? null }));
-    if ($("#overlay-board").classList.contains("show")) renderBoard(players, shame.length ? shame : localShame, true);
-  } catch (e) { offline(e); }
 }
 
 /* desk gets messier as the run goes on */
@@ -1311,21 +1441,33 @@ function scheduleBoss() {
     S.bossTimer = setTimeout(bossWalk, rand(9000, 20000));
   }
 }
-function bossWalk() {
-  if (S.submitted || tut.on || !$("#screen-desk").classList.contains("active") || $(".overlay.show")) {
+// tutorial practice: footsteps after a moment, no heat, repeats until the player hides in time
+function tutBossDrill(delay = 1800) {
+  clearTimeout(S.bossTimer);
+  S.bossTimer = setTimeout(() => { if (tut.on && TUTORIAL[tut.i].drill && !S.paused) bossWalk(true); }, delay);
+}
+function bossWalk(practice = false) {
+  if (S.paused && !practice) { S.bossTimer = setTimeout(bossWalk, 4000); return; }
+  if (!practice && (S.submitted || tut.on || !$("#screen-desk").classList.contains("active") || $(".overlay.show"))) {
     if (tut.on && !S.submitted) S.bossTimer = setTimeout(bossWalk, 8000); // try again after the tour
     return;
   }
   sfx("steps");
   const sh = $("#boss-shadow"); sh.classList.remove("walk"); void sh.offsetWidth; sh.classList.add("walk");
   $("#boss-prompt").classList.add("show");
-  S.bossWindow = true;
-  S.bossTimer = setTimeout(() => {
-    if (!S.bossWindow) return;
-    S.bossWindow = false; $("#boss-prompt").classList.remove("show");
-    sfx("buzz"); addHeat(15); toast("The boss saw something… +15 heat", "bad");
-    inspectorSay("Huh? What's the boss looking at?");
-  }, 2000);
+  S.bossWindow = true; S.bossPractice = practice;
+  S.bossTimer = setTimeout(bossSaw, 2000);
+}
+function bossSaw() {
+  if (!S.bossWindow) return;
+  S.bossWindow = false; $("#boss-prompt").classList.remove("show");
+  if (S.bossPractice) { // tutorial: no heat, just try again
+    S.bossPractice = false; sfx("bad");
+    toast(`Too slow! Press ${ForgedKeys.label("hide")} when the banner shows. Again…`, "bad");
+    tutBossDrill(2200); return;
+  }
+  sfx("buzz"); addHeat(15); toast("The boss saw something… +15 heat", "bad");
+  inspectorSay("Huh? What's the boss looking at?");
 }
 function hideInvoice() {
   if (!S.bossWindow) return;
@@ -1333,6 +1475,7 @@ function hideInvoice() {
   $("#boss-prompt").classList.remove("show");
   const np = $("#newspaper"); np.classList.add("show"); sfx("whoosh");
   toast("Smooth. Just reading the paper.", "good");
+  if (S.bossPractice) { S.bossPractice = false; tut.hid = true; }
   setTimeout(() => np.classList.remove("show"), 1700);
 }
 
@@ -1359,26 +1502,95 @@ function record() {
 }
 function updateDebug() { if ($("#debug-panel").classList.contains("show")) $("#debug-json").textContent = JSON.stringify(record(), null, 2); }
 function toggleDebug() { $("#debug-panel").classList.toggle("show"); updateDebug(); }
-$("#btn-debug").onclick = () => { sfx("click"); toggleDebug(); };
+const paintDebugKey = () => { $("#debug-key").textContent = ForgedKeys.label("detector"); };
+paintDebugKey(); ForgedKeys.onChange(paintDebugKey);
 
-/* ======================= Keyboard ======================= */
+/* ======================= Pause & Game Menu =======================
+ * Esc opens the Game Menu (menu.js). Inside the office the office page owns the
+ * menu, so the computer asks for it with a "menu" message and is told when the
+ * game is paused or resumed. On its own, os.html runs the menu itself. */
+
+function openMenu(screen = "pause") {
+  hidePopover(); hideSchemeTip();
+  if (EMBED) post("menu", { screen });
+  else ForgedMenu.open(screen);
+}
+function setPaused(on) {
+  if (!!S.paused === on) return;
+  S.paused = on;
+  if (on) {
+    clearTimeout(S.bossTimer);
+    S.pausedWindow = S.bossWindow;
+    dropTool(); hidePopover();
+  } else if (tut.on && TUTORIAL[tut.i].drill && !tut.hid) {
+    S.bossWindow = false; $("#boss-prompt").classList.remove("show"); tutBossDrill();
+  } else if (S.pausedWindow) {
+    S.bossTimer = setTimeout(bossSaw, 2000); // a fresh 2 seconds to hide the invoice
+  } else if (!EMBED && S.inv && !S.submitted) scheduleBoss();
+}
+if (!EMBED) ForgedMenu.init({
+  office: false,
+  onPause: setPaused,
+  onQuit: quitToTitle,
+  canTour, onTour: replayTour,
+  getStats: () => ({ money: S.money, patches: S.patches, shame: S.shame, round: S.round }),
+});
+
+/* ======================= Keyboard & mouse ======================= */
 
 document.addEventListener("keydown", e => {
-  if (tut.on) {
-    if (e.key === "Escape") { e.preventDefault(); endTutorial(); }
-    else if (!TUTORIAL[tut.i].wait && (e.key === "Enter" || e.key === "ArrowRight" || e.code === "Space")) { e.preventDefault(); tutNext(); }
-    else if (e.key === "ArrowLeft") $("#tut-back").click();
-    return;
+  const K = ForgedKeys, code = e.code;
+  const el = document.activeElement;
+  const typing = ["INPUT", "TEXTAREA"].includes(el.tagName) || el.isContentEditable;
+  if (code === "Escape") {
+    e.preventDefault();
+    if (typing) { el.blur(); return; } // like closing chat: a second Esc opens the menu
+    openMenu("pause"); return;
   }
-  const typing = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable;
-  if (e.code === "Space" && S.bossWindow) { e.preventDefault(); document.activeElement.blur?.(); hideInvoice(); return; }
-  if (typing) { if (e.key === "Escape" || e.key === "Enter" && document.activeElement.isContentEditable) { e.preventDefault(); document.activeElement.blur(); } return; }
-  if (e.key === "Escape" && EMBED && !S.tool && !$("#popover.show")) { post("stand"); return; }
+  if (S.paused) return;
+  if (tut.on && !typing) {
+    const st = TUTORIAL[tut.i];
+    if (st.wait) return; // picking a scheme: mouse only
+    if (!st.until) { // reading steps: Enter / → / Space for next, ← for back
+      if (code === "Enter" || code === "ArrowRight" || code === "Space") { e.preventDefault(); tutNext(); }
+      else if (code === "ArrowLeft") $("#tut-back").click();
+      return;
+    }
+    // hands-on steps fall through: the game's own keys work
+  }
+  if (K.is("hide", code) && S.bossWindow) { e.preventDefault(); el.blur?.(); hideInvoice(); return; }
+  if (typing) { if (code === "Enter" && el.isContentEditable) { e.preventDefault(); el.blur(); } return; }
+  if (EMBED && K.is("standUp", code)) { e.preventDefault(); post("stand"); return; }
+  if (K.is("detector", code)) { e.preventDefault(); toggleDebug(); return; }
   if (!$("#screen-desk").classList.contains("active") || $(".overlay.show")) return;
-  if (e.key === "Escape") { dropTool(); hidePopover(); }
-  if (e.key >= "1" && e.key <= "6") selectTool(TOOLS[+e.key - 1].id);
-  if (e.key.toLowerCase() === "d") toggleDebug();
+  for (let i = 1; i <= 6; i++) if (K.is("tool" + i, code)) { e.preventDefault(); selectTool(TOOLS[i - 1].id); return; }
+  if (K.is("drop", code)) { dropTool(); hidePopover(); return; }
+  if (K.is("chat", code) && S.inv && !S.submitted) { e.preventDefault(); $("#chat-text").focus(); }
 });
+
+// mouse buttons can be bound too ("Mouse3" = back button…); left click stays the pointer
+document.addEventListener("mousedown", e => {
+  if (e.button === 0 || S.paused) return;
+  const code = "Mouse" + e.button, K = ForgedKeys;
+  if (EMBED && K.is("standUp", code)) { e.preventDefault(); post("stand"); }
+  else if (K.is("hide", code) && S.bossWindow) { e.preventDefault(); hideInvoice(); }
+});
+
+// mouse wheel cycles through the tools you can still use, like a hotbar
+let wheelAt = 0;
+$("#screen-desk").addEventListener("wheel", e => {
+  if (S.paused || (tut.on && !TUTORIAL[tut.i].until) || $(".overlay.show") || !S.inv || S.submitted) return;
+  if (e.target.closest(".win-body, #debug-panel, #popover")) return; // let windows scroll
+  e.preventDefault();
+  const now = performance.now(); if (now - wheelAt < 140) return; wheelAt = now; // trackpads send bursts
+  if (S.edits >= S.maxEdits) return;
+  const usable = TOOLS.filter(t => !t.instant && toolAvailable(t) && S.uses[t.id] < t.cap);
+  if (!usable.length) return;
+  const i = usable.findIndex(t => t.id === S.tool), dir = e.deltaY > 0 ? 1 : -1;
+  const next = usable[i < 0 ? (dir > 0 ? 0 : usable.length - 1) : (i + dir + usable.length) % usable.length];
+  if (next.id !== S.tool) selectTool(next.id);
+}, { passive: false });
+
 document.addEventListener("pointerdown", e => {
   if (!e.target.closest("#popover") && !e.target.closest("#invoice") && !e.target.closest(".tool")) hidePopover();
 });

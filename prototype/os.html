@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Caveat:wght@600&family=Space+Mono:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
 <!-- the ?v= stamp makes the browser fetch the newest style.css and game.js on every load, whatever server is used -->
-<script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '">');</script>
-<noscript><link rel="stylesheet" href="style.css"></noscript>
+<script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '"><link rel="stylesheet" href="menu.css?v=' + Date.now() + '">');</script>
+<noscript><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="menu.css"></noscript>
 </head>
 <body>
 <div id="viewport">
@@ -29,8 +29,8 @@
       <div class="title-buttons">
         <button class="btn btn-big" data-go="levels">▶ Play Solo</button>
         <button class="btn btn-big btn-ghost" disabled>⚔ Duel <span class="tag">soon</span></button>
-        <button class="btn btn-ghost" data-open="howto">How to play</button>
-        <button class="btn btn-ghost" data-board>🏆 Leaderboard</button>
+        <button class="btn btn-ghost" data-menu="howto">How to play</button>
+        <button class="btn btn-ghost" data-menu="board">🏆 Leaderboard</button>
       </div>
       <p class="fineprint">Fictional companies. Cartoon paperwork. A game about outsmarting a detector, not a how-to.</p>
     </div>
@@ -92,7 +92,7 @@
       <div class="win-title"><span class="dots"><i></i><i></i><i></i></span><span id="insp-win-title">Accounts Payable Scanner</span><span class="win-hint" id="insp-version">v1</span></div>
       <div class="win-body insp-body">
         <div class="insp-left">
-          <div class="insp-face" id="insp-face"><span id="insp-emoji">😴</span><span class="insp-prop" id="insp-prop">📎</span></div>
+          <div class="insp-face" id="insp-face"><div id="insp-portrait"></div></div>
           <div class="insp-name" id="insp-name">Gus</div>
           <div class="insp-title" id="insp-title">Sleepy Intern</div>
         </div>
@@ -112,7 +112,7 @@
       <div class="win-title"><span class="dots"><i></i><i></i><i></i></span>Cover Email<span class="win-hint" id="clerk-quirk"></span></div>
       <div class="win-body clerk-body">
         <div class="clerk-head">
-          <div class="clerk-avatar" id="clerk-avatar">🥪</div>
+          <div class="clerk-avatar" id="clerk-avatar"></div>
           <div><div class="clerk-name" id="clerk-name">Brenda</div><div class="clerk-sub" id="clerk-sub">Accounts clerk</div></div>
           <div class="persuade"><span class="tb-label">Convinced</span><div class="persuade-track"><div id="persuade-fill"></div></div></div>
         </div>
@@ -129,8 +129,6 @@
       <div class="dock-label">TOOLBOX<span id="edits-left">Edits 0/4</span></div>
       <div id="tools"></div>
       <div class="dock-sep"></div>
-      <button class="btn btn-ghost btn-small" id="btn-tutorial" title="Walk through the desk">❔ Tutorial</button>
-      <button class="btn btn-ghost btn-small" id="btn-debug" title="What the detector sees (D)">🔍 Detector view</button>
       <div id="envelope" title="Drag me into the outbox"><div class="env-flap"></div><span class="env-label">DRAG TO OUTBOX</span></div>
     </footer>
 
@@ -142,6 +140,9 @@
 
     <!-- popover used by scissors / stamps / pen -->
     <div id="popover"></div>
+
+    <!-- hover tips on the scheme picker (above the tutorial dimming) -->
+    <div id="scheme-tip"></div>
 
     <!-- guided tutorial: dims the desk, cuts a hole around one part, points at it -->
     <div id="tutorial">
@@ -156,7 +157,7 @@
         <h3 id="tut-title"></h3>
         <p id="tut-text"></p>
         <div class="tut-btns">
-          <button class="btn btn-ghost btn-small" id="tut-skip">Skip tour</button>
+          <button class="btn btn-ghost btn-small" id="tut-skip">Skip tutorial</button>
           <div class="tut-dots" id="tut-dots"></div>
           <span><button class="btn btn-ghost btn-small" id="tut-back">← Back</button>
           <button class="btn btn-small" id="tut-next">Next →</button></span>
@@ -166,7 +167,7 @@
 
     <!-- detector debug -->
     <aside id="debug-panel">
-      <div class="debug-head">What the detector sees <span>(mock record — press D to close)</span></div>
+      <div class="debug-head">What the detector sees <span>(mock record — press <b id="debug-key">F3</b> to close)</span></div>
       <pre id="debug-json"></pre>
     </aside>
   </section>
@@ -199,7 +200,7 @@
       <div class="cork-pins" id="cork-pins"></div>
       <svg class="cork-string" id="cork-string" viewBox="0 0 1100 560" preserveAspectRatio="none"></svg>
       <div class="cork-inspector">
-        <div class="insp-face big"><span id="cork-emoji">😴</span></div>
+        <div class="insp-face big"><div id="cork-portrait"></div></div>
         <div class="bubble" id="cork-line">Never again.</div>
         <div class="version-tick"><span id="ver-old">v1</span> → <span id="ver-new">v2</span></div>
       </div>
@@ -227,42 +228,9 @@
       </div>
       <div class="between-foot">
         <button class="btn btn-ghost" id="btn-quit">Leave the office</button>
-        <button class="btn btn-ghost" data-board>🏆 Leaderboard</button>
+        <button class="btn btn-ghost" data-menu="board">🏆 Leaderboard</button>
         <button class="btn btn-big" id="btn-next-round">Next round →</button>
       </div>
-    </div>
-  </div>
-
-  <div id="overlay-board" class="overlay">
-    <div class="modal board">
-      <div class="board-head">
-        <div class="board-tabs">
-          <button class="board-tab active" data-tab="leaders">🏆 Leaderboard</button>
-          <button class="board-tab" data-tab="shame">🧾 Hall of Shame</button>
-        </div>
-        <label class="board-name">Your name <input id="player-name" maxlength="16" spellcheck="false" autocomplete="off"></label>
-      </div>
-      <div class="board-source" id="board-source"></div>
-      <div class="board-pane" id="board-leaders"></div>
-      <div class="board-pane" id="board-shame" hidden></div>
-      <div class="between-foot"><span class="fineprint" id="board-foot"></span><button class="btn btn-big" data-close>Back</button></div>
-    </div>
-  </div>
-
-  <div id="overlay-howto" class="overlay">
-    <div class="modal howto">
-      <div class="modal-kicker">HOW TO PLAY</div>
-      <h2 id="howto-title">One round, about 90 seconds</h2>
-      <!-- standalone version; game.js swaps in the office version when embedded -->
-      <ol class="howto-steps" id="howto-steps">
-        <li><b>Briefing.</b> Read the leaked memo and the case file. One memo rule is fake: click a rule to mark it real or fake.</li>
-        <li><b>Pick a scheme.</b> Changed bank details, duplicate bill, phantom supplier, boss request. Repeating one raises heat.</li>
-        <li><b>Forge.</b> Click a tool in the toolbox, then click the invoice. Use at least 2 edits (4 max), and make sure the money goes to your account.</li>
-        <li><b>Pitch.</b> Sweet-talk the clerk in the cover email.</li>
-        <li><b>Submit.</b> Drag the envelope into the outbox. Watch out for the boss.</li>
-        <li><b>Inspection.</b> PAID or FLAGGED. Either way, the inspector learns. Spend your money in the shop between rounds.</li>
-      </ol>
-      <div class="between-foot"><span class="fineprint" id="howto-keys">Hotkeys: 1–6 tools · Esc drop tool · D detector view · Space hide invoice</span><button class="btn btn-big" data-close>Got it</button></div>
     </div>
   </div>
 
@@ -270,6 +238,6 @@
 </div>
 </div>
 <div id="tool-cursor"></div>
-<script>document.write('<script src="game.js?v=' + Date.now() + '"><\/script>');</script>
+<script>document.write(['keys.js', 'menu.js', 'game.js'].map(f => '<script src="' + f + '?v=' + Date.now() + '"><\/script>').join(''));</script>
 </body>
 </html>
