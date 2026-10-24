@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException
 
 from server import config
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
-from server.services.online_data import preview, submit_online
+from server.services.online_data import model_version, preview, submit_online
 from server.models.schemas import (
     CaseFile,
     MemoRule,
@@ -99,7 +99,7 @@ async def round_start(req: RoundStartRequest):
         round_id=round_id,
         session_id=session_id,
         memo=memo,
-        inspector_version=version,
+        inspector_version=model_version() or version,  # the fraud model's, when it's live: the one judging
         case_file=CaseFile(
             company=level_data["company"],
             vendors=level_data["vendors"],
@@ -117,7 +117,7 @@ async def round_start(req: RoundStartRequest):
 @router.post("/submit", response_model=SubmitResponse)
 async def submit(req: SubmitRequest):
     if isinstance(req.record, OnlineRecord):  # the typed checkout
-        return submit_online(req.record, req.gus, req.round_id, req.player)
+        return submit_online(req.record, req.gus, req.round_id, req.player, req.perks)
     # 1. Load round state from Redis
     round_state = game_state.load_round(req.round_id)
     if round_state is None:
