@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 
 from ml.baseline import Detector
+from ml.schema import MEMORY_FEATURES
 
 # feature -> (prototype tell name, invoice region)
 TELLS = {
@@ -71,10 +72,10 @@ PHRASES = {
 TREE_AGREEMENT = 0.85  # spec 5.1: only use rules from a tree that agrees with the model this often
 
 
-def tells(det: Detector, features: dict[str, float], k: int = 5) -> list[dict]:
+def tells(det: Detector, features: dict[str, float], k: int = 5, memory: bool = True) -> list[dict]:
     """The strongest reasons this invoice looks forged, merged by tell name, strongest first."""
     merged: dict[str, dict] = {}
-    for name, push in det.contributions(features).items():
+    for name, push in det.contributions(features, memory).items():
         if push <= 0 or name not in TELLS:
             continue
         tell, region = TELLS[name]
@@ -91,39 +92,44 @@ def phrase(feature: str, threshold: float | None = None, high: bool = True, limi
     return text.format(t=t, p=max(0.0, (t - 1) * 100), d=t, limit=limit)
 
 
-def memo_rules(det: Detector, rows: list, k: int = 2) -> list[str]:
+def memo_rules(det: Detector, rows: list, k: int = 2, memory: bool = True) -> list[str]:
     """Spec 5.1: a depth-2 tree fit on the model's own verdicts, read off as rules with real
-    thresholds. Falls back to the largest weights when the tree agrees with the model too little."""
-    x = np.array([[r.features[n] for n in det.features] for r in rows])
-    verdicts = det.flags(rows)
+    thresholds. Falls back to the largest weights when the tree agrees with the model too little.
+    With memory off, the rules only use the features that level judges by."""
+    names = _judged_by(det, memory)
+    x = np.array([[r.features[n] for n in names] for r in rows])
+    verdicts = det.flags(rows, memory)
     if verdicts.any() and not verdicts.all():
         tree = DecisionTreeClassifier(max_depth=2, random_state=0).fit(x, verdicts)
         if (tree.predict(x) == verdicts).mean() >= TREE_AGREEMENT:
-            rules = _flag_paths(tree, det.features)
+            rules = _flag_paths(tree, names)
             if rules:
                 return rules[:k]
-    weights = sorted(zip(det.features, det.model.coef_[0]), key=lambda t: -t[1])
+    weights = sorted(_weights(det, names).items(), key=lambda t: -t[1])
     return [f"Check {phrase(name)}." for name, w in weights[:k] if w > 0]
 
 
-def top_features(det: Detector, rows: list, k: int = 2) -> list[str]:
+def top_features(det: Detector, rows: list, k: int = 2, memory: bool = True) -> list[str]:
     """The features the memo rules are about (the tree's splits, or the largest weights)."""
-    x = np.array([[r.features[n] for n in det.features] for r in rows])
-    verdicts = det.flags(rows)
+    names = _judged_by(det, memory)
+    x = np.array([[r.features[n] for n in names] for r in rows])
+    verdicts = det.flags(rows, memory)
     if verdicts.any() and not verdicts.all():
         tree = DecisionTreeClassifier(max_depth=2, random_state=0).fit(x, verdicts)
         if (tree.predict(x) == verdicts).mean() >= TREE_AGREEMENT:
-            names = list(dict.fromkeys(det.features[i] for i in tree.tree_.feature if i >= 0))
-            if len(names) >= k:
-                return names[:k]
-    return [name for name, _ in sorted(zip(det.features, det.model.coef_[0]), key=lambda t: -t[1])[:k]]
+            split = list(dict.fromkeys(names[i] for i in tree.tree_.feature if i >= 0))
+            if len(split) >= k:
+                return split[:k]
+    return [name for name, _ in sorted(_weights(det, names).items(), key=lambda t: -t[1])[:k]]
 
 
-def patch_note(old: Detector, new: Detector, trigger_rows: list, version: int, trick_recall: float | None) -> list[str]:
+def patch_note(old: Detector, new: Detector, trigger_rows: list, version: int, trick_recall: float | None,
+               memory: bool = True) -> list[str]:
     """Spec 5.2: the features whose push rose most on the attacks that triggered the retrain."""
     if not trigger_rows:
         return [f"Inspector v{version} reviewed the latest invoices."]
-    rise = {n: np.mean([new.contributions(r.features)[n] - old.contributions(r.features)[n] for r in trigger_rows])
+    rise = {n: np.mean([new.contributions(r.features, memory)[n] - old.contributions(r.features, memory).get(n, 0.0)
+                        for r in trigger_rows])
             for n in new.features}
     learned = [n for n, gain in sorted(rise.items(), key=lambda t: -t[1])[:2] if gain > 0]
     lines = [f"Inspector v{version} now catches {' and '.join(phrase(n) for n in learned) or 'your trick'}, "
@@ -131,6 +137,14 @@ def patch_note(old: Detector, new: Detector, trigger_rows: list, version: int, t
     if trick_recall is not None:
         lines.append(f"v{version} catches {trick_recall:.0%} of variants of your trick.")
     return lines
+
+
+def _judged_by(det: Detector, memory: bool) -> tuple[str, ...]:
+    return tuple(n for n in det.features if memory or n not in MEMORY_FEATURES)
+
+
+def _weights(det: Detector, names) -> dict[str, float]:
+    return {n: w for n, w in zip(det.features, det.model.coef_[0]) if n in names}
 
 
 def _flag_paths(tree: DecisionTreeClassifier, names: tuple[str, ...]) -> list[str]:

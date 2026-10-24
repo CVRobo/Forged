@@ -4,6 +4,7 @@ import pytest
 from ml.baseline import evaluate, fit_detector, threshold_at_fpr
 from ml.checks import run_checks
 from ml.generate import build_dataset
+from ml.schema import LEVELS
 
 
 @pytest.fixture(scope="module")
@@ -58,8 +59,10 @@ def test_evaluate_reports_recall_per_scheme(splits):
 
 
 def test_the_gate_runs_every_spec_check(splits):
-    names = [c.name for c in run_checks(*splits).checks]
+    report = run_checks(*splits)
+    names = [c.name for c in report.checks]
     assert sum(n.startswith("2.1") for n in names) == 5
     assert sum(n.startswith("3.1") for n in names) == 6
     assert any(n.startswith("3.2") for n in names) and any(n.startswith("4.5") for n in names)
     assert any(n.startswith("v1 recall") for n in names)
+    assert 0 <= report.v1_memory["recall"] <= 1 and set(report.levels) == set(LEVELS)  # memory on is reported too

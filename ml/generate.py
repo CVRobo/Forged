@@ -24,6 +24,7 @@ ROUNDS = (15, 30)          # invoices per run
 ATTACK_RUN_SHARE = 0.5     # share of runs with a scripted attacker
 ATTACK_RATE = (0.25, 0.5)  # in those runs, the share of rounds that are attacks
 ATTACK_PAID_RATE = 0.5     # paid attacks join the case file; v1 should miss about half
+REPEAT_RATE = 0.5          # like players, an attacker reuses its last PAID trick this often (spec 2.3)
 
 # The legit mix (spec 2.1). Every tell shows up on real invoices above the 5% FPR target,
 # and a real invoice carries at most one of them, looking clean on every other lever.
@@ -64,6 +65,7 @@ class Run:
     rows: list[Submission] = field(default_factory=list)
     new_vendors: list[tuple] = field(default_factory=list)  # (name, domain, bank, letterhead) onboarded this run
     fake_payee: tuple | None = None                         # the attacker's last phantom or boss payee
+    favorite: Levers | None = None                          # the attacker's last PAID trick
     order_seq: int = 4000
     invoice_seq: int = 100
 
@@ -96,13 +98,19 @@ def build_dataset(seed: int, n_runs: int = 150, attack_run_share: float = ATTACK
     return rows
 
 
-def clone_attacks(levers: Levers, n: int, seed: int) -> list[Submission]:
+def clone_attacks(levers: Levers, n: int, seed: int, origin: str = "player_clone") -> list[Submission]:
     """Spec 2.2: n variants of one trick, with the same levers on new vendors, amounts and dates."""
-    clones, i = [], 0
-    while len(clones) < n:
-        clones += [r for r in simulate_run(seed, i, attack_rate=0.5, levers=levers, origin="player_clone") if r.is_fraud]
+    return [r for r in clone_runs(levers, n, seed, origin) if r.is_fraud][:n]
+
+
+def clone_runs(levers: Levers, n: int, seed: int, origin: str = "player_clone") -> list[Submission]:
+    """Every row of the runs that hold n variants: the attacker repeats the trick in each session,
+    between the desk's legit invoices. Replay these for the variants' memory features (spec 2.3)."""
+    rows, i = [], 0
+    while sum(r.is_fraud for r in rows) < n:
+        rows += simulate_run(seed, i, attack_rate=0.5, levers=levers, origin=origin)
         i += 1
-    return clones[:n]
+    return rows
 
 
 def simulate_run(seed: int, index: int, attack_rate: float, levers: Levers | None = None,
@@ -114,10 +122,16 @@ def simulate_run(seed: int, index: int, attack_rate: float, levers: Levers | Non
     _seed_history(run, start)
     for _ in range(rng.randint(*ROUNDS)):
         if rng.random() < attack_rate:
-            _attack_round(run, levers or sample_levers(rng, rng.choice(SCHEMES)), origin)
+            _attack_round(run, levers or _scripted_levers(run), origin)
         else:
             _legit_round(run)
     return run.rows
+
+
+def _scripted_levers(run: Run) -> Levers:
+    if run.favorite and run.rng.random() < REPEAT_RATE:
+        return run.favorite
+    return sample_levers(run.rng, run.rng.choice(SCHEMES))
 
 
 # ---------- rounds ----------
@@ -141,6 +155,8 @@ def _legit_round(run: Run) -> None:
 def _attack_round(run: Run, levers: Levers, origin: str) -> None:
     inv = attack_invoice(run, levers)
     _submit(run, inv, origin, levers.scheme_id)
+    if run.rows[-1].verdict == "PAID":
+        run.favorite = levers
 
 
 def _submit(run: Run, inv: Invoice, origin: str, scheme_id: str | None) -> None:

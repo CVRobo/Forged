@@ -1,14 +1,17 @@
 """What the game server imports from ml.detector, and the spec's core demo sequence (section 1)."""
+import numpy as np
 import pytest
 
-from ml import detector, store, training
+from ml import detector, memory, store, training
 from ml.attackers import Levers
-from ml.generate import clone_attacks
-from ml.schema import FEATURES
-from ml.tests.test_adapter import record
+from ml.schema import FEATURES, MEMORY_FEATURES
+from ml.tests.test_adapter import features, record
 
 # A careful Bank Switcheroo: a mule account taped onto the vendor's own paper, nothing else off.
 CAREFUL_SWITCHEROO = Levers(scheme_id="bank_switcheroo", identity="copy", amount="typical", timing="on_cadence")
+# A careful phantom vendor: a brand-new payee with nothing else off. Retraining can't learn it (README).
+CAREFUL_PHANTOM = Levers(scheme_id="phantom_supplier", identity="fresh", amount="typical", timing="random")
+TAPED_BANK = dict(bank_account="••••7781", field_altered=["bank"])
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +20,7 @@ def model_dir(tmp_path, monkeypatch):
     store.clear_cache()
     yield tmp_path
     store.clear_cache()
+    training.forget_memory()
 
 
 def test_v1_is_trained_and_saved_on_first_use(model_dir):
@@ -63,19 +67,20 @@ def test_memo_rules_are_readable_sentences():
 def test_a_retrain_on_a_missed_trick_catches_its_variants():  # spec section 1 and 2.2
     detector.warm()
     v1 = store.load_detector(1)
-    missed = next(r for r in clone_attacks(CAREFUL_SWITCHEROO, n=40, seed=7)
-                  if not v1.score_features(r.features) >= store.threshold(1, "sunny_diner"))
+    missed = next(r for r in training.clones(CAREFUL_SWITCHEROO, n=40, seed=7)
+                  if not training.score(v1, r.features, "sunny_diner") >= store.threshold(1, "sunny_diner"))
     result = training.retrain_on([missed.model_copy(update={"origin": "player", "submission_id": "trick-1"})])
     assert result["promoted"] and result["new_version"] == 2
     v2 = store.load_detector(2)
-    fresh = clone_attacks(CAREFUL_SWITCHEROO, n=50, seed=999)
+    fresh = training.clones(CAREFUL_SWITCHEROO, n=50, seed=999)
 
-    def caught(level):  # share of fresh variants FLAGGED at a level's FPR target
-        return sum(v2.score_features(r.features) >= store.threshold(2, level) for r in fresh) / len(fresh)
+    def caught(level, version=2):  # share of fresh variants FLAGGED at a level's FPR target
+        det = store.load_detector(version)
+        return sum(training.score(det, r.features, level) >= store.threshold(version, level) for r in fresh) / len(fresh)
     # Spec 2.2 asks for 9 of 10. This trick overlaps real hand-corrected bank changes, so at the
-    # spec's 5% FPR (St. Mercy) a retrain reaches 78-86%, and 60-84% at Sunny Diner's 3%.
+    # spec's 5% FPR (St. Mercy) a retrain reaches 84-86%, and 73-74% at Sunny Diner's 3%.
     assert caught("st_mercy") >= 0.75 and caught("sunny_diner") >= 0.6
-    assert caught("sunny_diner") > 0.3  # v1 caught under 20% of these
+    assert caught("sunny_diner") >= caught("sunny_diner", version=1) + 0.3  # v1 catches about 30% of these
     assert result["metrics"]["false_positive_rate"] <= 0.08
     assert any("v2" in line for line in result["learned"])
 
@@ -93,7 +98,7 @@ def test_player_invoices_without_a_payload_never_teach_the_model():  # spec 3.3
 
 def test_the_replay_grid_skips_batches_a_version_trained_on():
     detector.warm()
-    tricks = clone_attacks(CAREFUL_SWITCHEROO, n=6, seed=3)
+    tricks = training.clones(CAREFUL_SWITCHEROO, n=6, seed=3)
     training.retrain_on([r.model_copy(update={"origin": "player", "detector_version": 1, "submission_id": f"t{i}"})
                          for i, r in enumerate(tricks)])
     grid = detector.replay_grid()
@@ -111,3 +116,80 @@ def test_retrain_skips_records_from_levels_that_arent_modelled():
     detector.warm()
     result = detector.retrain([record(level=2, bank_account="••••7781", field_altered=["bank"])])
     assert result["examples"]["skipped_levels"] == 1 and result["examples"]["total"] == 0
+
+
+# ---------- in-session memory (spec 2.3 and 5.3) ----------
+
+def test_v1_trains_on_the_base_and_memory_features():
+    detector.warm()
+    assert store.load_detector(1).features == FEATURES
+
+
+def test_the_same_trick_twice_in_one_session_scores_higher_the_second_time():  # spec 2.3 acceptance
+    # The served memory features don't depend on the level, so serve at Sunny Diner (the one level
+    # the server sends) and judge them the way Port Nocturne does, with memory on.
+    first = detector.predict(record(session_id="repeat", round_id="r1", **TAPED_BANK))
+    second = detector.predict(record(session_id="repeat", round_id="r2", invoice_no="PP-0413", **TAPED_BANK))
+    v1 = store.load_detector(1)
+    judged = [training.score(v1, p.features, "port_nocturne") for p in (first, second)]
+    assert judged[1] > judged[0] and store.current_version() == 1  # no retrain in between
+    assert first.features["self_sim"] == 0 and second.features["self_sim"] == pytest.approx(1.0)
+    assert second.features["knn_fraud_share"] > first.features["knn_fraud_share"]
+    assert second.heat == 100 and first.heat == 0
+
+
+def test_a_memory_off_level_ignores_the_index():  # spec 5.3: Sunny Diner has memory off
+    first = detector.predict(record(level=1, session_id="off", round_id="r1", **TAPED_BANK))
+    second = detector.predict(record(level=1, session_id="off", round_id="r2", invoice_no="PP-0413", **TAPED_BANK))
+    assert second.features["self_sim"] > first.features["self_sim"]  # still served and stored
+    assert second.score == first.score
+    assert second.heat > first.heat  # the heat meter still sees the repeat
+
+
+def test_history_records_count_as_this_sessions_earlier_submissions():
+    earlier = record(session_id="hist", round_id="h1", **TAPED_BANK)
+    result = detector.predict(record(session_id="hist", round_id="h2", invoice_no="PP-0413", **TAPED_BANK),
+                              history=[earlier])
+    v = memory.scale().vectors([features(earlier), result.features])  # window features count the earlier one
+    assert result.features["self_sim"] == pytest.approx(float(v[0] @ v[1])) and result.heat > 0
+
+
+def test_predict_and_retrain_write_what_they_see_into_memory():
+    detector.warm()
+    index = training.live_memory()
+    before = len(index)
+    history = [record(session_id="w", round_id="w0", invoice_no="PP-0400")]
+    detector.predict(record(session_id="w", round_id="w1"), history=history)
+    detector.predict(record(session_id="w", round_id="w1"), history=history)  # judged again: stored once
+    assert len(index) == before + 2
+    trick = training.clones(CAREFUL_SWITCHEROO, n=1, seed=21)[0].model_copy(
+        update={"origin": "player", "submission_id": "w-trick"})
+    result = training.retrain_on([trick])
+    assert len(index) == before + 3 + result["examples"]["clones"]
+    assert "w-trick" in index
+
+
+def test_training_reads_the_memory_features_served_at_predict_time():  # spec 2.3: never recomputed
+    rec = record(session_id="srv", round_id="s1", **TAPED_BANK)
+    served = detector.predict(rec).features
+    detector.predict(record(session_id="srv", round_id="s2", invoice_no="PP-0413", **TAPED_BANK))
+    row = detector.to_row(rec)
+    assert {n: row.features[n] for n in MEMORY_FEATURES} == {n: served[n] for n in MEMORY_FEATURES}
+
+
+def test_dropping_memory_costs_recall_on_repeated_tricks_but_not_fpr():  # spec 2.3 acceptance
+    detector.warm()
+    v1 = store.load_detector(1)
+    training.remember(training.clones(CAREFUL_PHANTOM, n=1, seed=11))  # one PAID trick is in memory
+    repeats = training.clones(CAREFUL_PHANTOM, n=60, seed=12, apart=True)  # player-like: each session repeats it
+    on, off = "port_nocturne", "st_mercy"  # both flag at 5% FPR; only memory differs
+
+    def recall(level):
+        return np.mean([training.score(v1, r.features, level) >= store.threshold(1, level) for r in repeats])
+
+    def frozen_fpr(level):
+        legit = [r for r in training.base_splits()[2] if not r.is_fraud]
+        return np.mean([training.score(v1, r.features, level) >= store.threshold(1, level) for r in legit])
+
+    assert recall(on) >= recall(off) + 0.2
+    assert abs(frozen_fpr(on) - frozen_fpr(off)) <= 0.02
