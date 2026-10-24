@@ -46,29 +46,43 @@ Then open `ml/online/report.html` (any static server, e.g. `python -m http.serve
 
 **A trained `v1` ships in the repo** (`models/v1.joblib`), so a fresh clone runs the real model — judging orders and powering the checkout's gut feeling — without the Kaggle download. You only need the dataset to **retrain** or rebuild from scratch.
 
-Run it (Python 3.10–3.14):
+Two environments, depending on what you do:
+
+- **Serve the shipped model** (play the game): Python 3.10+, `server/requirements.txt`. The scores are identical to the pinned training environment's.
+- **Train, retrain, run the tests and tools**: Python 3.11+ (the pins in `ml/online/requirements.txt` include pandas 3).
 
 ```bash
-python -m venv ml/.venv
-ml/.venv/Scripts/python -m pip install -r ml/online/requirements.txt
-USE_STUBS=true ml/.venv/Scripts/python -m uvicorn server.main:app --port 8000
+uv venv ml/.venv --python 3.12        # or: python3.12 -m venv ml/.venv
+uv pip install --python ml/.venv/bin/python -r ml/online/requirements.txt
+USE_STUBS=true ml/.venv/bin/python -m uvicorn server.main:app --port 8000
 ```
 
-Then serve the game and open it against the API (from `prototype/`, `python serve.py`, then `http://localhost:8765/?api=http://localhost:8000`).
+(On Windows the interpreter is `ml/.venv/Scripts/python`.) Then serve the game and open it against the API (from `prototype/`, `python serve.py`, then `http://localhost:8765/?api=http://localhost:8000`). `USE_STUBS=true` needs no Redis: the online checkout always uses the real model. With `USE_STUBS=false`, Redis must be running (`docker compose up -d`).
 
-To **rebuild or retrain** the model, put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account), then `ml/.venv/Scripts/python -m ml.online.train`. Node is needed for the simulators (`simulate.js`).
+**On a Mac, no Homebrew libomp is needed.** LightGBM's macOS wheels look for OpenMP where Homebrew puts it (`/opt/homebrew/opt/libomp`). When it isn't there, `lgbm.py` loads a renamed copy of the one scikit-learn ships, made once inside the virtualenv. On Linux, install `libgomp1`.
+
+**Check it's live:** `GET /health` reports `model`: the live version, the reason if the model is off (and the game is on the browser's scripted Gus), and whether this machine can retrain (`learning`, `why_not_learning`, `wins_waiting`).
+
+To **rebuild or retrain** the model, put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account), then `ml/.venv/bin/python -m ml.online.train`. Node is needed for the simulators (`simulate.js`). Without the files, the server still judges every order, but Gus can't learn: the wins wait, and the server says why once (and in `/health`).
 
 ## Tests
 
 The unit tests need neither the Kaggle dataset nor a trained model, so they run fast:
 
 ```bash
-PYTHONPATH=. ml/.venv/Scripts/python -m pytest ml/online/tests -q
+PYTHONPATH=. ml/.venv/bin/python -m pytest ml/online/tests server/tests -q
 ```
 
-They cover feature framing and encoding (unknown categories → `other`, rare values dropped), the time-ordered split and the rank thresholds, the attack-family labelling, the per-player cap and the simulated-attack weighting, and — when Node is installed — that the game's own row builder produces well-formed fraud rows.
+They cover feature framing and encoding (unknown categories → `other`, rare values dropped), the time-ordered split and the rank thresholds, the attack-family labelling, the per-player cap and the simulated-attack weighting, and — when Node is installed — that the game's own row builder produces well-formed fraud rows. `test_tells.py` and `server/tests` also use the shipped model on game orders frozen in `tests/fixtures/orders.json` (rebuilt by `tests/fixtures/make_orders.py`).
 
-`/submit` scores each order with the live version. `/preview` gives the checkout's gut feeling from the same score and threshold (nothing is saved), so the face and the verdict always agree: 😠 means the order would be caught. Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background. Without a trained model the server answers with the browser's scripted Gus.
+## In the game
+
+- **One model, one version.** `/submit` scores each order with the live version. `/preview` gives the checkout's gut feeling from the same score and threshold (nothing is saved), so the face and the verdict always agree: 😠 means the order would be caught. `/round/start` reports the live version too, so Gus's version only goes up when a retrain is promoted, and `/patch-notes` and `/metrics` read what each version learned and how it tested (`models/versions.json`).
+- **The scripted Gus's nudges still count**, in the model's units (4 of his points per unit of log-odds). Heat over 40 adds `(heat - 40) × 0.5` points, and persuasion takes away `0.18` a point. Rank leniency is the model's rank thresholds (below).
+- **The cardholder can report the card** between orders placed days apart (4% a day; never with Patience). The rest of the campaign is then dead.
+- **The Paper Shredder** saves the run's first win after it's bought as `FORGOTTEN`: it pays and counts as got-through in the report, but retraining doesn't weigh it as a blind spot.
+- **Learning.** Every 25 orders that get through (`FORGED_RETRAIN_EVERY`), a retrain runs in the background, on machines that have the data for it (`train.can_retrain`). Without a trained model the server answers with the browser's scripted Gus.
+- **Gus's reasons.** `Version.explain` turns each feature's push toward fraud into the tell the order's own value shows (`model.tell_for`). A drop 4 miles away is `new_address`; "shipped across the ocean" (`far_ship`) is for 100 miles or more. A card's long history isn't `velocity`; more than one order today is. A brand-new account is `new_account`. A push that shows nothing a player would recognize, like a common email or the card's brand, makes no tell.
 
 ## How it learns
 

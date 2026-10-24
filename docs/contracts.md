@@ -146,6 +146,49 @@ Submit a forged invoice for inspection.
 }
 ```
 
+#### Online orders (the typed checkout)
+
+The prototype sends `record.mode = "online"` with one IEEE-CIS row per order (`prototype/orders.js` `toRows`), its scripted Gus's verdict as `gus` (the answer when the server has no model), what each order pays the player in `gus.values`, and the player's shop perks:
+
+```json
+{
+  "round_id": "uuid-string",
+  "player": "Pat",
+  "record": {
+    "mode": "online", "level": 1, "scheme": "typed-r1", "rank": 3, "persuasion": 0, "heat": 12,
+    "detector_version": 2, "rows": [{ "TransactionAmt": 62, "ProductCD": "W", "M5": "T", "...": "..." }]
+  },
+  "gus": { "caught": false, "tells": [["ip_far", 16]], "payout": 62, "values": [62] },
+  "perks": ["patience"]
+}
+```
+
+The fraud model (`ml/online`) answers:
+
+```json
+{
+  "verdict": "DECLINED",
+  "top_tells": [{ "tell_type": "new_address", "strength": 23.7 }, { "tell_type": "new_account", "strength": 6.8 }],
+  "inspector_line": "",
+  "payout": 0,
+  "new_version": 2,
+  "results": [{ "declined": true, "reason": "flagged", "score": 0.539, "tells": [["new_address", 23.7], ["new_account", 6.8]] }]
+}
+```
+
+- `results` has one entry per order. `reason` is `"flagged"`, `"card_reported"` (the cardholder called their bank: orders days apart, 4% a day, never with `patience`), `"card_blocked"` (an earlier order was declined or reported) or `null`. `score` is the model's P(fraud).
+- An order is flagged when its score, after the scripted Gus's nudges, reaches the player's rank threshold. The nudges are in log-odds, 4 points per unit: heat over 40 adds `(heat - 40) * 0.5` points, and `0.18 * persuasion` takes points away.
+- Tells are the game's names (`TELL_LABELS`), each read from the order's own values. Strengths are the model's log-odds × 10.
+- `new_version` is the live version that judged the order, the same as `/round/start`'s `inspector_version`.
+- The saved rows' `verdict` is `APPROVED`, `DECLINED`, `BLOCKED` (reported or blocked card), or `FORGOTTEN`: the run's first win after the `shred` perk. It pays, but retraining doesn't treat it as a blind spot.
+- With no model (or one that won't load), the response is the browser's verdict, with `new_version: 0` and no `results`.
+
+`POST /preview` takes `{ "record": ... }` and returns the checkout's gut feeling, scored the same way and saving nothing: `{ "worry", "scores", "threshold", "version", "tells" }`. `worry` is the riskiest order's nudged score over the threshold, so 1 or more means caught. It returns 503 without a model.
+
+`GET /health` includes `model`: `{ "available", "version", "error", "learning", "why_not_learning", "wins_waiting", "retrain_every" }`.
+
+While the model is live, `/patch-notes` and `/metrics` come from its version registry (`ml/online/models/versions.json`), promoted versions only. `catch_rate` and `false_positive_rate` are real fraud caught and real customers blocked on the held-out test days. `held_out_catch_rate` is the held-out player orders caught (v1, before any players: the simulated attackers).
+
 ### GET /patch-notes?since=v
 
 **Response:**
