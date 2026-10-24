@@ -1490,6 +1490,8 @@ function downloadCsv() {
   toast(`⬇ ${all.length} rows exported`, "good");
 }
 if ($("#btn-csv")) $("#btn-csv").onclick = () => { sfx("click"); downloadCsv(); };
+// the fraud-model report page, served by the API (so it works however the game is served)
+if ($("#btn-report") && API) { $("#btn-report").hidden = false; $("#btn-report").onclick = () => { sfx("click"); window.open(API + "/report", "_blank"); }; }
 window.forgedRows = { all: storedRows, csv: downloadCsv, clear: () => { try { localStorage.removeItem(ROWS_KEY); } catch (e) {} } };
 
 const paintDebugKey = () => { $("#debug-key").textContent = ForgedKeys.label("detector"); };

@@ -46,7 +46,8 @@ def report(players: pd.DataFrame) -> dict:
     players["through"] = players["verdict"].eq("APPROVED") if "verdict" in players else False
     versions = [r["version"] for r in M.registry() if r.get("promoted")]
     scored = {v: M.load(v) for v in versions}
-    catch = {v: (m.scores(players) >= m.threshold) for v, m in scored.items()}
+    raw = {v: scored[v].scores(players) for v in versions}
+    catch = {v: (raw[v] >= scored[v].threshold) for v in versions}
     out = []
     for fam, g in players.groupby("family"):
         idx = g.index
@@ -57,7 +58,27 @@ def report(players: pd.DataFrame) -> dict:
                     "catch_by_version": rates, "closed_in": fixed})
     out.sort(key=lambda r: -r["exposure"])
     return {"versions": [{k: r.get(k) for k in ("version", "promoted", "note", "test", "learned")} for r in M.registry()],
-            "families": out, "orders": len(players), "got_through": int(players["through"].sum())}
+            "families": out, "orders": len(players), "got_through": int(players["through"].sum()),
+            "attack_catch": learning_curve()}
+
+
+def learning_curve() -> dict:
+    """The honest learning curve: the share of held-out attack orders each promoted version catches,
+    taken from the gate's own measurement at promotion time (retrain stores the new version's
+    `test.player_catch` and its parent's `parent_test.player_catch`). This is where learning shows —
+    the aggregate catch over all player traffic barely moves, because a version's gains are specific
+    to the family it learned; the gate's held-out attack set is the fair before/after.
+    """
+    reg = {r["version"]: r for r in M.registry() if r.get("promoted")}
+    curve: dict[int, float] = {}
+    for v, meta in reg.items():
+        pc = (meta.get("test") or {}).get("player_catch")
+        if pc is not None:
+            curve[v] = round(float(pc), 3)
+        parent, ppc = meta.get("parent"), (meta.get("parent_test") or {}).get("player_catch")
+        if parent in reg and ppc is not None:
+            curve.setdefault(parent, round(float(ppc), 3))  # the parent's catch on this version's held set
+    return {k: curve[k] for k in sorted(curve)}
 
 
 def print_report(r: dict) -> None:
