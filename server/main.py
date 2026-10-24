@@ -9,9 +9,11 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from server import config
 
@@ -91,3 +93,24 @@ else:
 @app.get("/health")
 async def health():
     return {"status": "ok", "stubs": config.USE_STUBS}
+
+
+# The fraud-model report page (ml/online/report.html + report.js), served from the API the game
+# already talks to, so a "Model report" link in the game works however the game itself is served.
+_REPORT_DIR = Path(__file__).resolve().parents[1] / "ml" / "online"
+
+
+@app.get("/report")
+async def report_page():
+    f = _REPORT_DIR / "report.html"
+    if not f.exists():
+        raise HTTPException(status_code=404, detail="report not generated (run: python -m ml.online.briefing --html)")
+    return FileResponse(f, media_type="text/html")
+
+
+@app.get("/report.js")
+async def report_data():
+    f = _REPORT_DIR / "report.js"
+    if not f.exists():
+        raise HTTPException(status_code=404, detail="report.js not generated")
+    return FileResponse(f, media_type="application/javascript")

@@ -2,7 +2,7 @@
   {
     "version": 1,
     "promoted": true,
-    "created_at": 1792853924.7296262,
+    "created_at": 1792854382.9843912,
     "threshold": 0.24343660438666775,
     "trained_on": {
       "real": 100963,
@@ -18,5 +18,46 @@
     },
     "learned": [],
     "note": "v1: real transactions and simulated shoppers"
+  },
+  {
+    "version": 2,
+    "promoted": true,
+    "created_at": 1792854473.309255,
+    "threshold": 0.24820221282234908,
+    "parent": 1,
+    "trained_on": {
+      "real": 100963,
+      "honest": 7293,
+      "sim": 5435,
+      "player": 300
+    },
+    "evasions": 281,
+    "test": {
+      "recall": 0.652,
+      "fpr": 0.0358,
+      "game_fpr": 0.0193,
+      "sim_catch": 0.9324,
+      "player_catch": 0.542
+    },
+    "parent_test": {
+      "recall": 0.6475,
+      "fpr": 0.036,
+      "game_fpr": 0.0116,
+      "sim_catch": 0.9358,
+      "player_catch": 0.0887
+    },
+    "checks": {
+      "real_recall": true,
+      "real_fpr": true,
+      "game_fpr": true,
+      "player_catch": true
+    },
+    "forced": false,
+    "learned": [
+      "new_address",
+      "gift_card",
+      "far_ship"
+    ],
+    "note": "retrained on 300 player orders (281 got through)"
   }
 ]

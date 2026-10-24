@@ -45,6 +45,12 @@
   .pill.closed { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
   .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
   .empty { color: var(--muted); font-style: italic; }
+  .lc-row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+  .lc-k { width: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lc-track { flex: 1; height: 22px; background: color-mix(in srgb, var(--line) 60%, transparent); border-radius: 6px; overflow: hidden; }
+  .lc-bar { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width .4s; }
+  .lc-v { width: 84px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .lc-up { color: var(--good); font-size: 12px; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -67,6 +73,12 @@
     <div id="chart"></div>
     <div class="legend" id="legend"></div>
     <div class="note" id="chart-note"></div>
+  </div>
+
+  <div class="card" id="learning-card" hidden>
+    <h2>What Gus learned from players</h2>
+    <div id="learning"></div>
+    <div class="note">Share of the held-out attack orders each version catches — the promotion gate's own before/after measurement. Real-fraud detection (above) stays flat as this rises: Gus learns the attackers' tricks without getting worse at real fraud. (Aggregate catch over all player traffic barely moves — a version's gains are specific to the family it learned — so this held-out set is the fair comparison.)</div>
   </div>
 
   <div class="card">
@@ -133,6 +145,20 @@
   $("legend").innerHTML = versions.map(([vnum, s]) =>
     `<span><i class="sw" style="background:${colorOf(vnum)}"></i> v${vnum} — ${s.promoted ? "live" : "gated (rejected)"} · ${pct(s.mean_recall)} avg</span>`).join("");
   $("chart-note").textContent = `Each line is one model version's share of real fraud caught per day, reviewing the top ${ev.alerts_per_day} orders — measured only on days the model never trained on. Gated versions (dashed) were held back by the safety gate.`;
+
+  // the learning curve: attacks caught per version
+  const ac = attacks.attack_catch || {};
+  const acv = Object.keys(ac).map(Number).sort((a, b) => a - b);
+  if (acv.length) {
+    $("learning-card").hidden = false;
+    $("learning").innerHTML = acv.map((v, i) => {
+      const w = Math.round(ac[v] * 100);
+      const delta = i > 0 ? ac[v] - ac[acv[i - 1]] : 0;
+      return `<div class="lc-row"><span class="lc-k">v${v}</span>
+        <span class="lc-track"><span class="lc-bar" style="width:${w}%"></span></span>
+        <span class="lc-v">${w}%${i > 0 && delta ? ` <span class="lc-up">▲${Math.round(delta * 100)}</span>` : ""}</span></div>`;
+    }).join("");
+  }
 
   // versions table
   const vrows = R.data.versions.map(v => {

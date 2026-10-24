@@ -35,3 +35,4 @@ ml/online/models/*
 # but ship the trained v1 so a fresh clone runs the real model without the Kaggle download
 !ml/online/models/v1.joblib
 !ml/online/models/versions.json
+!ml/online/models/v2.joblib
