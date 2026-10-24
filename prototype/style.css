@@ -463,6 +463,7 @@ kbd { background: var(--win); color: var(--ink); border: 2px solid var(--ink); b
 .howto .between-foot { gap: 20px; }
 .howto .between-foot .btn { white-space: nowrap; flex-shrink: 0; }
 #inspect-line.reading { font-style: italic; opacity: .75; }
+#patch-list.loading { opacity: .55; }
 
 /* toasts */
 #toasts { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }

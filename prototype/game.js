@@ -106,6 +106,7 @@ const LEVELS = {
       { name: "Dr. Sleepwell Linens", domain: "sleepwell-linens.com", bank: "4470", usual: 3100, icon: "🛏️", items: [["Bed sheets (100)", 8, 260], ["Pillowcases (100)", 6, 110], ["Laundry fee", 1, 360]] },
     ],
     approvers: [["Head Nurse Okafor", "supplies up to $8,000"], ["CFO Dr. Ledger", "everything else, PO required"]],
+    bossOffice: "Office of the CFO", bossDomain: "cfo-office.net",
     notes: ["Every invoice needs a PO number starting with SM-.", "APPROVED stamp required on anything over $5,000.", "Recent invoice: St. Scalpel #SS-7741, $9,630."],
     memo: [
       { text: "Reject invoices without a valid SM- PO.", tell: "bad_po", real: true },
@@ -171,7 +172,7 @@ const TELL_REGION = {
   vendor: "header", letterhead: "header", letterhead_match: "header", copy_gen: "header", copy_generation: "header", scan_quality: "header",
   amount_unusual: "items", amount: "items", total_mismatch: "items", line_items: "items", low_legibility: "items", legibility: "items",
   altered: "meta", field_altered: "meta", bad_po: "meta", po_number: "meta", dup_number: "meta", invoice_no: "meta", date: "meta",
-  stamp_wrong: "footer", stamp_type: "footer", stamp_position: "footer",
+  stamp_wrong: "footer", stamp_missing: "footer", stamp_type: "footer", stamp_position: "footer",
 };
 
 const TELL_LABELS = {
@@ -184,6 +185,7 @@ const TELL_LABELS = {
   copy_gen: "copy-of-a-copy scan quality",
   low_legibility: "suspiciously stained region",
   stamp_wrong: "stamp doesn't fit this company",
+  stamp_missing: "big invoice without an APPROVED stamp",
   bad_po: "PO number doesn't follow the company format",
   dup_number: "invoice number already paid before",
   letterhead: "letterhead doesn't match the vendor",
@@ -443,20 +445,21 @@ function showBriefing() {
 function beginForge(schemeId) {
   const L = LEVELS[S.level];
   S.scheme = schemeId;
-  const v = pick(L.vendors);
+  const recent = L.notes.map(n => n.match(/Recent invoice: (.+?) #(\S+),/)).find(Boolean);
+  const v = (schemeId === "duplicate" && recent && L.vendors.find(x => x.name.startsWith(recent[1]))) || pick(L.vendors);
   S.vendorRef = v;
   const prefix = S.level === 2 ? "SM-" : "PO-";
   const items = v.items.map(i => ({ desc: i[0], qty: i[1], price: i[2] }));
   const sum = items.reduce((a, i) => a + i.qty * i.price, 0);
   const inv = {
     vendor: v.name, domain: v.domain, letterhead: "match", icon: v.icon,
-    invoiceNo: v.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() + "-0" + Math.floor(rand(200, 999)),
+    invoiceNo: v.name.split(" ").map(w => w[0]).filter(c => /[a-z]/i.test(c)).join("").slice(0, 2).toUpperCase() + "-0" + Math.floor(rand(200, 999)),
     date: "Fri, Oct " + Math.floor(rand(3, 28)), po: prefix + Math.floor(rand(1000, 9999)),
     items, amount: sum, bank: v.bank, approver: L.approvers[0][0].split(" ")[0],
   };
-  if (schemeId === "duplicate") { inv.invoiceNo = L.notes[2].match(/#(\S+),/)?.[1] || inv.invoiceNo; inv.dupOf = inv.invoiceNo; }
+  if (schemeId === "duplicate") { inv.invoiceNo = recent?.[2] || inv.invoiceNo; inv.dupOf = inv.invoiceNo; }
   if (schemeId === "phantom") { inv.vendor = pick(PHANTOMS); inv.icon = "❓"; inv.domain = inv.vendor.toLowerCase().replace(/[^a-z]/g, "").slice(0, 14) + ".biz"; inv.bank = pick(ATTACKER_ACCOUNTS).id; }
-  if (schemeId === "boss_request") { inv.vendor = "Office of the Owner"; inv.icon = "👔"; inv.domain = "owner-office.net"; inv.bank = pick(ATTACKER_ACCOUNTS).id; inv.approver = L.approvers[1][0].split(" (")[0]; inv.items = [{ desc: "Urgent confidential payment", qty: 1, price: Math.round(v.usual * 1.8) }]; inv.amount = inv.items[0].price; }
+  if (schemeId === "boss_request") { inv.vendor = L.bossOffice || "Office of the Owner"; inv.icon = "👔"; inv.domain = L.bossDomain || "owner-office.net"; inv.bank = pick(ATTACKER_ACCOUNTS).id; inv.approver = L.approvers[1][0].split(" (")[0]; inv.items = [{ desc: "Urgent confidential payment", qty: 1, price: Math.round(v.usual * 1.8) }]; inv.amount = inv.items[0].price; }
   S.inv = inv;
   ["header", "meta", "items", "bank", "footer"].forEach(r => S.legibility[r] = 1);
   $("#scheme-banner").textContent = `${SCHEMES[schemeId].icon} ${SCHEMES[schemeId].name}`;
@@ -857,6 +860,7 @@ function computeTells() {
   if (worst < .4) t.push(["low_legibility", 10, Object.keys(S.legibility).find(k => S.legibility[k] === worst)]);
   if (S.stamps.some(s => s.type === "URGENT") && S.level === 1) t.push(["stamp_wrong", 12, "footer"]);
   if (S.level === 2 && !/^SM-\d+/.test(inv.po)) t.push(["bad_po", 18, "meta"]);
+  if (S.level === 2 && inv.amount > 5000 && !S.stamps.some(s => s.type === "APPROVED")) t.push(["stamp_missing", 14, "footer"]);
   if (inv.dupOf && inv.invoiceNo === inv.dupOf) t.push(["dup_number", 25, "meta"]);
   if (S.heat > 40) t.push(["heat", (S.heat - 40) * .5, null]);
   // the memo's real rules are what the inspector actually watches
@@ -960,6 +964,7 @@ function showCorkboard() {
   const shredded = r.caught && S.perks.includes("shred") && !S.shredUsed;
   if (shredded) S.shredUsed = true;
   const oldV = S.version;
+  S.prevVersion = oldV;
   if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
   else if (!shredded) S.version++;
   const top = r.tells.slice(0, 3);
@@ -999,6 +1004,7 @@ function showBetween() {
   if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b> ${st.emoji}</li>`);
   if (S.streak >= 2) items.push(`<li>🔥 Streak ×${S.streak} — vary your schemes to keep it.</li>`);
   $("#patch-list").innerHTML = items.join("");
+  loadPatchNotes(S.prevVersion, items.slice(learned.length ? learned.length : 1));
   const caught = S.history.filter(h => h.caught).length;
   $("#round-stats").innerHTML = `
     <div class="stat"><div class="v">${money(S.money)}</div><div class="k">Siphoned</div></div>
@@ -1010,6 +1016,29 @@ function showBetween() {
   renderShop();
   messUpDesk();
   overlay("between");
+}
+
+/* GET /patch-notes?since=v: what each new version learned. Replaces the mock
+ * "Now catches" lines; `extra` (promotion, streak) is kept underneath. */
+async function loadPatchNotes(since, extra) {
+  if (!API || since == null) return;
+  const round = S.round, list = $("#patch-list");
+  list.classList.add("loading");
+  try {
+    const r = await api("GET", `/patch-notes?since=${encodeURIComponent(since)}`);
+    if (S.round !== round) return;
+    const notes = Array.isArray(r) ? r : r.notes ?? r.versions ?? r.patch_notes ?? [];
+    const lines = notes.flatMap(n => {
+      if (typeof n === "string") return [n];
+      const v = n.version != null ? `v${n.version}` : "";
+      const n_ = n.learned_from ?? n.examples ?? n.n ?? n.count;
+      const from = n_ != null ? ` — learned from ${n_} invoices` : "";
+      const learned = [].concat(n.learned ?? n.catches ?? n.features ?? n.text ?? n.summary ?? []);
+      return learned.map(l => `${v ? v + " " : ""}now catches: <b>${tellLabel(l)}</b>${from}.`);
+    });
+    if (lines.length) list.innerHTML = lines.map(l => `<li>${l}</li>`).join("") + extra.join("");
+  } catch (e) { offline(e); }
+  finally { list.classList.remove("loading"); }
 }
 
 function renderShop() {
@@ -1099,10 +1128,13 @@ function record() {
     line_items: inv.items.map(i => `${i.desc} ×${i.qty} @ ${i.price}`),
     field_altered: [...S.altered],
     legibility: Object.fromEntries(Object.entries(S.legibility).map(([k, v]) => [k, +v.toFixed(2)])),
-    scan_quality: +scanQuality().toFixed(2), copy_generation: S.copyGen,
+    // Copy Machine Whisperer: copies don't count toward the generation penalty
+    scan_quality: +scanQuality().toFixed(2), copy_generation: S.perks.includes("copy") ? 0 : S.copyGen,
     stamp_type: S.stamps.map(s => s.type), stamp_position: S.stamps.map(s => [Math.round(s.x), Math.round(s.y)]),
     domain_mismatch: inv.domain !== S.vendorRef.domain, letterhead_match: inv.letterhead === "match",
-    cover_email: inv.coverEmail || "", detector_version: S.version, heat: Math.round(S.heat),
+    cover_email: inv.coverEmail || "", persuasion: Math.round(S.persuasion), // Smooth Talker raises this
+    after_hours: S.perks.includes("night"), // Night Shift: sent late, pays double
+    detector_version: S.version, heat: Math.round(S.heat),
     verdict: S.lastResult && S.submitted ? (S.lastResult.caught ? "FLAGGED" : "PAID") : null,
   };
 }
