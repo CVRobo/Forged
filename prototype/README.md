@@ -75,6 +75,15 @@ Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Cont
 - Still per player: coffee runs, the desk phone, doors and the printer. The boss also stays in his office while the owner is in the first-game tutorial.
 - The rules are in `lan_room.py`. Tests: `python3 -m pytest prototype/tests/test_lan.py -q`. Design: `docs/superpowers/specs/2026-10-24-lan-multiplayer-design.md`.
 
+### Hosting it online
+
+Use this when the Wi-Fi won't let laptops reach each other, which is common on venue and campus networks, or when players aren't in the same place. `prototype/Dockerfile` runs the same server on any host that runs containers and supports WebSockets. `serve.py` listens on `$PORT`. There, the button reads **👥 Online game**, the lobby shares the site's own address, and the first player to join owns the room.
+
+- **Render (free):** **New → Blueprint** with this repo uses `render.yaml` (a Docker web service on the free plan). Or **New → Web Service** with Docker, Dockerfile path `./prototype/Dockerfile` and Docker context `./prototype`. Render needs access to the GitHub repo.
+- **Anywhere else:** `docker build -t forged-prototype prototype`, then run it with the platform's `PORT`.
+- There is one room of 4 for everyone with the link.
+- On Render's free plan the service sleeps after 15 idle minutes. Waking it takes about a minute and starts an empty room.
+
 ## How the two halves talk
 
 Both pages use `postMessage`:

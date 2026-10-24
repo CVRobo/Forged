@@ -114,15 +114,16 @@ class Room:
         return {"t": "players", "owner": self.owner(),
                 "players": [p.public() for p in sorted(self.players.values(), key=lambda p: p.desk)]}
 
-    def join(self, name, look, local: bool, now: float = 0.0):
-        """Seat a new player at the lowest free desk. Returns (their id, out), or (None, []) when full."""
+    def join(self, name, look, local: bool, now: float = 0.0, share: str | None = None):
+        """Seat a new player at the lowest free desk. Returns (their id, out), or (None, []) when full.
+        `share` is the address to invite people with, as this player reached the server."""
         if len(self.players) >= MAX_PLAYERS:
             return None, []
         pid, self._next = self._next, self._next + 1
         taken = {p.desk for p in self.players.values()}
         desk = min(d for d in DESKS if d not in taken)
         self.players[pid] = Player(pid, text(name, 16) or f"Forger {pid}", clean_look(look), bool(local), desk, now)
-        welcome = {**self.roster(), "t": "welcome", "id": pid, "desk": desk, "share": self.share, "max": MAX_PLAYERS,
+        welcome = {**self.roster(), "t": "welcome", "id": pid, "desk": desk, "share": share or self.share, "max": MAX_PLAYERS,
                    "brains": {str(level): copy.deepcopy(b) for level, b in self.brains.items()}}
         return pid, self._out(([pid], welcome), (self.ids(but=pid), self.roster()))
 

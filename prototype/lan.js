@@ -22,6 +22,9 @@ const NAME_KEY = "forged-player"; // the leaderboard name, shared with menu.js a
 const SEND_MS = 100, PING_MS = 5000, MAX = 4;
 const DESK_COLORS = { 1: "#e0352b", 2: "#2f6fd6", 3: "#1d9a4b", 4: "#8e44ad" };
 const FRESH_BRAIN = { version: 1, learned: {}, memory: [] };
+// a private address means a LAN game; a public one (a hosting service or a tunnel) is an online game
+const ON_LAN = !location.hostname || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$|^\[?::1\]?$/.test(location.hostname);
+const MODE = ON_LAN ? "LAN game" : "Online game";
 const r2 = v => Math.round(v * 100) / 100;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -38,12 +41,12 @@ function myName() { try { return (localStorage.getItem(NAME_KEY) || "").trim(); 
 
 const card = $("#start .start-card");
 const lanBtn = document.createElement("button");
-lanBtn.id = "btn-lan"; lanBtn.type = "button"; lanBtn.textContent = "👥 LAN game";
+lanBtn.id = "btn-lan"; lanBtn.type = "button"; lanBtn.textContent = `👥 ${MODE}`;
 ($("#btn-customize") || $("#btn-start")).insertAdjacentElement("afterend", lanBtn);
 const panel = document.createElement("div");
 panel.id = "lan-panel";
 panel.innerHTML = `
-  <div class="lan-head"><b>LAN game</b><span id="lan-status"></span></div>
+  <div class="lan-head"><b>${MODE}</b><span id="lan-status"></span></div>
   <label class="lan-name">Your name <input id="lan-name" maxlength="16" spellcheck="false" autocomplete="off" placeholder="Forger"></label>
   <ol id="lan-list"></ol>
   <div id="lan-note"></div>
@@ -86,15 +89,15 @@ function renderLobby() {
       <span class="lan-who">${esc(p.name)}${p.id === lan.owner ? " 👑" : ""}${p.id === lan.id ? " <i>(you)</i>" : ""}</span>
       <span class="lan-where">${p.started ? "in the office" : "at the door"}</span></li>`).join("");
   $("#lan-note").innerHTML = inRoom()
-    ? `Friends on your network open <b>${esc(lan.share || location.origin + "/?lan")}</b>. Clock in whenever you like.${owner ? ` 👑 ${esc(owner.name)} owns the room: the boss follows their game.` : ""}`
+    ? `${ON_LAN ? "Friends on your network open" : "Friends anywhere can open"} <b>${esc(lan.share || location.origin + "/?lan")}</b>. Clock in whenever you like.${owner ? ` 👑 ${esc(owner.name)} owns the room: the boss follows their game.` : ""}`
     : lan.status === "nohost" ? `To host, run <code>python3 serve.py</code> in the <code>prototype</code> folder and open the address it prints. Up to ${MAX} players, you included.`
     : lan.status === "full" ? "Try again when someone leaves." : "";
   $("#lan-leave").style.display = inRoom() ? "" : "none";
-  lanBtn.textContent = inRoom() ? `👥 LAN game · ${lan.players.length}/${MAX}` : "👥 LAN game";
+  lanBtn.textContent = inRoom() ? `👥 ${MODE} · ${lan.players.length}/${MAX}` : `👥 ${MODE}`;
 }
 function renderChip() {
   chip.style.display = inRoom() ? "" : "none";
-  if (inRoom()) chip.innerHTML = `👥 <b>LAN</b> · ${lan.players.length}/${MAX} · desk ${FW.MY_DESK.n}${isOwner() ? " · 👑" : ""}`;
+  if (inRoom()) chip.innerHTML = `👥 <b>${ON_LAN ? "LAN" : "Online"}</b> · ${lan.players.length}/${MAX} · desk ${FW.MY_DESK.n}${isOwner() ? " · 👑" : ""}`;
 }
 
 /* ======================= Connection ======================= */
@@ -139,7 +142,7 @@ function enterRoom(m) {
   if (mine && !myName()) { try { localStorage.setItem(NAME_KEY, mine.name); } catch (e) {} nameInput.value = mine.name; }
   applyRoster(m);
   pushBrain();
-  if (mine) FW.wtoast(`You're in the LAN game, at desk ${mine.desk}`, "good");
+  if (mine) FW.wtoast(`You're in the ${MODE.toLowerCase()}, at desk ${mine.desk}`, "good");
 }
 
 function leaveRoom(why) {
@@ -157,7 +160,7 @@ function leaveRoom(why) {
   try { FW.assignDesks({ [FW.MY_DESK.n]: "You" }, FW.MY_DESK.n); } finally { lan.applying = false; } // the coworkers come back
   ForgedMenu.setRoom(null);
   if (!API) FW.toOS("gus-solo");
-  if (why === "lost") FW.wtoast("Lost the LAN host: you're playing solo now", "bad");
+  if (why === "lost") FW.wtoast(`Lost the ${ON_LAN ? "LAN host" : "server"}: you're playing solo now`, "bad");
 }
 
 /* ======================= Who's here, and at which desk ======================= */

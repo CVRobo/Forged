@@ -3,9 +3,10 @@
 It also hosts LAN games, for up to 4 players with you included. Friends on your network open the
 LAN address printed at startup and press LAN game on the Clock in card. The room lives at
 ws://<host>:<port>/lan (lan_room.py, lan_ws.py; docs/superpowers/specs/2026-10-24-lan-multiplayer-design.md).
+On a hosting service (Dockerfile) the same room is an online game, shared at the service's address.
 
     python serve.py          # http://localhost:8765
-    python serve.py 9000     # another port
+    python serve.py 9000     # another port (or set PORT, as hosting services do)
 """
 from __future__ import annotations
 
@@ -35,6 +36,15 @@ def lan_address() -> str:
         return "127.0.0.1"
 
 
+def share_url(host: str, proto: str, lan_url: str) -> str:
+    """The address to invite people with. Opened as localhost, that's this machine's LAN address
+    (lan_url); opened through any other name (a LAN IP, a tunnel, a hosting service), it's that name."""
+    name = (host or "").rsplit(":", 1)[0].strip("[]").lower()
+    if name in ("", "localhost", "127.0.0.1", "::1"):
+        return lan_url
+    return f"{'https' if proto.strip().lower() == 'https' else 'http'}://{host}/?lan"
+
+
 class LanHost:
     """The room and its open connections. The room is only touched under the lock; sending happens outside it."""
 
@@ -59,8 +69,8 @@ class LanHost:
                 if conn:
                     conn.send_text(text)  # a failed send closes it, and that player's own thread then leaves
 
-    def play(self, conn: lan_ws.Conn, ip: str):
-        """One player's connection, from their hello until they leave."""
+    def play(self, conn: lan_ws.Conn, ip: str, share: str | None = None):
+        """One player's connection, from their hello until they leave. `share` is how they reached us."""
         pid = None
         try:
             hello, deadline = None, time.monotonic() + 10
@@ -69,7 +79,7 @@ class LanHost:
             if not hello or hello.get("t") != "hello":
                 return
             with self.lock:
-                pid, out = self.room.join(hello.get("name"), hello.get("look"), self.is_local(ip), time.monotonic())
+                pid, out = self.room.join(hello.get("name"), hello.get("look"), self.is_local(ip), time.monotonic(), share)
                 if pid is not None:
                     self.conns[pid] = conn
                     who = self.room.players[pid]
@@ -150,7 +160,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.log_request(101)
         self.close_connection = True
         self.connection.settimeout(5)  # reads wake every 5 s; a send stuck for 5 s drops that player
-        self.server.lan.play(lan_ws.Conn(self.connection), self.client_address[0])
+        lan = self.server.lan
+        share = share_url(self.headers.get("Host", ""), self.headers.get("X-Forwarded-Proto", ""), lan.room.share)
+        lan.play(lan_ws.Conn(self.connection), self.client_address[0], share)
 
 
 def make_server(port: int, bind: str = "") -> http.server.ThreadingHTTPServer:
@@ -160,11 +172,12 @@ def make_server(port: int, bind: str = "") -> http.server.ThreadingHTTPServer:
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", "8765"))
     server = make_server(port)
     threading.Thread(target=server.lan.tick_forever, daemon=True).start()
     print(f"Forged prototype on http://localhost:{port} (caching off)")
-    print(f"LAN game: friends on your network open {server.lan.room.share} (up to {lan_room.MAX_PLAYERS} players, you included)", flush=True)
+    print(f"LAN game: friends on your network open {server.lan.room.share} (up to {lan_room.MAX_PLAYERS} players, you included)")
+    print("On a hosting service, share the service's own address instead: the lobby shows it.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

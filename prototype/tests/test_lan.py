@@ -68,6 +68,14 @@ def test_everyone_teaches_the_same_gus():
     assert len(room.brains[1]["memory"]) == lan_room.MEMORY_KEEP
 
 
+def test_the_invite_link_is_the_address_people_used():
+    lan = "http://10.0.18.42:8765/?lan"
+    assert serve.share_url("localhost:8765", "", lan) == lan  # the owner on localhost invites with the LAN address
+    assert serve.share_url("[::1]:8765", "", lan) == lan
+    assert serve.share_url("10.0.18.42:8765", "", lan) == "http://10.0.18.42:8765/?lan"
+    assert serve.share_url("forged-prototype.onrender.com", "https", lan) == "https://forged-prototype.onrender.com/?lan"
+
+
 # ---------------------------------------------------------------- end to end, over real sockets
 
 def ws_connect(port):
