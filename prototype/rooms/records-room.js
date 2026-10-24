@@ -15,7 +15,7 @@ if (!FW) return;
 const { THREE, M, box, cyl, scene } = FW;
 const X0 = 13, X1 = 22, Z0 = 0, Z1 = 10;
 
-try { FW.room({ x0: X0, x1: X1, z0: Z0, z1: Z1, skip: ["west"], floor: ["#b9ad94", "#a89b80"], wallColor: "#a3a184" }); }
+try { FW.room({ floorStyle: "carpet", x0: X0, x1: X1, z0: Z0, z1: Z1, skip: ["west"], floor: ["#b9ad94", "#a89b80"], wallColor: "#a3a184" }); }
 catch (e) { console.error("[records] room failed", e); }
 
 /* ======================= Materials ======================= */

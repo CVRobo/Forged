@@ -26,7 +26,7 @@ const WALL = "#8c3b3b"; // pompous burgundy
 
 /* ======================= Shell ======================= */
 
-FW.room({ x0: X0, x1: X1, z0: Z0, z1: Z1, skip: ["east"], floor: ["#6b4a33", "#5a3c28"], wallColor: WALL });
+FW.room({ floorStyle: "wood", x0: X0, x1: X1, z0: Z0, z1: Z1, skip: ["east"], floor: ["#6b4a33", "#5a3c28"], wallColor: WALL });
 // (the 1 m corner past the main office's west wall is filled by FW.room itself)
 
 const scene = FW.scene;
