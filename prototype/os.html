@@ -6,7 +6,9 @@
 <title>Forged</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Caveat:wght@600&family=Space+Mono:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<!-- the ?v= stamp makes the browser fetch the newest style.css and game.js on every load, whatever server is used -->
+<script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '">');</script>
+<noscript><link rel="stylesheet" href="style.css"></noscript>
 </head>
 <body>
 <div id="viewport">
@@ -127,6 +129,7 @@
       <div class="dock-label">TOOLBOX<span id="edits-left">Edits 0/4</span></div>
       <div id="tools"></div>
       <div class="dock-sep"></div>
+      <button class="btn btn-ghost btn-small" id="btn-tutorial" title="Walk through the desk">❔ Tutorial</button>
       <button class="btn btn-ghost btn-small" id="btn-debug" title="What the detector sees (D)">🔍 Detector view</button>
       <div id="envelope" title="Drag me into the outbox"><div class="env-flap"></div><span class="env-label">DRAG TO OUTBOX</span></div>
     </footer>
@@ -139,6 +142,27 @@
 
     <!-- popover used by scissors / stamps / pen -->
     <div id="popover"></div>
+
+    <!-- guided tutorial: dims the desk, cuts a hole around one part, points at it -->
+    <div id="tutorial">
+      <div class="tut-hole"></div>
+      <svg class="tut-arrow" viewBox="0 0 1600 900">
+        <defs><marker id="tut-head" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+        <path class="tut-line" marker-end="url(#tut-head)"/>
+      </svg>
+      <div class="tut-card">
+        <div class="tut-step" id="tut-step"></div>
+        <h3 id="tut-title"></h3>
+        <p id="tut-text"></p>
+        <div class="tut-btns">
+          <button class="btn btn-ghost btn-small" id="tut-skip">Skip tour</button>
+          <div class="tut-dots" id="tut-dots"></div>
+          <span><button class="btn btn-ghost btn-small" id="tut-back">← Back</button>
+          <button class="btn btn-small" id="tut-next">Next →</button></span>
+        </div>
+      </div>
+    </div>
 
     <!-- detector debug -->
     <aside id="debug-panel">
@@ -246,6 +270,6 @@
 </div>
 </div>
 <div id="tool-cursor"></div>
-<script src="game.js"></script>
+<script>document.write('<script src="game.js?v=' + Date.now() + '"><\/script>');</script>
 </body>
 </html>

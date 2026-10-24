@@ -3,10 +3,10 @@
 A third-person office game. The forging desk is the operating system of your in-game computer. There's no AI and no backend yet.
 
 ```
-python -m http.server 8765
+python serve.py
 ```
 
-Then open http://localhost:8765. After pulling changes, hard-refresh (Ctrl+F5): the simple server lets the browser keep old copies of the files. It needs to be served over http (not opened as a file) so the office and the computer can talk to each other.
+Then open http://localhost:8765. `serve.py` is a plain static server with browser caching turned off, so a normal reload always shows the latest code (`python -m http.server` lets the browser keep old copies of the files, especially inside the computer screen). It needs to be served over http (not opened as a file) so the office and the computer can talk to each other.
 
 ## Files
 

@@ -494,3 +494,29 @@ kbd { background: var(--win); color: var(--ink); border: 2px solid var(--ink); b
 .toast { background: var(--ink); color: #fff; padding: 8px 18px; border-radius: 20px; font-weight: 700; font-size: 14px; border: 2px solid #fff; animation: toast 2.6s forwards; }
 .toast.bad { background: var(--flag); } .toast.good { background: var(--paid); }
 @keyframes toast { 0% { transform: translateY(-20px); opacity: 0; } 10%, 85% { transform: none; opacity: 1; } 100% { opacity: 0; } }
+
+/* guided tutorial */
+#tutorial { position: absolute; inset: 0; z-index: 150; display: none; }
+#tutorial.show { display: block; }
+#tutorial.passthrough { pointer-events: none; } /* the highlighted part stays clickable */
+#tutorial.passthrough .tut-card { pointer-events: auto; }
+.tut-hole { position: absolute; border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 4000px rgba(12, 8, 4, .74); outline: 4px dashed var(--accent); outline-offset: 5px;
+  transition: left .35s cubic-bezier(.2,1,.3,1), top .35s cubic-bezier(.2,1,.3,1), width .35s cubic-bezier(.2,1,.3,1), height .35s cubic-bezier(.2,1,.3,1); }
+.tut-hole.none { outline-color: transparent; }
+.tut-arrow { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; pointer-events: none; overflow: visible; }
+.tut-line { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; filter: drop-shadow(3px 3px 0 var(--ink)); }
+#tut-head path { fill: var(--accent); }
+.tut-card { position: absolute; width: 450px; background: var(--win); border: 4px solid var(--ink); border-radius: 14px;
+  box-shadow: 8px 8px 0 var(--ink); padding: 20px 22px 16px; transition: left .35s cubic-bezier(.2,1,.3,1), top .35s cubic-bezier(.2,1,.3,1); }
+.tut-step { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: var(--accent-2); text-transform: uppercase; }
+.tut-card h3 { font-family: var(--display); font-size: 24px; margin: 4px 0 8px; font-weight: 400; }
+.tut-card p { font-size: 15px; line-height: 1.55; margin: 0; }
+.tut-card p b { color: var(--accent-2); }
+.tut-card kbd { font-size: 13px; }
+.tut-btns { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 18px; }
+.tut-btns > span { display: flex; gap: 8px; }
+.tut-btns .btn { white-space: nowrap; }
+.tut-dots { display: flex; gap: 4px; }
+.tut-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(0,0,0,.2); }
+.tut-dots i.on { background: var(--accent); outline: 2px solid var(--ink); }
