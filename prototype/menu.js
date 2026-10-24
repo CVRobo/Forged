@@ -55,6 +55,7 @@ const SCREENS = {
     <h2 class="fm-title">Options</h2>
     <div class="fm-grid">
       <button class="fm-btn wide" data-fm-go="controls">Controls…</button>
+      ${host.onCustomize ? `<button class="fm-btn wide" data-fm-act="customize">Customize character…</button>` : ""}
       <button class="fm-btn wide" data-fm-act="reset-tips">Reset Tutorial &amp; Tips</button>
       <button class="fm-btn wide primary" data-fm-act="done">Done</button>
     </div>
@@ -220,6 +221,7 @@ function act(name) {
   if (name === "done") return back();
   if (name === "quit") { stack = []; root.classList.remove("show"); paused = false; host.onPause && host.onPause(false); host.onQuit && host.onQuit(); return; }
   if (name === "dossier") { if (!host.canDossier || !host.canDossier()) return; close(); host.onDossier && host.onDossier(); return; }
+  if (name === "customize") { host.onCustomize && host.onCustomize(); return; } // opens on top of the menu
   if (name === "reset-tips") { TIP_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} }); toast("Tutorial and scheme tips will show again"); return; }
   if (name === "reset-keys") { K.reset(); render(); toast("Keys reset to defaults"); }
 }
@@ -253,7 +255,7 @@ function build() {
 
   // while open, the menu owns the keyboard
   addEventListener("keydown", e => {
-    if (!isOpen()) return;
+    if (!isOpen() || (window.ForgedCustomizer && window.ForgedCustomizer.isOpen())) return; // the character editor sits on top
     const typing = document.activeElement && document.activeElement.tagName === "INPUT";
     if (capture) {
       e.preventDefault(); e.stopImmediatePropagation();

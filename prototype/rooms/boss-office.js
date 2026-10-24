@@ -420,7 +420,7 @@ FW.onUpdate((dt, now) => {
       if (cone) cone.visible = false;
     } else {
       if (seated) { FW.standPose(boss); seated = false; }
-      if (cone) cone.visible = true;
+      if (cone) cone.visible = B.state !== "drill"; // no cone while he's out at the fire-drill headcount
     }
   } catch (e) { console.error("[boss-office] seat", e); }
 

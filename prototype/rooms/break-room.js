@@ -387,6 +387,11 @@ safe(() => {
   cupSteam = makeSteam(heldCup, 6, .1);
   heldDonut.visible = false; player.g.add(heldDonut);
   makeDonut(frostings[0], heldDonut);
+  // in the hand (world.js FW.hold): the cup in the left, the donut in whichever hand is free
+  if (FW.hold) {
+    FW.hold.register(heldCup, { hand: "left", offset: [.1, .04, .04] });
+    FW.hold.register(heldDonut, { hand: () => FW.P.carrying ? "left" : "right", offset: [.1, .06, .04] });
+  }
   const mGroup = new THREE.Group(); mGroup.position.set(COFFEE.x + .15, TOP_Y + .34, COFFEE.z - .14); FW.scene.add(mGroup);
   machineSteam = makeSteam(mGroup, 5, 0);
 });
@@ -582,13 +587,14 @@ FW.onUpdate((dt, now) => {
   if (caff) {
     setChip(P.seated ? "" : `☕ CAFFEINATED ${Math.ceil((S.caffUntil - now) / 1000)}s`);
     animSteam(cupSteam, now, .35, 1);
-    heldCup.position.set(-.52, 1.02 + Math.sin(now / 90) * .006, .16); // jittery hands
+    if (FW.hold) heldCup.rotation.z = Math.sin(now / 90) * .05; // jittery hands
+    else heldCup.position.set(-.52, 1.02 + Math.sin(now / 90) * .006, .16);
   } else {
     setChip("");
     if (heldCup.visible) heldCup.visible = false;
     if (!S.crashShown) { S.crashShown = true; FW.wtoast("Caffeine crash. Back to normal speed.", ""); }
   }
-  heldDonut.position.set(caff ? -.32 : -.52, caff ? 1.3 : 1.05, caff ? .3 : .16);
+  if (!FW.hold) heldDonut.position.set(caff ? -.32 : -.52, caff ? 1.3 : 1.05, caff ? .3 : .16);
 
   // --- coffee machine: light, steam
   const brewing = now < S.brewUntil;

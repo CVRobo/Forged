@@ -15,7 +15,7 @@ const FW = window.FW;
 if (!FW) return;
 const EXIT_X = FW.EXIT_X ?? 0; // where the emergency exit is on the south wall
 const { THREE, P, B, player, npcs } = FW;
-const { kevin, dana, inspector, clerk, boss } = npcs;
+const { kevin, dana, priya, marcus, inspector, clerk, boss } = npcs;
 const rand = FW.rand, pick = FW.pick, clamp = FW.clamp;
 const COFFEE = { x: -10, z: 15 };                                   // break room coffee spot
 
@@ -56,6 +56,7 @@ const ACH = [
   { id: "tip", name: "Inside info", desc: "Get a tip about the boss" },
   { id: "drill", name: "Survived a fire drill", desc: "Make it through a fire drill" },
   { id: "drillDeliver", name: "Fire sale", desc: "Deliver during a fire drill" },
+  { id: "modelEmployee", name: "Model employee", desc: "Get counted at the assembly point" },
 ];
 const unlocked = new Set(store.get("ach", []));
 function unlock(id) {
@@ -110,8 +111,8 @@ addEventListener("keydown", e => {
 const mx = x => (x - MX0) * MS, mz = z => (z - MZ0) * MS;
 // static layer: rooms, doorways, furniture. Drawn once.
 const bg = document.createElement("canvas"); bg.width = mapCv.width; bg.height = mapCv.height;
-(function drawStatic() {
-  const g = bg.getContext("2d"); g.scale(dpr, dpr);
+function drawStatic() {
+  const g = bg.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = "#cbbd9f"; g.fillRect(0, 0, MW, MH);
   const rooms = [
     { x0: -13, x1: 13, z0: -9, z1: 9, fill: "#f3e8cf", label: "" },
@@ -129,7 +130,7 @@ const bg = document.createElement("canvas"); bg.width = mapCv.width; bg.height =
   g.fillRect(mx(13) - 2, mz(5.5 - 1), 4, 2 * MS);
   // furniture
   g.fillStyle = "#8a5a35";
-  for (const [x, z] of [[FW.MY_DESK.x, FW.MY_DESK.z], [-3, 2], [-3, -3], [FW.CLERK_DESK.x, FW.CLERK_DESK.z]]) g.fillRect(mx(x - 1.1), mz(z - .55), 2.2 * MS, 1.1 * MS);
+  for (const [x, z] of [...(FW.DESKS || [FW.MY_DESK]).map(d => [d.x, d.z]), [FW.CLERK_DESK.x, FW.CLERK_DESK.z]]) g.fillRect(mx(x - 1.1), mz(z - .55), 2.2 * MS, 1.1 * MS);
   g.fillStyle = "#1f8a8a"; g.fillRect(mx(FW.BOOTH.x - 1.8), mz(FW.BOOTH.z - .6), 3.6 * MS, 1.2 * MS);
   g.fillStyle = "#2e2a28"; g.fillRect(mx(FW.PRINTER.x - .5), mz(FW.PRINTER.z - .4), MS, .8 * MS);
   g.fillStyle = "#1d9a4b"; g.fillRect(mx(EXIT_X - .6), mz(9) - 3, 1.2 * MS, 4);           // exit sign
@@ -137,7 +138,9 @@ const bg = document.createElement("canvas"); bg.width = mapCv.width; bg.height =
   g.font = "bold 8px 'Space Mono', monospace"; g.fillStyle = "rgba(43,29,20,.55)"; g.textAlign = "center";
   for (const r of rooms) if (r.label) g.fillText(r.label, mx((r.x0 + r.x1) / 2), mz(r.z1) - 4);
   g.fillText("YOU", mx(FW.MY_DESK.x), mz(FW.MY_DESK.z) + 3);
-})();
+}
+drawStatic();
+if (FW.onDeskChange) FW.onDeskChange(drawStatic);
 
 function dot(x, z, r, fill) {
   mg.beginPath(); mg.arc(mx(x), mz(z), r, 0, 6.2832); mg.fillStyle = fill; mg.fill();
@@ -169,8 +172,10 @@ function drawMap(now) {
     dot(bp.x, bp.z, 4.5, "#e0352b");
   }
   // NPCs
-  dot(kevin.g.position.x, kevin.g.position.z, 3, "#7a5cff");
-  dot(dana.g.position.x, dana.g.position.z, 3, "#3fae6a");
+  if (kevin.g.visible) dot(kevin.g.position.x, kevin.g.position.z, 3, "#7a5cff");
+  if (dana.g.visible) dot(dana.g.position.x, dana.g.position.z, 3, "#3fae6a");
+  if (marcus && marcus.g.visible) dot(marcus.g.position.x, marcus.g.position.z, 3, "#ffd23f");
+  if (priya && priya.g.visible) dot(priya.g.position.x, priya.g.position.z, 3, "#e75aa3");
   dot(inspector.g.position.x, inspector.g.position.z, 3, "#ffffff");
   dot(clerk.g.position.x, clerk.g.position.z, 3, "#f4a63a");
   // you: an arrow pointing where you face
@@ -216,11 +221,24 @@ function makeNpc(ch, name, standOff, toJunction, toExit) {
   };
 }
 // Kevin sits on the south side of the north desk, Dana on the south side of the south desk.
+// During a fire drill they walk out the emergency exit to the assembly point in the parking lot.
+const AP = FW.ASSEMBLY || { x: EXIT_X - 2.4, z: 15.2 };
+const OUTSIDE = (FW.RD ?? 18) / 2 + 1.4;  // just past the exit
 const NPCS = [
-  makeNpc(kevin, "Kevin", .75, [[-5, 4.4]], [[0.6, 6.4], [EXIT_X - .6, 7.8]]),
-  makeNpc(dana, "Dana", .75, [[-5, -1.0], [-5, 4.4]], [[-0.9, -0.6], [-0.6, 6.4], [EXIT_X + .6, 7.8]]),
+  makeNpc(kevin, "Kevin", .75, [[-5, 4.4]], [[0.6, 6.4], [EXIT_X - .6, 7.8], [EXIT_X - .3, OUTSIDE], [AP.x - .9, AP.z + .4]]),
+  ...(marcus ? [makeNpc(marcus, "Marcus", .75, [[-6.6, 3.8], [-5, 4.4]], [[-6.6, 3.8], [-5, 5.2], [0, 6.6], [EXIT_X - 1.2, 7.8], [EXIT_X - .5, OUTSIDE], [AP.x - 1.7, AP.z - .3]])] : []),
+  ...(priya ? [makeNpc(priya, "Priya", .75, [[-5.2, -1.2], [-5, 4.4]], [[-5.2, -1.2], [-5, 5.2], [0, 6.6], [EXIT_X, 7.8], [EXIT_X, OUTSIDE], [AP.x + 1.4, AP.z + 1.7]])] : []),
+  makeNpc(dana, "Dana", .75, [[-5, -1.0], [-5, 4.4]], [[-0.9, -0.6], [-0.6, 6.4], [EXIT_X + .6, 7.8], [EXIT_X + .3, OUTSIDE], [AP.x - .1, AP.z + 1.2]]),
 ];
-const npcByName = { kevin: NPCS[0], dana: NPCS[1] };
+// Brenda (the clerk) evacuates too; she never goes on coffee runs
+const BRENDA = makeNpc(clerk, "Brenda", -.7, [], [[10.2, 2.35], [10.2, 7.8], [EXIT_X + 1.2, 7.8], [EXIT_X + .5, OUTSIDE], [AP.x + .7, AP.z + .9]]);
+// the boss walks out with his clipboard to do the headcount (world.js leaves him alone in state "drill")
+const BOSS_N = makeNpc(boss, "Boss", 0, [], []);
+const BOSS_SPOT = { x: AP.x + 1.7, z: AP.z - .4 };
+const clipboard = FW.box(.32, .42, .03, FW.M("#c69a5c"), 0, -.78, .16, boss.armR); clipboard.rotation.x = -.5; clipboard.visible = false;
+FW.box(.26, .3, .01, FW.M("#ffffff"), 0, .02, .02, clipboard);
+const MOVERS = [...NPCS, BRENDA, BOSS_N];
+const npcByName = Object.fromEntries(NPCS.map(n => [n.name.toLowerCase(), n]));
 
 function walk(n, pts, done) { n.path = pts; n.pi = 0; n.done = done; n.mode = "walk"; }
 function getUp(n) {
@@ -233,6 +251,9 @@ function sitDown(n) {
   n.mode = "seated"; n.trip = false; n.holding = false; n.cup.visible = false;
 }
 const reversed = pts => pts.slice().reverse();
+if (FW.onDeskChange) FW.onDeskChange(() => {
+  for (const n of NPCS) if (n.ch.away && n.mode !== "seated") { n.path = null; n.done = null; n.after = null; n.face = null; sitDown(n); }
+});
 function coffeeRun(n) {
   if (!n || n.mode !== "seated") return false;
   getUp(n); n.trip = true; n.snitched = false;
@@ -251,12 +272,12 @@ function coffeeRun(n) {
 let nextCoffee = performance.now() + rand(30000, 50000);
 
 function updateNpcs(dt, now) {
-  for (const n of NPCS) {
-    if (n.mode === "seated") continue;
+  for (const n of MOVERS) {
+    if (n.mode === "seated" || n.ch.away) continue;
     const ch = n.ch, pos = ch.g.position;
     if (n.mode === "walk") {
       const tgt = n.path[n.pi], dx = tgt[0] - pos.x, dz = tgt[1] - pos.z, d = Math.hypot(dx, dz);
-      const sp = drill.active ? 2.4 : 1.5;
+      const sp = n === BOSS_N ? 3.4 : drill.active ? 2.4 : 1.5; // the boss strides out from his office, far from the exit
       if (d < .06) {
         n.pi++;
         if (n.pi >= n.path.length) { n.mode = "idle"; const f = n.done; n.done = null; if (f) f(); }
@@ -278,6 +299,7 @@ function updateNpcs(dt, now) {
       if (n.mode === "wait" && now > n.waitUntil) { n.mode = "idle"; n.face = null; const f = n.after; n.after = null; if (f) f(); }
     }
     if (n.holding) ch.armR.rotation.x = -1.2;
+    if (n === BOSS_N && clipboard.visible) ch.armR.rotation.x = -1.0; // reading the headcount
     // snitch: on a coffee run, near you while you carry the envelope
     if (n.trip && !n.snitched && P.carrying && !drill.active && playerNear(pos.x, pos.z, 3)) {
       n.snitched = true;
@@ -291,19 +313,21 @@ function updateNpcs(dt, now) {
   // schedule the next coffee run, one at a time
   if (now > nextCoffee) {
     nextCoffee = now + rand(40000, 70000);
-    if (P.started && !drill.active && NPCS.every(n => n.mode === "seated")) coffeeRun(pick(NPCS));
+    const here = NPCS.filter(n => !n.ch.away);
+    if (P.started && !drill.active && here.length && here.every(n => n.mode === "seated")) coffeeRun(pick(here));
   }
 }
 
 /* ======================= Desk phone ======================= */
 
-const PHONE_X = FW.MY_DESK.x - .78, PHONE_Z = FW.MY_DESK.z + .22;
+let PHONE_X = FW.MY_DESK.x - .78, PHONE_Z = FW.MY_DESK.z + .22;
 const phoneG = new THREE.Group(); phoneG.position.set(PHONE_X, .8, PHONE_Z); FW.scene.add(phoneG);
 const phoneRed = FW.M("#c8322a"), phoneDark = FW.M("#2e2a28");
 FW.box(.3, .09, .24, phoneRed, 0, .045, 0, phoneG);
 FW.box(.12, .02, .1, phoneDark, .05, .1, .04, phoneG);                // keypad
 const handset = FW.box(.34, .06, .09, phoneRed, 0, .13, -.06, phoneG);
 FW.box(.08, .05, .1, phoneRed, -.15, .1, -.06, phoneG); FW.box(.08, .05, .1, phoneRed, .15, .1, -.06, phoneG);
+if (FW.onDeskChange) FW.onDeskChange(d => { PHONE_X = d.x - .78; PHONE_Z = d.z + .22; phoneG.position.set(PHONE_X, .8, PHONE_Z); });
 const phone = { ringing: false, ringEnd: 0, nextRing: performance.now() + rand(50000, 75000), nextPulse: 0, calls: 0, sinceTip: 0, busy: false };
 
 const CALLS = [
@@ -398,43 +422,93 @@ alarmBulb.position.set(EXIT_X, 3.0, FW.RD / 2 - .25); FW.scene.add(alarmBulb);
 const redOverlay = document.createElement("div");
 redOverlay.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:radial-gradient(ellipse at center, rgba(255,0,0,0) 45%, rgba(255,20,20,.55) 100%);";
 document.body.appendChild(redOverlay);
-const DRILL_MS = 15000;
+const DRILL_MS = 25000; // long enough to walk out, or to sneak a delivery and still make the headcount
+// headcount chip at the top of the screen during a drill
+const countChip = document.createElement("div");
+countChip.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:6;display:none;pointer-events:none;padding:8px 16px;font:700 14px var(--ui,monospace);color:#fff;background:#b3261e;border:3px solid #2b1d14;border-radius:12px;box-shadow:4px 4px 0 #2b1d14;";
+document.body.appendChild(countChip);
 
 function startDrill(now) {
   if (drill.active) return;
-  drill.active = true; drill.endAt = now + DRILL_MS;
-  FW.wtoast("🔥 FIRE DRILL! The boss is busy herding everyone out — 15 s to deliver unseen!", "good");
-  // the boss stops patrolling; if he is in his office he stays there
+  drill.active = true; drill.endAt = now + DRILL_MS; drill.returning = false;
+  if (FW.exit) FW.exit.propped = true;
+  FW.wtoast("🔥 FIRE DRILL! Get to the assembly point outside, or use the empty office… the boss counts heads at the end.", "good");
+  // the boss stops whatever he was doing and walks out with his clipboard
   B.sus = 0;
-  if (B.state === "wait") B.t = Math.max(B.t, DRILL_MS / 1000 + 4);
-  else { B.pauseUntil = now + DRILL_MS; FW.say(boss, "FIRE DRILL! Everybody OUT! Single file!", 3000); }
-  // coworkers head for the exit sign
-  for (const n of NPCS) {
-    if (n.mode !== "seated") continue;
-    getUp(n);
-    walk(n, n.toExit, () => { n.mode = "idle"; n.face = { x: n.ch.g.position.x, z: 20 }; });
+  const wasHome = B.state === "wait";
+  B.state = "drill"; boss.g.visible = true; clipboard.visible = true;
+  if (wasHome) FW.standPose(boss);
+  const bp = boss.g.position;
+  // to the south wall: from his desk through his office door (x -13, z -5) like on patrol,
+  // from the west lane straight down it, from the patrol's east lane (x -5.5) straight down that
+  const toSouth = bp.x < -13 ? [[bp.x, -2.8], [-16.5, -2.8], [-14, -5], [-10.4, -5], [-10.4, 7.8]]
+    : bp.x < -8 ? [[-10.4, bp.z], [-10.4, 7.8]] : [[bp.x, 7.8]];
+  BOSS_N.out = [[bp.x, bp.z], ...toSouth, [EXIT_X, 7.8], [EXIT_X, OUTSIDE], [BOSS_SPOT.x, BOSS_SPOT.z]];
+  walk(BOSS_N, BOSS_N.out, () => {
+    BOSS_N.mode = "idle"; BOSS_N.face = { x: AP.x - .5, z: AP.z + .8 };
+    FW.say(boss, "Line up! Headcount!", 2400);
+  });
+  FW.say(boss, "FIRE DRILL! Everybody OUT! Single file!", 3000);
+  // coworkers and Brenda head for the assembly point
+  for (const n of [...NPCS, BRENDA]) {
+    if (n.ch.away) continue;
+    const arrive = () => { n.mode = "idle"; n.face = BOSS_SPOT; };
+    if (n.mode === "seated") { getUp(n); walk(n, n.toExit, arrive); continue; }
+    // mid coffee run: drop it and go. From the break room, back out through its door first.
+    n.after = null; n.done = null; n.trip = false; n.holding = false; n.cup.visible = false;
+    const pos = n.ch.g.position, viaBreak = pos.z > 8 ? [[-6.6, 12.6], [-6, 10.4], [-6, 7.8]] : [];
+    walk(n, [...viaBreak, ...n.toExit.slice(-4)], arrive);
+    n.leftFromTrip = true;
   }
-  setTimeout(() => FW.say(kevin, pick(["Is this a drill?!", "Not again!", "I left my sandwich!"]), 2000), 600);
-  setTimeout(() => FW.say(dana, pick(["Walk, don't run.", "Ugh. I was on a roll.", "Does this count as a break?"]), 2000), 2200);
+  const sayIfHere = (ch, lines, at) => ch && setTimeout(() => { if (!ch.away) FW.say(ch, pick(lines), 2000); }, at);
+  sayIfHere(kevin, ["Is this a drill?!", "Not again!", "I left my sandwich!"], 600);
+  sayIfHere(dana, ["Walk, don't run.", "Ugh. I was on a roll.", "Does this count as a break?"], 2200);
+  sayIfHere(marcus, ["Is this part of onboarding?!", "I'll lead the way! Follow me!", "I've got my lanyard!"], 1400);
+  sayIfHere(priya, ["Saving my spreadsheet first. Priorities.", "Third drill this month.", "Somebody grab the donuts!"], 3000);
+  setTimeout(() => FW.say(clerk, pick(["Finally, a real lunch break.", "Is the parking lot catering?"]), 2200), 3600);
   FW.say(inspector, "I'm not leaving my stapler.", 2600);
 }
 function endDrill(now) {
-  drill.active = false;
+  drill.active = false; drill.returning = true;
   alarmLight.intensity = 0; alarmBulb.material.color.set("#5a1010");
-  redOverlay.style.opacity = 0; drill.lastOp = -1;
+  redOverlay.style.opacity = 0; drill.lastOp = -1; countChip.style.display = "none";
   drill.nextAt = now + rand(240000, 330000);
-  FW.wtoast("Drill over. Back to work, everyone.");
-  if (boss.g.visible) FW.say(boss, "Alright, alright. Back to work!", 2200);
-  unlock("drill");
-  for (const n of NPCS) {
-    if (n.mode === "seated") continue;
-    const back = [...reversed(n.toExit), n.stand];
-    // they start from where they stand, which is the last exit waypoint
-    n.mode = "idle"; n.face = null;
-    setTimeout(() => walk(n, back, () => sitDown(n)), rand(0, 1200));
+  // the headcount: outside you're counted, inside you're missing
+  const counted = FW.isOutside ? FW.isOutside() : false;
+  if (counted) {
+    FW.say(boss, pick(["…and you. Good. Model employee.", "Everyone's here. Even you. Huh.", "All present. Back to work!"]), 2600);
+    FW.toOS("heat", { amount: -10 });
+    FW.wtoast("Counted at the assembly point. −10 heat", "good");
+    unlock("modelEmployee");
+  } else {
+    FW.say(boss, "Where were YOU during the drill?!", 2800);
+    FW.toOS("heat", { amount: 15 });
+    FW.wtoast("Missed the headcount: the boss noticed. +15 heat", "bad");
+    FW.sfx("busted");
   }
+  unlock("drill");
+  // everyone walks back in (the exit stays propped until they're through)
+  const walked = (n, route) => n.mode === "walk" && n.path === route ? route.slice(0, n.pi) : route;
+  for (const n of [...NPCS, BRENDA]) {
+    if (n.mode === "seated") continue;
+    const back = n.leftFromTrip ? [...reversed(n.toExit), n.stand] : [...reversed(walked(n, n.toExit)), n.stand];
+    n.leftFromTrip = false;
+    n.mode = "idle"; n.face = null;
+    setTimeout(() => walk(n, back, () => sitDown(n)), rand(600, 1800));
+  }
+  // the boss retraces his route and disappears into his office (or out of sight past the exit)
+  const bossBack = reversed(walked(BOSS_N, BOSS_N.out || []));
+  BOSS_N.mode = "idle";
+  setTimeout(() => walk(BOSS_N, bossBack.length ? bossBack : [[boss.g.position.x, boss.g.position.z]], () => {
+    clipboard.visible = false; boss.g.visible = false; BOSS_N.mode = "seated"; BOSS_N.face = null;
+    boss.g.position.set(-12.2, 0, -5); B.state = "wait"; B.t = rand(14, 22); B.i = 0;
+  }), 2600);
 }
 function updateDrill(dt, now) {
+  // after a drill, shut the exit once everyone's walked back through it (you included: world.js waits for you)
+  if (drill.returning && MOVERS.every(n => n.ch.g.position.z < (FW.RD ?? 18) / 2 - .3 || !n.ch.g.visible)) {
+    drill.returning = false; if (FW.exit) FW.exit.propped = false;
+  }
   if (!drill.active) {
     if (now > drill.nextAt) {
       drill.nextAt = now + 1000;                           // re-check every second
@@ -442,9 +516,10 @@ function updateDrill(dt, now) {
     }
     return;
   }
-  // keep the boss busy for the whole drill (he may come out mid-drill)
-  if (B.state === "wait") B.t = Math.max(B.t, (drill.endAt - now) / 1000 + 2);
-  else if (B.pauseUntil < drill.endAt) B.pauseUntil = drill.endAt;
+  // headcount countdown and where you are
+  const left = Math.max(0, Math.ceil((drill.endAt - now) / 1000)), out = FW.isOutside && FW.isOutside();
+  countChip.style.display = P.seated ? "none" : "block";
+  countChip.textContent = `🔥 Headcount in ${left}s · You: ${out ? "at the assembly point ✓" : "inside"}`;
   const on = Math.sin(now / 130) > 0;
   alarmLight.intensity = on ? 2.4 : .4;
   alarmBulb.material.color.set(on ? "#ff2a2a" : "#5a1010");

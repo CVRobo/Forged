@@ -224,7 +224,7 @@ function wallRun(axis, fixed, from, to, doors = [], { thick = .3, color } = {}) 
     const a = d.at - d.width / 2, b = d.at + d.width / 2;
     if (a > start) seg(start, a, WALL_H / 2, WALL_H, true);
     seg(a, b, WALL_H - .35, .7, false); // lintel over the doorway
-    doorFrame(axis, fixed, d.at, d.width);
+    if (d.frame !== false) doorFrame(axis, fixed, d.at, d.width);
     start = b;
   });
   if (to > start) seg(start, to, WALL_H / 2, WALL_H, true);
@@ -242,11 +242,51 @@ function wallBlocks(w, cam, pl) {
   return cross > w.a - 1 && cross < w.b + 1;
 }
 // main office: doorways west (boss office), south (break room), east (records & mail)
-const DOORS = { west: { at: -5, width: 1.8 }, south: { at: -6, width: 2.2 }, east: { at: 5.5, width: 2 } };
+const DOORS = { west: { at: -5, width: 1.8 }, south: { at: -6, width: 2.2 }, east: { at: 5.5, width: 2 },
+  exit: { at: 6, width: 1.84, frame: false } }; // the emergency exit: double doors to the parking lot (see "Emergency exit")
 wallRun("x", -RD / 2, -RW / 2, RW / 2);
-wallRun("x", RD / 2, -RW / 2, RW / 2, [DOORS.south]);
+wallRun("x", RD / 2, -RW / 2, RW / 2, [DOORS.south, DOORS.exit]);
 wallRun("z", -RW / 2, -RD / 2, RD / 2, [DOORS.west]);
 wallRun("z", RW / 2, -RD / 2, RD / 2, [DOORS.east]);
+
+/* ======================= Doors (boss office, break room, records) =======================
+ * Press E near one to open or close it; it stays where you leave it. A closed door blocks
+ * you. Anyone else (the boss, coworkers) opens it as they reach it and it closes behind them.
+ * Each door fades with its wall when it's between you and the camera. */
+const doorObjs = [];
+function makeDoor(name, axis, fixed, at, width, into) {
+  const wood = M("#9c6a3e", { transparent: true }), dark = M("#5c3a1f", { transparent: true });
+  const glass = new THREE.MeshStandardMaterial({ color: "#bfe8ff", transparent: true, opacity: .45, roughness: .1 });
+  const hinge = new THREE.Group(), w = width - .08, h = 2.44;
+  // the hinge sits at the low end of the doorway; the leaf runs along the wall (local +x)
+  const base = axis === "x" ? 0 : -Math.PI / 2;
+  if (axis === "x") hinge.position.set(at - width / 2 + .04, 0, fixed); else hinge.position.set(fixed, 0, at - width / 2 + .04);
+  hinge.rotation.y = base; scene.add(hinge);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(w, h, .07), wood); leaf.position.set(w / 2, h / 2, 0); leaf.castShadow = true; hinge.add(leaf);
+  [[.06, h / 2], [w - .06, h / 2]].forEach(([x, y]) => { const r = new THREE.Mesh(new THREE.BoxGeometry(.06, h - .04, .08), dark); r.position.set(x, y, 0); hinge.add(r); }); // stiles
+  [.08, h - .08, 1.05].forEach(y => { const r = new THREE.Mesh(new THREE.BoxGeometry(w - .06, .06, .08), dark); r.position.set(w / 2, y, 0); hinge.add(r); }); // rails
+  const win = new THREE.Mesh(new THREE.BoxGeometry(w * .45, .55, .08), glass); win.position.set(w / 2, 1.7, 0); hinge.add(win);
+  [-1, 1].forEach(sd => { const k = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 10), M("#d8b34a")); k.position.set(w - .14, 1.02, sd * .07); hinge.add(k); }); // knobs
+  const block = axis === "x"
+    ? { minX: at - width / 2, maxX: at + width / 2, minZ: fixed - .16, maxZ: fixed + .16 }
+    : { minX: fixed - .16, maxX: fixed + .16, minZ: at - width / 2, maxZ: at + width / 2 };
+  colliders.push(block);
+  const openAngle = axis === "x" ? -into * 1.5 : base + into * 1.5;
+  const d = { name, axis, fixed, at, width, hinge, base, openAngle, block, open: false, npcHold: false, lastNpc: 0,
+    mats: [wood, dark, glass], center: axis === "x" ? { x: at, z: fixed } : { x: fixed, z: at } };
+  // fades with its wall (the camera code dims anything listed in `walls`)
+  walls.push({ m: leaf, mat: wood, mats: d.mats, axis, fixed, a: at - width / 2, b: at + width / 2 });
+  doorObjs.push(d);
+  return d;
+}
+function setDoorBlocking(d, blocking) {
+  const i = colliders.indexOf(d.block);
+  if (blocking && i < 0) colliders.push(d.block);
+  if (!blocking && i >= 0) colliders.splice(i, 1);
+}
+makeDoor("boss office", "z", -RW / 2, DOORS.west.at, DOORS.west.width, -1);
+makeDoor("break room", "x", RD / 2, DOORS.south.at, DOORS.south.width, +1);
+makeDoor("records", "z", RW / 2, DOORS.east.at, DOORS.east.width, +1);
 
 /* A room next to the main office: checker floor, ceiling and walls. Skip the
  * side it shares with the main office (that wall already has the doorway). */
@@ -498,7 +538,8 @@ const BELT_M = M("#3a2a20"), GOLD_M = M("#ffd23f"), SHOE_M = M("#3b2a22"), SOLE_
 const HANDS = {};
 // palm + thumb merged into one mesh per side; sx = -1 left, 1 right (the thumb points at the body)
 const handGeo = sx => HANDS[sx] || (HANDS[sx] = kit().add(RBOXG(.15, .15, .12, .05)).add(RBOXG(.06, .1, .065, .025), -sx * .085, .02, .03, 0, 0, -sx * .4, { line: .02 }).bake());
-function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, name, tagColor, scale = 1 }) {
+// parent/track: the character editor builds a preview character in its own scene, outside `characters`
+function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, name, tagColor, scale = 1, parent = scene, track = true }) {
   const g = new THREE.Group();
   // one material per colour per character; geometry is shared between everyone
   const shirtM = M(shirt), pantsM = M(pants), skinM = M(skin), trimM = M(tie ? "#ffffff" : shade(shirt, .12));
@@ -521,12 +562,13 @@ function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, 
   [-1, 1].forEach(sx => { part(BOXG(.2, .07, .05), trimM, sx * .09, 1.6, .17, g, .02).rotation.z = sx * .45; });
   part(CYLG(.11, .12, .14, 12), skinM, 0, 1.67, 0, g, .02);
   part(BOXG(.14, .12, .02), trimM, .16, 1.42, .185, g, .015);
-  if (tie) {
-    const tm = M(tie);
-    part(BOXG(.13, .09, .05), tm, 0, 1.55, .19, g, .02);
-    part(BOXG(.11, .4, .03), tm, 0, 1.3, .19, g, .02);
-    part(BOXG(.08, .08, .03), tm, 0, 1.1, .19, g, .02).rotation.z = Math.PI / 4;
-  } else [1.42, 1.24, 1.06].forEach(y => part(SPHG(.022, 6), INK, 0, y, .185, g, 0));
+  // tie or shirt buttons: both are built so restyleChar can switch between them
+  const tieM = M(tie || "#1f8a8a"), tieParts = [], buttonParts = [];
+  tieParts.push(part(BOXG(.13, .09, .05), tieM, 0, 1.55, .19, g, .02));
+  tieParts.push(part(BOXG(.11, .4, .03), tieM, 0, 1.3, .19, g, .02));
+  const knot = part(BOXG(.08, .08, .03), tieM, 0, 1.1, .19, g, .02); knot.rotation.z = Math.PI / 4; tieParts.push(knot);
+  [1.42, 1.24, 1.06].forEach(y => buttonParts.push(part(SPHG(.022, 6), INK, 0, y, .185, g, 0)));
+  tieParts.forEach(m => m.visible = !!tie); buttonParts.forEach(m => m.visible = !tie);
   // arms: sleeve, cuff, mitten hand with a thumb on the inside
   const armL = limb(-.4, 1.58), armR = limb(.4, 1.58);
   [[armL, -1], [armR, 1]].forEach(([a, sx]) => {
@@ -541,10 +583,35 @@ function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, 
   const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex })); // walls hide it, so tags no longer show through rooms
   tag.scale.set(1.6, .3, 1); tag.position.y = 2.72; tag.renderOrder = 10; g.add(tag);
   g.scale.setScalar(scale);
-  scene.add(g);
-  const ch = { g, legL, legR, armL, armR, head, face, tag, tagTex: tex, walkT: 0, scale, blinkAt: rand(1, 4) };
-  characters.push(ch);
+  parent.add(g);
+  const ch = { g, legL, legR, armL, armR, head, face, tag, tagTex: tex, walkT: 0, scale, blinkAt: rand(1, 4),
+    mats: { shirt: shirtM, pants: pantsM, skin: skinM, trim: trimM, tie: tieM }, tieParts, buttonParts };
+  if (track) characters.push(ch);
   return ch;
+}
+
+/* Change a character's look in place: colours are recoloured and the head is rebuilt, but the
+ * body, arms and anything held stay where they are (so the envelope, coffee or seal survive).
+ * look = { skin, hair, hairColor, brows, mouth, nose, glasses, earrings, mustache, shirt, pants, tie } (tie: colour or null) */
+function restyleChar(ch, look) {
+  const L = Object.assign({}, look);
+  ch.mats.shirt.color.set(L.shirt); ch.mats.pants.color.set(L.pants); ch.mats.skin.color.set(L.skin);
+  ch.mats.trim.color.set(L.tie ? "#ffffff" : shade(L.shirt, .12));
+  if (L.tie) ch.mats.tie.color.set(L.tie);
+  ch.tieParts.forEach(m => m.visible = !!L.tie); ch.buttonParts.forEach(m => m.visible = !L.tie);
+  const old = ch.head, face = buildHead({ skin: L.skin, hair: L.hair, hairColor: L.hairColor, brows: L.brows, mouth: L.mouth, nose: L.nose,
+    glasses: L.glasses, earrings: L.earrings, mustache: L.mustache });
+  face.head.position.copy(old.position); face.head.visible = old.visible;
+  old.parent.add(face.head); old.parent.remove(old);
+  ch.head = face.head; ch.face = face;
+}
+
+/* the player's look: saved in the browser, edited in customize.js */
+const LOOK_KEY = "forged-look";
+const DEFAULT_LOOK = { skin: "#f1c27d", hair: "spiky", hairColor: "#2b1d14", brows: "raised", mouth: "smirk", nose: "round",
+  glasses: false, earrings: false, mustache: false, shirt: "#e0352b", pants: "#2b2b44", tie: null };
+function loadLook() {
+  try { return Object.assign({}, DEFAULT_LOOK, JSON.parse(localStorage.getItem(LOOK_KEY) || "{}")); } catch (e) { return { ...DEFAULT_LOOK }; }
 }
 
 // everyone's googly eyes follow a target (you); they blink now and then
@@ -650,7 +717,7 @@ const deskPF = prefab(K => {
 
 function desk(x, z, { flip = false, screen = screenMat, chair = true } = {}) {
   const g = deskPF(scene, x, 0, z, flip ? Math.PI : 0);
-  const scr = new THREE.Mesh(SCREEN_GEO, screen); scr.position.set(0, 1.38, -.296); g.add(scr);
+  const scr = new THREE.Mesh(SCREEN_GEO, screen); scr.position.set(0, 1.38, -.296); g.add(scr); g.userData.screen = scr;
   blob(0, -.05, 2.6, 1.5, g);
   if (chair) { chairPF(g, 0, 0, .95); blob(0, .95, .95, .95, g); }
   collide(x, z, 2.3, 1.2);
@@ -743,15 +810,38 @@ const myScreenTex = canvasTex(512, 296, (g, w, h) => {
   g.fillStyle = "#f4a63a"; g.font = "64px Bungee, Impact"; g.textAlign = "center"; g.fillText("FORGED", w / 2, h / 2 + 10);
   g.fillStyle = "#2b1d14"; g.font = "bold 20px 'Space Mono'"; g.fillText("press E to sit", w / 2, h / 2 + 60);
 });
-const MY_DESK = { x: -8, z: 2 };
-desk(MY_DESK.x, MY_DESK.z, { screen: new THREE.MeshStandardMaterial({ map: myScreenTex, emissive: "#ffffff", emissiveMap: myScreenTex, emissiveIntensity: .7 }) });
+/* ======================= Desks: four cubicles, one per player =======================
+ * A 2 × 2 block of cubicles. Players take desks in join order (single-player is desk 1);
+ * a desk nobody plays at has its NPC coworker working at it. MY_DESK and CHAIR are shared
+ * objects that move to whichever desk is yours (setMyDesk), so everything that reads them
+ * (sitting, the seated camera, the boss's "behind your chair" check, the desk mess, the
+ * minimap, the phone via onDeskChange) follows automatically.
+ *
+ *          x −8         x −3
+ *  z −3   desk 4       desk 3      (north)
+ *  z  2   desk 1       desk 2
+ *
+ * The boss patrols the lanes at x −10.4 and x −5.5, past every chair. */
+const DESKS = [{ x: -8, z: 2 }, { x: -3, z: 2 }, { x: -3, z: -3 }, { x: -8, z: -3 }].map((d, i) => ({ ...d, n: i + 1, npc: null, player: null }));
+const deskScreenMat = new THREE.MeshStandardMaterial({ map: myScreenTex, emissive: "#ffffff", emissiveMap: myScreenTex, emissiveIntensity: .7 });
+DESKS.forEach(d => {
+  d.g = desk(d.x, d.z);
+  cubicle(d.x, d.z);
+  d.plate = signPlane("", null, .7, .2, "#2b1d14"); d.plate.position.set(d.x - .7, .9, d.z + .56); scene.add(d.plate);
+});
+const MY_DESK = { x: DESKS[0].x, z: DESKS[0].z, n: 1 };
 const CHAIR = new THREE.Vector3(MY_DESK.x, 0, MY_DESK.z + .95);
-const nameplate = signPlane("YOU", null, .7, .2, "#2b1d14"); nameplate.position.set(MY_DESK.x - .7, .9, MY_DESK.z + .56); scene.add(nameplate);
-
-/* --- coworkers --- */
-desk(-3, 2); desk(-3, -3);
-cubicle(-3, 2); cubicle(-3, -3);
-{ // rug under the coworker pod (flat, walkable; ends 0.8 m short of the boss's x = -5.5 lane)
+function setPlate(d, label) {
+  const tex = d.plate.material.map;
+  tex.cv.draw = (g, cw, ch) => {
+    g.fillStyle = "#2b1d14"; g.fillRect(0, 0, cw, ch);
+    g.strokeStyle = "#e8c27a"; g.lineWidth = 16; g.strokeRect(8, 8, cw - 16, ch - 16);
+    g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = `${Math.round(ch * .42)}px Bungee, Impact, sans-serif`;
+    g.fillText(label.toUpperCase().slice(0, 12), cw / 2, ch / 2);
+  };
+  redraw(tex);
+}
+{ // rugs under each pair of cubicles (flat, walkable; clear of the boss's lanes)
   const rugTex = canvasTex(256, 512, (g, w, h) => {
     g.fillStyle = "#a9483a"; g.fillRect(0, 0, w, h);
     g.strokeStyle = "#e8c27a"; g.lineWidth = 10; g.strokeRect(14, 14, w - 28, h - 28);
@@ -759,13 +849,59 @@ cubicle(-3, 2); cubicle(-3, -3);
     g.fillStyle = "#c9654f";
     for (let j = 0; j < 7; j++) { const y = 70 + j * 62; g.beginPath(); g.moveTo(w / 2, y - 24); g.lineTo(w / 2 + 40, y); g.lineTo(w / 2, y + 24); g.lineTo(w / 2 - 40, y); g.closePath(); g.fill(); }
   });
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 8), M("#ffffff", { map: rugTex }));
-  rug.rotation.x = -Math.PI / 2; rug.position.set(-3, .008, -.3); rug.receiveShadow = true; scene.add(rug);
+  [-3, -8].forEach(x => {
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 8), M("#ffffff", { map: rugTex }));
+    rug.rotation.x = -Math.PI / 2; rug.position.set(x, .008, -.3); rug.receiveShadow = true; scene.add(rug);
+  });
 }
+
+/* --- coworkers: one NPC per desk; a desk's NPC leaves while a player sits there --- */
+const marcus = makeChar({ shirt: "#ffd23f", pants: "#5a5f69", tie: "#2f6fd6", look: { hair: "neat", hairColor: "#5a3a22", glasses: true, mouth: "grin", brows: "raised", teeth: true }, name: "MARCUS", tagColor: "#555" });
 const kevin = makeChar({ shirt: "#7a5cff", look: { hair: "bowl", hairColor: "#c98a3a", glasses: true, teeth: true, mouth: "grin", brows: "raised" }, name: "KEVIN", tagColor: "#555" });
-kevin.g.position.set(-3, 0, 2.95); kevin.g.rotation.y = Math.PI; seatPose(kevin, true);
 const dana = makeChar({ shirt: "#3fae6a", skin: "#a8714a", look: { hair: "bun", hairColor: "#1e1410", lids: true, mouth: "flat", brows: "flat" }, name: "DANA", tagColor: "#555" });
-dana.g.position.set(-3, 0, -2.05); dana.g.rotation.y = Math.PI; seatPose(dana, true);
+const priya = makeChar({ shirt: "#e75aa3", pants: "#3d5a80", skin: "#c68642", look: { hair: "curly", hairColor: "#1a1210", earrings: true, mouth: "smirk", brows: "worried" }, name: "PRIYA", tagColor: "#555" });
+[[DESKS[0], marcus, "Marcus"], [DESKS[1], kevin, "Kevin"], [DESKS[2], dana, "Dana"], [DESKS[3], priya, "Priya"]].forEach(([d, ch, name]) => {
+  d.npc = ch; d.npcName = name;
+  ch.g.position.set(d.x, 0, d.z + .95); ch.g.rotation.y = Math.PI; seatPose(ch, true);
+});
+const deskChangeHooks = [];
+// who sits where: `players` maps desk number → player name (single-player: { 1: "You" })
+let deskPlayers = {};
+function assignDesks(players, mine) {
+  deskPlayers = { ...players };
+  for (const d of DESKS) {
+    d.player = players[d.n] || null;
+    if (d.npc) { d.npc.away = !!d.player; d.npc.g.visible = !d.player; }
+    setPlate(d, d.player ? (d.n === mine ? "YOU" : d.player) : d.npcName || "VACANT");
+    d.g.userData.screen.material = d.n === mine ? deskScreenMat : screenMat;
+  }
+  const d = DESKS[mine - 1];
+  MY_DESK.x = d.x; MY_DESK.z = d.z; MY_DESK.n = d.n;
+  CHAIR.set(d.x, 0, d.z + .95);
+  deskChangeHooks.forEach(fn => { try { fn(MY_DESK); } catch (e) { console.error("[forged] desk change hook", e); } });
+}
+assignDesks({ 1: "You" }, 1);
+// move yourself to desk n if no other player is there (single-player starts at desk 1;
+// multiplayer calls assignDesks with everyone's desks, and listens to onDeskChange to tell the others)
+const DESK_LINES = {
+  Marcus: ["Oh! Sure! I'll go… shadow someone!", "Taking my laptop to the break room. Synergy!"],
+  Kevin: ["Hey, that's my— fine. Coffee break.", "My chair's still warm. You're welcome."],
+  Dana: ["Ugh. I'll work from the break room.", "Don't touch my stapler."],
+  Priya: ["Take it. I needed a walk anyway.", "Mind the spreadsheet, it's fragile."],
+};
+function setMyDesk(n, { announce = false } = {}) {
+  n = clamp(Math.round(n), 1, DESKS.length);
+  if (n === MY_DESK.n) return true;
+  const other = deskPlayers[n];
+  if (other && other !== "You") return false; // another player's desk
+  if (P.seated) stand();
+  const leaving = DESKS[n - 1].npc, name = DESKS[n - 1].npcName;
+  if (announce && leaving && leaving.g.visible) say(leaving, pick(DESK_LINES[name] || ["All yours."]), 2400);
+  const players = { ...deskPlayers }; delete players[MY_DESK.n]; players[n] = "You";
+  // the coworker steps away after their line; the one whose desk you left sits back down
+  setTimeout(() => assignDesks(players, n), announce ? 900 : 0);
+  return true;
+}
 
 /* --- printer --- */
 const PRINTER = { x: -8, z: -7.6 };
@@ -883,9 +1019,9 @@ const corkTex = canvasTex(1024, 640, (g, w, h) => {
   });
 });
 const cork = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.5), new THREE.MeshStandardMaterial({ map: corkTex, roughness: 1 }));
-cork.position.set(3, 1.9, -RD / 2 + .17); scene.add(cork);
+cork.position.set(3, 1.9, -RD / 2 + .23); scene.add(cork); // proud of the chair rail (which sticks out to +.185)
 { // chunky wooden frame round the corkboard
-  const K = kits(), f = K(wood), z = -RD / 2 + .19;
+  const K = kits(), f = K(wood), z = -RD / 2 + .25;
   f.add(RBOXG(4.26, .13, .07, .025), 3, 1.9 + 1.31, z).add(RBOXG(4.26, .13, .07, .025), 3, 1.9 - 1.31, z)
     .add(RBOXG(.13, 2.5, .07, .025), 3 - 2.065, 1.9, z).add(RBOXG(.13, 2.5, .07, .025), 3 + 2.065, 1.9, z);
   K.place();
@@ -924,7 +1060,7 @@ plant(-12.2, 8.2, "tall"); plant(12.2, 8.2, "bush"); plant(12.2, -8.2, "bush"); 
 }
 const jug = cyl(.26, .26, .5, M("#7cc6ff", { transparent: true, opacity: .7 }), -12.3, 1.25, -8.2); jug.castShadow = false; collide(-12.3, -8.2, .7, .7);
 // the emergency exit sits on the south wall east of the break room, so it opens onto the outside
-const EXIT_X = 6;
+const EXIT_X = DOORS.exit.at;
 const exitSign = signPlane("EXIT", null, 1, .35, "#1d9a4b"); exitSign.position.set(EXIT_X, 2.6, RD / 2 - .17); exitSign.rotation.y = Math.PI; scene.add(exitSign);
 // the emergency exit under the sign: double metal doors with push bars and wired-glass windows
 const exitDoor = (() => {
@@ -944,10 +1080,98 @@ const exitDoor = (() => {
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.0, .35), new THREE.MeshBasicMaterial({ color: "#3dff8a", transparent: true, opacity: .25 }));
   glow.position.set(0, 2.6, zf - .02); glow.rotation.y = Math.PI; g.add(glow);         // the sign glows
   const alarm = new THREE.Mesh(new THREE.BoxGeometry(.18, .12, .05), red); alarm.position.set(1.15, 1.5, zf - .02); g.add(alarm);
-  collide(0, zf, 1.9, .3);
-  return { leaves };
+  const block = { minX: EXIT_X - .95, maxX: EXIT_X + .95, minZ: zf - .15, maxZ: zf + .3 };
+  colliders.push(block);
+  return { leaves, block };
 })();
 let exitOpenUntil = 0;
+// propped open during a fire drill (features.js); it only shuts again once you're back inside
+const exitState = { propped: false, open: false, youOut: false };
+const isOutside = () => player.g.position.z > RD / 2 + .2;
+// once you've been outside, the exit stays open for you until you're clearly back in, so it never shuts
+// on you mid-step in the doorway. You can only get outside while it's propped, so this can't be used to sneak out.
+function youreOut() {
+  if (isOutside()) exitState.youOut = true;
+  else if (player.g.position.z < RD / 2 - 1.1) exitState.youOut = false;
+  return exitState.youOut;
+}
+function setExitPassable(on) {
+  if (exitState.open === on) return;
+  exitState.open = on;
+  const i = colliders.indexOf(exitDoor.block);
+  if (on && i >= 0) colliders.splice(i, 1);
+  if (!on && i < 0) colliders.push(exitDoor.block);
+}
+
+/* ======================= Parking lot (outside the emergency exit) =======================
+ * A small fenced lot where everyone gathers during a fire drill. The only way in or out
+ * is the emergency exit. Break room to the west (x < 0), records room to the east (x > 13). */
+const LOT = { x0: .15, x1: 12.6, z0: RD / 2 + .15, z1: 17.6 };
+const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
+{
+  const w = LOT.x1 - LOT.x0, d = LOT.z1 - LOT.z0, cx = (LOT.x0 + LOT.x1) / 2, cz = (LOT.z0 + LOT.z1) / 2;
+  // asphalt with painted bays along the east fence and a walkway from the door
+  const tex = canvasTex(1024, 640, (g, cw, ch) => {
+    const r = seeded(91);
+    g.fillStyle = "#4a4d52"; g.fillRect(0, 0, cw, ch);
+    for (let k = 0; k < 9000; k++) { g.fillStyle = r() < .5 ? "#3d4045" : "#5b5f65"; g.globalAlpha = .5; g.fillRect(r() * cw, r() * ch, 2, 2); }
+    g.globalAlpha = 1;
+    const X = x => (x - LOT.x0) / w * cw, Z = z => (z - LOT.z0) / d * ch;
+    g.strokeStyle = "#f2efe6"; g.lineWidth = 6;
+    for (let i = 0; i <= 4; i++) { const z = 10.4 + i * 1.75; g.beginPath(); g.moveTo(X(8.2), Z(z)); g.lineTo(X(LOT.x1), Z(z)); g.stroke(); } // 4 bays
+    g.fillStyle = "#f2efe6"; for (let z = LOT.z0; z < 13.4; z += .7) g.fillRect(X(EXIT_X - .9), Z(z), X(EXIT_X + .9) - X(EXIT_X - .9), Z(z + .35) - Z(z)); // zebra walkway
+    g.strokeStyle = "#ffd23f"; g.lineWidth = 8; g.setLineDash([26, 18]);
+    g.beginPath(); g.arc(X(ASSEMBLY.x), Z(ASSEMBLY.z), (2.0 / w) * cw, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); // assembly circle
+  });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(w, d), M("#fff", { map: tex }));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(cx, .004, cz); ground.receiveShadow = true; scene.add(ground);
+  // grass beyond the fence, so the lot doesn't float in the void
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(40, 18), M("#7fae5a"));
+  grass.rotation.x = -Math.PI / 2; grass.position.set(cx, -.01, LOT.z1 + 8.5); grass.receiveShadow = true; scene.add(grass);
+  // chain-link fence: posts, rails and see-through mesh; south side and east side
+  const fenceTex = canvasTex(64, 64, (g, cw, ch) => {
+    g.clearRect(0, 0, cw, ch); g.strokeStyle = "rgba(200,205,210,.9)"; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(cw, ch); g.moveTo(cw, 0); g.lineTo(0, ch); g.stroke();
+  });
+  fenceTex.wrapS = fenceTex.wrapT = THREE.RepeatWrapping;
+  const post = M("#8d949b");
+  const fence = (ax, ay, bx, by) => {
+    const len = Math.hypot(bx - ax, by - ay), mx = (ax + bx) / 2, mz = (ay + by) / 2, ang = Math.atan2(by - ay, bx - ax);
+    const t = fenceTex.clone(); t.needsUpdate = true; t.repeat.set(len / .35, 1.5 / .35);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.5), new THREE.MeshBasicMaterial({ map: t, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+    mesh.position.set(mx, .78, mz); mesh.rotation.y = -ang; scene.add(mesh);
+    const rail = box(len, .05, .05, post, mx, 1.52, mz); rail.rotation.y = -ang;
+    for (let k = 0; k <= Math.ceil(len / 2.5); k++) { const f = k / Math.ceil(len / 2.5); cyl(.04, .04, 1.6, post, ax + (bx - ax) * f, .8, ay + (by - ay) * f); }
+    if (Math.abs(by - ay) < 1e-6) collide(mx, ay, len, .2); else collide(ax, mz, .2, len);
+  };
+  fence(-.2, LOT.z1, LOT.x1, LOT.z1);
+  fence(LOT.x1, RD / 2 + .1, LOT.x1, LOT.z1);
+  // two parked cars in the bays
+  const car = (x, z, color, ry) => {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    const body = M(color), glass = M("#bfe8ff"), tyre = M("#1f1f22"), chrome = M("#d6dadf");
+    box(2.2, .55, 1.05, body, 0, .5, 0, g);
+    box(1.15, .45, .95, body, -.15, .98, 0, g);
+    box(1.0, .34, .97, glass, -.15, .98, 0, g);
+    [[-.7, .5], [.7, .5], [-.7, -.5], [.7, -.5]].forEach(([wx, wz]) => { const t = cyl(.22, .22, .16, tyre, wx, .22, wz, g); t.rotation.x = Math.PI / 2; });
+    box(.06, .14, .9, chrome, 1.12, .48, 0, g);
+    collide(x, z, Math.abs(Math.cos(ry)) * 2.3 + Math.abs(Math.sin(ry)) * 1.15, Math.abs(Math.sin(ry)) * 2.3 + Math.abs(Math.cos(ry)) * 1.15);
+  };
+  car(10.6, 11.27, "#2f6fd6", 0);
+  car(10.6, 14.77, "#e0352b", 0);
+  // lamp post, bench, assembly sign
+  cyl(.07, .09, 4.2, post, 7.6, 2.1, 16.9); box(.6, .1, .3, post, 7.35, 4.2, 16.9);
+  const lampGlass = new THREE.Mesh(new THREE.BoxGeometry(.4, .06, .24), new THREE.MeshBasicMaterial({ color: "#fff3c4" })); lampGlass.position.set(7.2, 4.13, 16.9); scene.add(lampGlass);
+  collide(7.6, 16.9, .3, .3);
+  const benchWood = M("#8a5a35");
+  box(1.6, .08, .45, benchWood, 1.6, .48, 17.0); box(1.6, .35, .06, benchWood, 1.6, .75, 17.22);
+  [-.7, .7].forEach(dx => box(.06, .45, .45, post, 1.6 + dx, .24, 17.0));
+  collide(1.6, 17.0, 1.7, .5);
+  cyl(.05, .05, 2.2, post, ASSEMBLY.x - 1.6, 1.1, ASSEMBLY.z + 1.9);
+  const sign = signPlane("ASSEMBLY POINT", "Fire drill? Line up here", 1.4, .7, "#1d9a4b");
+  sign.position.set(ASSEMBLY.x - 1.6, 2.2, ASSEMBLY.z + 1.85); sign.rotation.y = Math.PI; scene.add(sign);
+  collide(ASSEMBLY.x - 1.6, ASSEMBLY.z + 1.9, .2, .2);
+}
 
 
 /* --- windows with half-drawn blinds on the north wall (all geometry sits in front of the wall face) --- */
@@ -1153,7 +1377,7 @@ const tvTex = canvasTex(1024, 576, (g, w, h) => {
 }
 
 // canvases drawn at startup used fallback fonts: redraw them once Bungee / Space Mono are loaded
-if (document.fonts) document.fonts.ready.then(() => [tvTex, corkTex, myScreenTex].forEach(t => redraw(t)));
+if (document.fonts) document.fonts.ready.then(() => [tvTex, corkTex, myScreenTex, ...DESKS.map(d => d.plate.material.map)].forEach(t => redraw(t)));
 
 /* --- objective marker: a bobbing diamond + floor ring on whatever to do next --- */
 const markerMat = new THREE.MeshBasicMaterial({ color: "#ffd23f" });
@@ -1225,7 +1449,10 @@ function messUpDesk() {
 
 /* ======================= Player ======================= */
 
-const player = makeChar({ shirt: "#e0352b", look: { hair: "spiky", hairColor: "#2b1d14", brows: "raised", mouth: "smirk" }, name: "YOU", tagColor: "#e0352b" });
+let playerLook = loadLook();
+const player = makeChar({ shirt: playerLook.shirt, pants: playerLook.pants, skin: playerLook.skin, tie: playerLook.tie, name: "YOU", tagColor: "#e0352b",
+  look: { hair: playerLook.hair, hairColor: playerLook.hairColor, brows: playerLook.brows, mouth: playerLook.mouth, nose: playerLook.nose,
+    glasses: playerLook.glasses, earrings: playerLook.earrings, mustache: playerLook.mustache } });
 player.g.position.set(-5.5, 0, 7);
 player.g.rotation.y = Math.PI;
 // held in the right hand, upright, so it reads from the camera behind you
@@ -1411,7 +1638,7 @@ const INTERACTIONS = [
   { label: () => "Drop it in the IN tray", can: () => P.carrying && near(IN_TRAY, 1.9), act: deliver },
   { label: () => `Talk to ${P.hud ? P.hud.clerk.name : "Brenda"}`, can: () => near({ x: CLERK_DESK.x, z: CLERK_DESK.z + 1.2 }, 2.2) || near({ x: CLERK_DESK.x, z: CLERK_DESK.z - 1.6 }, 1.6), act: () => say(clerk, P.hud ? `"${P.hud.clerk.hello}" <br><small>(Send your cover note from your computer.)</small>` : `"I'm on lunch, hon. Email me."`, 3800) },
   { label: () => `Chat with ${P.hud ? P.hud.inspector : "Gus"}`, can: () => !P.carrying && P.phase !== "judging" && !(P.phase === "result" && bubbles.some(b => b.ch === inspector)) && near(IN_TRAY, 1.9), act: () => say(inspector, pick(["Mmm… pie.", "Did you know I have a stapler?", "I read every invoice. Mostly.", "Is it lunch yet?"]), 2600) },
-  { label: () => "Clock out early", can: () => near({ x: EXIT_X, z: RD / 2 - 1 }, 1.6), act: () => {
+  { label: () => "Clock out early", can: () => !exitState.propped && !isOutside() && near({ x: EXIT_X, z: RD / 2 - 1 }, 1.6), act: () => {
       exitOpenUntil = performance.now() + 1600; sfx("door");
       if (P.carrying) say(player, "Leave with a fake order slip in my hand? Bold.", 2600);
       else say(player, pick(["Not before quota. The boss would notice.", "One more order. Then I'm out.", "The parking lot looks free… but my desk looks profitable."]), 2600);
@@ -1632,7 +1859,7 @@ addEventListener("keydown", e => {
   if (K.is("playerList", e.code)) { ForgedMenu.showPlayerList(true); return; }
   P.keys.add(e.code);
   if (e.repeat) return;
-  if (K.is("interact", e.code) && current) current.act();
+  if (K.is("interact", e.code) && current) { swing("right"); current.act(); }
   if (K.is("camera", e.code)) setFirstPerson(!P.fp);
 });
 addEventListener("keyup", e => {
@@ -1647,7 +1874,7 @@ addEventListener("mousedown", e => {
   if (!P.started || P.paused || P.seated || e.button === 0) return;
   const code = "Mouse" + e.button;
   P.keys.add(code);
-  if (K.is("interact", code) && current) { e.preventDefault(); current.act(); }
+  if (K.is("interact", code) && current) { e.preventDefault(); swing("right"); current.act(); }
   if (K.is("camera", code)) setFirstPerson(!P.fp);
 });
 addEventListener("mouseup", e => P.keys.delete("Mouse" + e.button));
@@ -1717,6 +1944,7 @@ ForgedMenu.init({
     if (document.pointerLockElement) document.exitPointerLock();
     $("#start").classList.remove("hide");
   },
+  onCustomize: () => window.ForgedCustomizer && ForgedCustomizer.open(),
   canDossier: () => P.seated, // the Dossier lives on the computer
   onDossier: () => toOS("dossier"),
   getStats: () => P.hud ? { money: P.hud.money, patches: P.hud.patches || 0, shame: P.hud.shame || [], round: P.hud.round } : null,
@@ -1779,6 +2007,8 @@ function setSus(v) {
   if (r !== shownSus) { shownSus = r; $("#vignette").style.setProperty("--sus", r); }
 }
 function updateBoss(dt, now) {
+  cone.visible = B.state !== "drill";
+  if (B.state === "drill") return; // fire drill: features.js walks him to the assembly point and back
   if (B.state === "wait") {
     if (B.sus) { B.sus = 0; setSus(0); }
     B.t -= dt;
@@ -1945,15 +2175,161 @@ function drawMinimap(now) {
   g.strokeRect(0, 0, 200, 138);
 }
 
+/* ======================= Hands: holding, reaching, the first-person arm =======================
+ * Anything the player can carry is registered once (FW.hold.register). Showing it
+ * (visible = true) means "picked up" and hiding it means "put down", so code that only
+ * toggles visibility gets this for free: the item sits in the hand and moves with the arm,
+ * that arm stays bent forward while carrying, and the hand does a quick reach on every
+ * pick-up, put-down and interaction. In first person a Minecraft-style right arm (and the
+ * left one while it holds something) is drawn over the view, holding a copy of the item. */
+const CARRY = .6;       // a carrying arm is raised this far forward (radians): held at your side, visible from behind
+const REACH_MS = 320;   // one reach: out and back
+const ease = t => t * t * (3 - 2 * t);
+const lerp = (a, b, t) => a + (b - a) * t;
+const reachAt = { right: -1e9, left: -1e9 };
+function swing(side = "right") { reachAt[side] = performance.now(); }
+// 0 → 1 → 0 over a reach (0 when no reach is running)
+function reachK(side, now) { const k = (now - reachAt[side]) / REACH_MS; return k >= 0 && k < 1 ? Math.sin(Math.PI * ease(k)) : 0; }
+
+// sockets: a hand-held frame that's upright (body-aligned) when the arm is in the carry pose
+function addSocket(arm, pitch) { const s = new THREE.Group(); s.position.set(0, -.72, 0); s.rotation.x = pitch; arm.add(s); return s; }
+// makeChar's armL sits at -x, which is the character's own right hand (it shows on the right of the
+// screen from behind, matching the first-person right arm), so "right" here means armL
+const bodyHands = { right: { arm: player.armL, socket: addSocket(player.armL, CARRY) }, left: { arm: player.armR, socket: addSocket(player.armR, CARRY) } };
+
+/* --- first-person arms: their own little scene, drawn over the office so they never clip into walls --- */
+const vmScene = new THREE.Scene();
+vmScene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", .85));
+{ const l = new THREE.DirectionalLight("#ffecd0", .55); l.position.set(1, 2, 1.5); vmScene.add(l); }
+const vmCam = new THREE.PerspectiveCamera(60, 1, .01, 10);
+const VM_PITCH = 1.72; // the first-person arm points forward and a little up
+function buildViewArm(sx) {
+  const shirtM = M(playerLook.shirt), skinM = M(playerLook.skin), trimM = M(playerLook.tie ? "#ffffff" : shade(playerLook.shirt, .12));
+  const root = new THREE.Group(); root.visible = false; root.scale.setScalar(.8); vmScene.add(root);
+  const arm = new THREE.Group(); root.add(arm); // shoulder pivot
+  const part = (geom, mat, y) => { const m = new THREE.Mesh(geom, mat); m.position.y = y; arm.add(m); outline(m, .02); return m; };
+  part(RBOXG(.17, .6, .19, .06), shirtM, -.29);
+  part(RBOXG(.18, .08, .2, .03), trimM, -.58);
+  place(handGeo(sx), skinM, arm, 0, -.7, 0, 0, false);
+  const socket = addSocket(arm, -VM_PITCH); socket.scale.setScalar(.75); // held things look smaller up close
+  return { root, arm, sx, socket, mats: { shirt: shirtM, skin: skinM, trim: trimM } };
+}
+const viewHands = { right: buildViewArm(1), left: buildViewArm(-1) };
+
+// apply (and save) a new look for the player: the 3D body and the first-person arms
+function setPlayerLook(look, save = true) {
+  playerLook = Object.assign({}, DEFAULT_LOOK, look);
+  restyleChar(player, playerLook);
+  for (const v of Object.values(viewHands)) {
+    v.mats.shirt.color.set(playerLook.shirt); v.mats.skin.color.set(playerLook.skin);
+    v.mats.trim.color.set(playerLook.tie ? "#ffffff" : shade(playerLook.shirt, .12));
+  }
+  if (save) { try { localStorage.setItem(LOOK_KEY, JSON.stringify(playerLook)); } catch (e) { /* kept for this visit */ } }
+}
+
+const heldItems = [];
+const handOf = h => (typeof h.hand === "function" ? h.hand() : h.hand) || "right";
+// offset = [out to the side, up, forward] from the hand (mirrored for the left hand), rot = Euler angles
+function registerHeld(item, { hand = "right", offset = [.05, .05, .07], rot = [0, 0, 0] } = {}) {
+  const h = { item, hand, offset, rot, shown: !!item.visible, side: null, vm: null, vmNodes: 0 };
+  heldItems.push(h); return h;
+}
+const countNodes = o => { let n = 0; o.traverse(() => n++); return n; };
+// "out to the side" is -x for the right hand (armL sits at -x) and +x for the left
+const sideOffset = (h, side) => [(side === "right" ? -1 : 1) * h.offset[0], h.offset[1], h.offset[2]];
+function placeHeld(h, side) {
+  if (h.side === side) return;
+  h.side = side;
+  bodyHands[side].socket.add(h.item);
+  h.item.position.set(...sideOffset(h, side)); h.item.rotation.set(...h.rot);
+  if (h.vm) { viewHands[side].socket.add(h.vm); h.vm.position.set(...sideOffset(h, side)); h.vm.rotation.set(...h.rot); }
+}
+// the first-person copy mirrors the item (rebuilt if parts are added later, e.g. the boss's gold seal)
+function syncViewItem(h) {
+  const n = countNodes(h.item);
+  if (!h.vm || h.vmNodes !== n) {
+    if (h.vm) h.vm.parent && h.vm.parent.remove(h.vm);
+    h.vm = h.item.clone(true); h.vmNodes = n;
+    h.vm.traverse(o => { o.castShadow = false; });
+    viewHands[h.side].socket.add(h.vm); h.vm.position.set(...sideOffset(h, h.side)); h.vm.rotation.set(...h.rot);
+  }
+  const src = [], dst = [];
+  h.item.traverse(o => src.push(o)); h.vm.traverse(o => dst.push(o));
+  for (let i = 1; i < src.length; i++) { dst[i].visible = src[i].visible; dst[i].position.copy(src[i].position); dst[i].rotation.copy(src[i].rotation); dst[i].scale.copy(src[i].scale); }
+  h.vm.rotation.copy(h.item.rotation); h.vm.visible = h.item.visible;
+}
+
+let lastWalkT = 0;
+function updateHands(dt, now) {
+  const holding = { right: false, left: false };
+  for (const h of heldItems) {
+    const vis = !!h.item.visible;
+    if (vis) { placeHeld(h, handOf(h)); holding[h.side] = true; }
+    if (vis !== h.shown) { h.shown = vis; swing(h.side || handOf(h)); } // picked up or put down
+  }
+  const moving = Math.abs(player.walkT - lastWalkT) > 1e-4; lastWalkT = player.walkT;
+  // third person: a carrying arm stays bent forward (with a small bob); any arm can reach
+  if (!P.seated) for (const side of ["right", "left"]) {
+    const arm = bodyHands[side].arm, r = reachK(side, now);
+    let base = arm.rotation.x; // empty hands keep their walking swing
+    if (holding[side]) base = -CARRY + Math.sin(player.walkT * 2) * (moving ? .05 : 0) + Math.sin(now / 700) * .02;
+    arm.rotation.x = lerp(base, -1.75, r);
+  }
+  // first person: hide the body's own arms (the camera sits in your head) and show the view arms
+  const fpOn = P.fp && P.started && !P.seated && !CINE.active;
+  player.armR.visible = player.armL.visible = !fpOn;
+  for (const side of ["right", "left"]) {
+    const v = viewHands[side];
+    v.root.visible = fpOn && (side === "right" || holding[side]);
+    if (!v.root.visible) continue;
+    const r = reachK(side, now), bob = moving ? player.walkT : 0;
+    v.root.position.set(v.sx * (.5 + Math.cos(bob) * .012), -.4 + Math.abs(Math.sin(bob)) * -.022 + Math.sin(now / 900) * .006, -.22 - r * .14);
+    v.root.rotation.set(0, v.sx * .15, -v.sx * .1);
+    v.arm.rotation.x = VM_PITCH + r * .35 + (holding[side] ? -.08 : 0);
+  }
+  if (fpOn) for (const h of heldItems) if (h.item.visible && h.side) syncViewItem(h); else if (h.vm) h.vm.visible = false;
+}
+function renderViewArms() {
+  if (!viewHands.right.root.visible && !viewHands.left.root.visible) return;
+  if (vmCam.aspect !== camera.aspect) { vmCam.aspect = camera.aspect; vmCam.updateProjectionMatrix(); }
+  renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true;
+}
+// the envelope you carry from the printer to the IN tray
+registerHeld(carryEnv, { hand: "right", offset: [.06, .12, .08], rot: [Math.PI / 2, 0, -.12] });
+
+// inner doors: E opens/closes; other characters open them as they arrive
+function updateDoors(dt, now) {
+  for (const d of doorObjs) {
+    const npcNear = characters.some(ch => ch !== player && ch.g.visible && Math.hypot(ch.g.position.x - d.center.x, ch.g.position.z - d.center.z) < 1.6);
+    if (npcNear) d.lastNpc = now;
+    d.npcHold = now - d.lastNpc < 900;
+    const want = d.open || d.npcHold;
+    setDoorBlocking(d, !want);
+    const target = want ? d.openAngle : d.base;
+    d.hinge.rotation.y += (target - d.hinge.rotation.y) * Math.min(1, dt * 9);
+  }
+}
+for (const d of DESKS) INTERACTIONS.push({
+  label: () => `Take this desk${d.npcName && d.npc && d.npc.g.visible ? ` (${d.npcName}'s)` : ""}`,
+  can: () => !P.seated && d.n !== MY_DESK.n && !deskPlayers[d.n] && !P.carrying && !P.printing && !P.envelopeReady
+    && near({ x: d.x, z: d.z + 1.5 }, 1.1),
+  act: () => { setMyDesk(d.n, { announce: true }); sfx("pickup"); wtoast(`Desk ${d.n} is yours now`, "good"); },
+});
+for (const d of doorObjs) INTERACTIONS.push({
+  label: () => `${d.open ? "Close" : "Open"} the ${d.name} door`,
+  can: () => !P.seated && near(d.center, 1.5),
+  act: () => { d.open = !d.open; sfx("door"); },
+});
+
 const UPDATERS = [], MSG_HOOKS = [];
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  if (P.paused) { renderer.render(scene, camera); requestAnimationFrame(loop); return; } // Game Menu open: freeze
+  if (P.paused) { renderer.render(scene, camera); renderViewArms(); requestAnimationFrame(loop); return; } // Game Menu open: freeze
   updatePlayer(dt, now);
   updateBoss(dt, now);
   // idle life: coworkers type, inspector bobs, printer blinks
-  [kevin, dana].forEach((c, i) => { c.armL.rotation.x = -1.1 + Math.sin(now / 90 + i) * .12; c.armR.rotation.x = -1.1 + Math.cos(now / 80 + i) * .12; });
+  [kevin, dana, priya, marcus].forEach((c, i) => { c.armL.rotation.x = -1.1 + Math.sin(now / 90 + i) * .12; c.armR.rotation.x = -1.1 + Math.cos(now / 80 + i) * .12; });
   inspector.head.position.y = 2.02 + Math.sin(now / 700) * .04;
   if (P.seated) { player.armL.rotation.x = -1.1 + Math.sin(now / 85) * .1; player.armR.rotation.x = -1.1 + Math.cos(now / 95) * .1; }
   printerLight.material.emissiveIntensity = P.printing ? (Math.sin(now / 80) > 0 ? 1.5 : .1) : P.envelopeReady ? 1.2 : .3;
@@ -1963,24 +2339,32 @@ function loop(now) {
   if (st < 1) inspector.armR.rotation.x = st < .5 ? -.3 - st * 4.8 : -2.7 + (st - .5) * 4.8;
   else inspector.armR.rotation.x = -.3;
   updateMarker(now);
-  { const open = now < exitOpenUntil ? .55 : 0; exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); }); }
+  { // emergency exit: propped open during a drill and while you're still outside; otherwise only the "clock out" peek
+    const passable = exitState.propped || youreOut();
+    setExitPassable(passable);
+    const open = passable ? 1.45 : now < exitOpenUntil ? .55 : 0;
+    exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); });
+  }
+  updateDoors(dt, now);
   for (const fn of UPDATERS) { try { fn(dt, now); } catch (e) { console.error("[forged] plugin update failed", e); } }
   updateCine(now);
   updateConfetti(dt);
   updateFaces(now, _look.set(player.g.position.x, 1.9, player.g.position.z));
   // name tags ignore depth, so hide them when the camera gets right on top of someone
-  [kevin, dana, inspector, clerk, boss].forEach(c => { c.tag.visible = camera.position.distanceTo(c.g.position) > 3.2; });
+  [kevin, dana, priya, marcus, inspector, clerk, boss].forEach(c => { c.tag.visible = camera.position.distanceTo(c.g.position) > 3.2; });
+  updateHands(dt, now);
   updateCamera(dt);
   updatePrompt();
   updateBubbles(now);
   renderer.render(scene, camera);
+  renderViewArms();
   drawMinimap(now);
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
 // handy in the devtools console while prototyping
-window.forged = { P, player, boss: B, camera, CINE, sit, stand, setPhase, grab, deliver };
+window.forged = { P, player, boss: B, camera, CINE, sit, stand, setPhase, grab, deliver, setMyDesk }; // setMyDesk(1–4): test another desk
 
 /* ======================= Plugin API =======================
  * Rooms and features live in their own files (prototype/rooms/*.js, audio.js,
@@ -1990,15 +2374,23 @@ window.FW = {
   THREE, scene, camera, renderer,
   // building blocks
   M, mats, box, cyl, sphere, outline, collide, walls, EXIT_X, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
-  makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses,
+  makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses, restyleChar,
+  // the player's look (customize.js): getLook() → current look, setLook(look) applies and saves it
+  getLook: () => ({ ...playerLook }), setLook: setPlayerLook, DEFAULT_LOOK,
   // state
   P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,
-  npcs: { kevin, dana, inspector, clerk, boss },
+  npcs: { kevin, dana, priya, marcus, inspector, clerk, boss },
+  // desks: DESKS[i] = { n, x, z, npc, player }; assignDesks({ 1: "Ana", 3: "Ben" }, myDeskNumber); onDeskChange(fn)
+  DESKS, assignDesks, setMyDesk, onDeskChange: fn => deskChangeHooks.push(fn),
   // actions and effects
   say, wtoast, sfx, toOS, setPhase, sit, stand, grab, deliver, near, flashVignette, burstConfetti,
   rand, pick, clamp, money,
   // hooks
   onUpdate: fn => UPDATERS.push(fn),
+  // doors: FW.doors[i].open; the emergency exit: FW.exit.propped = true lets you out (fire drill)
+  doors: doorObjs, exit: exitState, isOutside, LOT, ASSEMBLY,
+  // held items: hold.register(group, { hand: "right" | "left" | () => side, offset, rot }); toggle .visible to pick up / put down
+  hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),
   addInteraction: it => INTERACTIONS.push(it),
   setSfx: (kind, fn) => { SFX_HOOKS[kind] = fn; },
