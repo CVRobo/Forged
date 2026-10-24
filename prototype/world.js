@@ -36,6 +36,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 $("#world").appendChild(renderer.domElement);
 const canvas = renderer.domElement;
+canvas.tabIndex = -1; // focusable, so standing up can pull the keyboard back from the computer
 
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
 function resize() {
@@ -533,6 +534,9 @@ const tvTex = canvasTex(1024, 576, (g, w, h) => {
   frame.castShadow = false;
 }
 
+// canvases drawn at startup used fallback fonts: redraw them once Bungee / Space Mono are loaded
+if (document.fonts) document.fonts.ready.then(() => [tvTex, corkTex, myScreenTex].forEach(t => redraw(t)));
+
 /* --- objective marker: a bobbing diamond + floor ring on whatever to do next --- */
 const markerMat = new THREE.MeshBasicMaterial({ color: "#ffd23f" });
 const marker = outline(new THREE.Mesh(new THREE.OctahedronGeometry(.26, 0), markerMat), .04);
@@ -569,6 +573,7 @@ let actx = null;
 function sfx(kind) {
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
     const t = actx.currentTime;
     const tone = (f, d, type = "square", v = .06, f2 = null, at = 0) => {
       const o = actx.createOscillator(), g = actx.createGain();
@@ -653,7 +658,7 @@ function applyHud(h) {
   $("#hud-heat").style.width = clamp(h.heat, 0, 100) + "%";
   $("#hud-insp").textContent = `${h.inspector} v${h.version}`;
   if (!prev || prev.version !== h.version || prev.level !== h.level) {
-    setTag(inspector, `${h.inspector.toUpperCase()} · v${h.version}`, PALETTES[h.level].accent);
+    setTag(inspector, `${h.inspector.toUpperCase()} · v${h.version}`, (PALETTES[h.level] || PALETTES[1]).accent);
   }
   if (!prev || prev.level !== h.level) applyPalette(h.level, h.clerk);
   showStage(h.version, !!prev);
@@ -669,13 +674,17 @@ function applyPalette(level, clerkInfo) {
   if (clerkInfo) setTag(clerk, clerkInfo.name.toUpperCase() + " · CLERK", "#a4581c");
 }
 
+let printSeq = 0;
 function startPrinting() {
+  const id = ++printSeq;
   P.printing = true; setPhase("printing"); sfx("print");
   setTimeout(() => {
+    if (id !== printSeq || P.phase !== "printing") return;
     stand();
     wtoast("🖨️ Printing… go grab it", "good");
   }, 900);
   setTimeout(() => {
+    if (id !== printSeq) return;
     P.printing = false; P.envelopeReady = true; envelope.visible = true;
     setPhase("pickup");
   }, 2600);
@@ -724,7 +733,7 @@ const INTERACTIONS = [
   { label: () => "Grab the invoice", can: () => P.envelopeReady && !P.carrying && near({ x: PRINTER.x, z: PRINTER.z + .9 }, 1.8), act: grab },
   { label: () => "Drop it in the IN tray", can: () => P.carrying && near(IN_TRAY, 1.9), act: deliver },
   { label: () => `Talk to ${P.hud ? P.hud.clerk.name : "Brenda"}`, can: () => near({ x: CLERK_DESK.x, z: CLERK_DESK.z + 1.2 }, 2.2) || near({ x: CLERK_DESK.x, z: CLERK_DESK.z - 1.6 }, 1.6), act: () => say(clerk, P.hud ? `"${P.hud.clerk.hello}" <br><small>(Send your cover note from your computer.)</small>` : `"I'm on lunch, hon. Email me."`, 3800) },
-  { label: () => `Chat with ${P.hud ? P.hud.inspector : "Gus"}`, can: () => !P.carrying && near(IN_TRAY, 1.9), act: () => say(inspector, pick(["Mmm… pie.", "Did you know I have a stapler?", "I read every invoice. Mostly.", "Is it lunch yet?"]), 2600) },
+  { label: () => `Chat with ${P.hud ? P.hud.inspector : "Gus"}`, can: () => !P.carrying && P.phase !== "judging" && !(P.phase === "result" && bubbles.some(b => b.ch === inspector)) && near(IN_TRAY, 1.9), act: () => say(inspector, pick(["Mmm… pie.", "Did you know I have a stapler?", "I read every invoice. Mostly.", "Is it lunch yet?"]), 2600) },
   { label: () => "Look at the corkboard", can: () => near({ x: 3, z: -RD / 2 + 1.2 }, 1.8), act: () => wtoast(pins.length ? `${pins.length} trick${pins.length > 1 ? "s" : ""} pinned. ${pins.filter(p => p.caught).length} caught.` : "Empty… for now.") },
   { label: () => "Small talk with the Boss", can: () => boss.g.visible && near(boss.g.position, 1.8), act: () => say(boss, pick(["Shouldn't you be at your desk?", "Numbers. I want numbers.", "Nice weather for compliance."]), 2400) },
 ];
@@ -770,7 +779,8 @@ function stand() {
   document.body.classList.remove("seated");
   player.g.position.set(CHAIR.x, 0, CHAIR.z + .9);
   P.yaw = 0; P.pitch = P.fp ? .05 : .5;
-  window.focus();
+  P.keys.clear();
+  OS.blur(); canvas.focus({ preventScroll: true });
 }
 function grab() {
   P.envelopeReady = false; envelope.visible = false; P.carrying = true; carryEnv.visible = true; sfx("pickup");
@@ -785,7 +795,7 @@ function deliver() {
     const k = Math.min(1, (performance.now() - t0) / 900);
     env.position.set(-.7 + 1.5 * k, 1.22 + .25 * Math.sin(k * Math.PI), .75 - .25 * k);
     scanSlot.material.emissiveIntensity = .2 + k;
-    if (k < 1) requestAnimationFrame(slide); else boothDesk.remove(env);
+    if (k < 1) requestAnimationFrame(slide); else { boothDesk.remove(env); env.geometry.dispose(); }
   })();
   say(inspector, "Hmm… let me see…", 1800);
   setPhase("judging");
@@ -866,6 +876,8 @@ function scanVerdict(m) {
 function endScanScene() {
   CINE.active = false; P.frozenUntil = 0;
   player.g.visible = true;
+  P.keys.clear(); // keys pressed during the close-up shouldn't make you walk off
+  if (P.phase === "judging") setPhase("result");
   stampTool.visible = false;
   setTimeout(() => { if (!CINE.active) scanPaper.visible = false; }, 4000);
 }
@@ -874,7 +886,8 @@ function updateCine(now) {
   const e = now - CINE.t;
   if (CINE.phase === "scan") {
     scanBeam.position.y = Math.sin(e / 260) * .52;
-    if (e > 9000) endScanScene(); // the computer never answered: don't trap the player
+    // the computer waits 0.9s then gives /submit up to 10s: wait a bit longer than that before giving up
+    if (e > 12500) endScanScene();
   } else if (CINE.phase === "mark" && e > 900) {
     Object.assign(CINE, { phase: "stamp", t: now });
     stampTool.visible = true; sfx("whoosh");
@@ -921,7 +934,7 @@ function flashVignette() { const v = $("#vignette"); v.classList.remove("flash")
 addEventListener("keydown", e => {
   if (!P.started) return;
   if (e.code === "Escape" && P.seated) { stand(); return; }
-  if (P.seated) return;
+  if (P.seated || CINE.active) return;
   P.keys.add(e.code);
   if (e.code === "KeyE" && current) current.act();
   if (e.code === "KeyV") setFirstPerson(!P.fp);
@@ -957,6 +970,7 @@ function setFirstPerson(on) {
 
 $("#btn-start").onclick = () => {
   $("#start").classList.add("hide"); P.started = true;
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) {}
   canvas.requestPointerLock && canvas.requestPointerLock();
   say(player, "Another day at the office…", 2500);
 };
@@ -978,15 +992,14 @@ function collidePlayer(pos) {
   }
 }
 
+const _dir = new THREE.Vector3(), _bub = new THREE.Vector3();
 function updatePlayer(dt, now) {
   if (P.seated) return;
   if (now < P.frozenUntil) { animWalk(player, dt, 0); return; }
   const k = P.keys;
   const f = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
   const s = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
-  const fwd = new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw));
-  const right = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
-  const dir = fwd.multiplyScalar(f).add(right.multiplyScalar(s));
+  const dir = _dir.set(-Math.sin(P.yaw) * f + Math.cos(P.yaw) * s, 0, -Math.cos(P.yaw) * f - Math.sin(P.yaw) * s);
   let speed = 0;
   if (dir.lengthSq() > 0) {
     dir.normalize();
@@ -1005,8 +1018,14 @@ function updatePlayer(dt, now) {
   if (speed > 0 && step !== P.lastStep) { P.lastStep = step; sfx("step"); }
 }
 
+let shownSus = -1;
+function setSus(v) {
+  const r = Math.round(v * 50) / 50;
+  if (r !== shownSus) { shownSus = r; $("#vignette").style.setProperty("--sus", r); }
+}
 function updateBoss(dt, now) {
   if (B.state === "wait") {
+    if (B.sus) { B.sus = 0; setSus(0); }
     B.t -= dt;
     if (B.t <= 0) { B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door"); }
     return;
@@ -1052,7 +1071,7 @@ function updateBoss(dt, now) {
     }
   } else B.sus = Math.max(0, B.sus - dt * .8);
   if (B.sus > 0 && now > (P.nextBeat || 0)) { sfx("heart"); P.nextBeat = now + 520 - B.sus * 240; }
-  $("#vignette").style.setProperty("--sus", B.sus.toFixed(2));
+  setSus(B.sus);
   coneMat.color.set(B.sus > 0 || now < B.pauseUntil ? "#e0352b" : "#ffd23f");
   coneMat.opacity = .22 + B.sus * .3;
   if (!P.seated && !B.chatted && !P.carrying && near(pos, 2.2)) {
@@ -1098,7 +1117,7 @@ function updateBubbles(now) {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
     if (now > b.until) { b.el.remove(); bubbles.splice(i, 1); continue; }
-    const p = b.ch.g.position.clone(); p.y += 2.95 * b.ch.scale + (b.ch.g.position.y < 0 ? -.2 : 0);
+    const p = _bub.copy(b.ch.g.position); p.y += 2.95 * b.ch.scale + (b.ch.g.position.y < 0 ? -.2 : 0);
     p.project(camera);
     const vis = p.z < 1 && !(P.seated && b.ch !== boss);
     b.el.style.display = vis ? "" : "none";
