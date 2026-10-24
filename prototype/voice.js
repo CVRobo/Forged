@@ -1,7 +1,8 @@
 /* voice.js: see PLUGINS.md. Builds on window.FW from world.js.
  *
- * Talk to the NPCs with your microphone, hands-free.
- *   - Click the 🎤 "Voice chat" button (top right) once to turn it on. It stays on
+ * Talk to the NPCs with your microphone.
+ *   - Hold T (rebindable: "talk" in keys.js) and speak, like a walkie-talkie.
+ *   - Or click the 🎤 "Voice chat" button (top right) once to turn it on. It stays on
  *     (remembered) and pauses itself while you're seated, in a close-up or paused.
  *   - Just talk when you're within ~4 m of someone: the Web Speech API transcribes
  *     you live over your head and the nearest NPC answers (spoken + bubble).
@@ -213,10 +214,14 @@ document.head.appendChild(css);
 const mic = document.createElement("div");
 mic.id = "voice-pill";
 mic.title = "Voice chat: talk to whoever is next to you with your microphone";
-mic.innerHTML = `<span class="dot"></span><span class="lbl">🎤 Voice chat: off</span><span class="meter"><i></i></span>`;
+mic.innerHTML = `<span class="dot"></span><span class="lbl"></span><span class="meter"><i></i></span>`;
 document.body.appendChild(mic);
 const meterBar = mic.querySelector(".meter i");
 const micLabel = mic.querySelector(".lbl");
+const K = window.ForgedKeys;
+const offLabel = () => `🎤 Hold ${K ? K.label("talk") : "T"} to talk`;
+micLabel.textContent = offLabel();
+if (K && K.onChange) K.onChange(() => { if (!enabled && !srUnsupported) micLabel.textContent = offLabel(); });
 
 /* ======================= Microphone level (getUserMedia analyser) ======================= */
 
@@ -272,6 +277,7 @@ FW.onUpdate(dt => {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const srUnsupported = !SR || location.protocol === "file:";
 let rec = null, enabled = false, listening = false, interim = "";
+let pttHeld = false, stopping = false; // push-to-talk key held / finishing the last sentence after release
 let npcTalkingUntil = 0; // ignore what the speakers say (NPC voices) so they don't answer themselves
 
 function store(v) { try { localStorage.setItem("forged.voice", v ? "1" : "0"); } catch (e) {} }
@@ -285,7 +291,8 @@ function getRec() {
   rec.interimResults = true;
   rec.maxAlternatives = 1;
   rec.onresult = e => {
-    const npcSpeaking = (window.speechSynthesis && speechSynthesis.speaking) || performance.now() < npcTalkingUntil;
+    // holding the key means you're the one talking, so don't drop it as NPC echo
+    const npcSpeaking = !pttHeld && ((window.speechSynthesis && speechSynthesis.speaking) || performance.now() < npcTalkingUntil);
     interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
@@ -293,11 +300,12 @@ function getRec() {
       if (r.isFinal) {
         const text = r[0].transcript.trim();
         if (text && nearestNpc(HEAR_RANGE)) deliver(text);  // only talk to someone who's there
+        else if (text && (pttHeld || stopping)) FW.say(player, "🎙 " + esc(text) + " <small>(nobody heard you, get closer)</small>", 2200);
         shoutedThisTurn = false;
       } else interim += r[0].transcript;
     }
     // show what you're saying only when someone can hear it
-    if (interim.trim() && nearestNpc(HEAR_RANGE)) {
+    if (interim.trim() && (nearestNpc(HEAR_RANGE) || pttHeld)) {
       FW.say(player, "🎙 " + esc(interim.trim()) + "…", 1500);
       mic.classList.add("heard"); clearTimeout(getRec.heardT); getRec.heardT = setTimeout(() => mic.classList.remove("heard"), 600);
     }
@@ -309,10 +317,14 @@ function getRec() {
     else if (err === "network") setEnabled(false, "Voice chat needs an internet connection (browser speech service)");
     else if (err === "language-not-supported") setEnabled(false, "Your browser language isn't supported for voice chat");
   };
-  rec.onend = () => { listening = false; if (shouldListen()) startListening(); }; // Chrome stops after pauses: keep going
+  rec.onend = () => { // Chrome stops after pauses: keep going
+    listening = false;
+    if (stopping) { stopping = false; stopAnalyser(); }
+    if (shouldListen()) startListening();
+  };
   return rec;
 }
-function shouldListen() { return enabled && P.started && !P.seated && !CINE.active && !P.paused; }
+function shouldListen() { return (enabled || pttHeld) && P.started && !P.seated && !CINE.active && !P.paused; }
 function startListening() {
   if (listening || srUnsupported) return;
   try { getRec().start(); listening = true; }
@@ -329,7 +341,7 @@ function setEnabled(on, why) {
   enabled = !!on && !srUnsupported;
   store(enabled);
   mic.classList.toggle("on", enabled);
-  micLabel.textContent = enabled ? "🎤 Voice chat: on" : "🎤 Voice chat: off";
+  micLabel.textContent = enabled ? "🎤 Voice chat: on" : offLabel();
   if (why) FW.wtoast(why, "bad");
   if (!enabled) stopListening();
 }
@@ -351,9 +363,33 @@ mic.addEventListener("click", () => {
 const startBtn = document.getElementById("btn-start");
 if (startBtn && stored() && !srUnsupported) startBtn.addEventListener("click", () => setEnabled(true));
 
+/* push-to-talk: hold the key, speak, let go; the last sentence still gets through */
+const isTalkKey = e => K ? K.matches("talk", e) : e.code === "KeyT";
+function typing(e) { const el = e.target; return !!(el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)); }
+addEventListener("keydown", e => {
+  if (e.repeat || pttHeld || !isTalkKey(e) || typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if ((K && K.isOpen && K.isOpen()) || (window.ForgedMenu && ForgedMenu.isOpen())) return;
+  if (!P.started || P.seated || CINE.active) return;
+  if (srUnsupported) { mic.click(); return; } // explains why (browser / file://)
+  try { if (FW.sound && FW.sound.ensure) FW.sound.ensure(); } catch (err) {}
+  pttHeld = true; stopping = false;
+  mic.classList.add("on");
+  startListening();
+});
+function releaseTalk() {
+  if (!pttHeld) return;
+  pttHeld = false;
+  if (!enabled) {
+    mic.classList.remove("on");
+    if (listening) { stopping = true; try { rec.stop(); } catch (err) { stopListening(); } } // stop() still delivers the final words
+  }
+}
+addEventListener("keyup", e => { if (isTalkKey(e)) releaseTalk(); });
+addEventListener("blur", releaseTalk);
+
 // follow the game: mic off while seated, during the booth close-up or the pause menu
 FW.onUpdate(() => {
-  if (shouldListen()) startListening(); else if (listening) stopListening();
+  if (shouldListen()) startListening(); else if (listening && !stopping) stopListening();
 });
 
 /* ======================= Public API ======================= */

@@ -19,6 +19,7 @@ const ACTIONS = [
   { id: "interact", group: "office", name: "Interact", keys: ["KeyE", "Mouse2"] },
   { id: "camera", group: "office", name: "Toggle first/third person", keys: ["F5", "KeyV"] },
   { id: "playerList", group: "office", name: "Leaderboard (hold)", keys: ["Tab", null] },
+  { id: "talk", group: "office", name: "Talk into the mic (hold)", keys: ["KeyT", null] },
   { id: "mute", group: "office", name: "Mute / unmute sound", keys: ["KeyM", null] },
   { id: "volumeDown", group: "office", name: "Volume down", keys: ["BracketLeft", "Minus"] },
   { id: "volumeUp", group: "office", name: "Volume up", keys: ["BracketRight", "Equal"] },
@@ -39,7 +40,7 @@ const FIXED = [
   { group: "both", name: "Game menu / free the mouse", label: "Esc" },
   { group: "computer", name: "Cycle tools", label: "Mouse wheel" },
   { group: "office", name: "Look around", label: "Mouse" },
-  { group: "office", name: "Voice chat (top-right button)", label: "🎤 Mic" },
+  { group: "office", name: "Voice chat always on (top-right button)", label: "🎤 Mic" },
 ];
 
 let binds = load();
