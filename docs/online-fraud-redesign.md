@@ -111,7 +111,16 @@ Two consequences for B:
 - **Export:** rows are kept in the browser (`localStorage`, last 3,000) and download as a CSV from the D panel.
 - **Verdict values:** `APPROVED`, `DECLINED`, or `BLOCKED` (never scored: the card was already declined or reported earlier in the campaign).
 
-## 8. Open questions
+## 8. v0.3: plan cards and ranks (built, replaces the ticket UI)
+
+Playtest feedback on v0.2: too complicated, too much text, and the data collection showed. So the player-facing layer changed; the rows and the scripted Gus did not.
+
+- **The plan:** one sentence with blanks, filled with picture cards from a hand of 3 dealt into the dock: WHO (a disguise like "👵 Grandma's account" or "🕶️ The Ghost"), WHAT (an item from the shop), WHEN, WHERE (where the loot goes), and a TRICK ("🧪 Test the card", "🔁 Do it 3 times", "🐢 Warm it up"…). `buildCampaign()` in `orders.js` turns the plan into the orders behind the scenes. Random hands mean less to read, rounds that feel different, and more varied data.
+- **Ranks** unlock one blank at a time (Rookie: what + where … Mastermind: tweak each part of the disguise, which is where the most creative combinations come from). The support chat and the memo only appear from ranks 2 and 3.
+- **Hidden data:** no rows, columns or CSV for players. Gus explains himself in plain words. The data panel and CSV need `?debug` in the URL.
+- **Data note for B:** a row's `scheme_id` is now `<who>+<trick>` (plus `+custom` when a Mastermind tweaked the disguise), and `record()` sends the `plan` and the player's `rank`. Low ranks produce less varied rows (the defaults fill the missing blanks), so B may want to weight rows by rank.
+
+## 9. Open questions
 
 1. Do we keep invoice fraud as a first level for the demo, or replace it completely?
 2. Is the IEEE-CIS CSV already in the team's environment, and where? The value lists in section 5 need it.

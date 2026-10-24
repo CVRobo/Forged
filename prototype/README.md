@@ -13,15 +13,27 @@ Then open http://localhost:8765. `serve.py` is a plain static server with browse
 | File | What it is |
 | --- | --- |
 | `index.html`, `world.js`, `world.css` | The 3D office (Three.js r128 from a CDN): your character, desks, printer, inspector booth, clerk, boss, corkboard |
-| `os.html`, `game.js`, `style.css` | The computer screen: FORGED OS with the order ticket, toolkit, campaign strip, memo, support chat, verdicts and shop. It also runs on its own if you open `os.html` directly |
-| `orders.js` | The online-order content (shops, stolen cards, toolkit options, starter campaigns), the IEEE-CIS row builder and the scripted Gus. Loaded before `game.js` |
+| `os.html`, `game.js`, `style.css` | The computer screen: FORGED OS with the plan, the hand of cards, the victim, memo, support chat, verdicts and shop. It also runs on its own if you open `os.html` directly |
+| `orders.js` | The online-order content (shops, stolen cards, plan cards, ranks), the IEEE-CIS row builder and the scripted Gus. Loaded before `game.js` |
 
 ## How a round plays
 
 1. Walk to your desk and press **E** to sit. The camera moves in and the computer takes over the screen.
-2. Pick a scheme (a starter campaign of 1 to 5 orders). Change the orders with the toolkit: swap the card, email, device, IP, shipping address or time, and add steps with **+ Next order**. At least one order has to deliver the goods to you. Drag the envelope onto the outbox to **print** the order slip. You stand up automatically.
+2. Fill in **the plan**, a sentence with blanks ("I'll pose as … and buy … at … then send it to … with the trick …"), by clicking cards from your hand of 3 (or keys `1`–`3`). Drag the envelope onto the outbox to **print** the order slip. You stand up automatically.
 3. Grab the slip at the **printer** (E), carry it across the office, and drop it in Gus's **IN tray** (E).
-4. Gus approves or declines each order (one declined order blocks the card for the rest). Your trick gets pinned to the **corkboard** on the wall.
+4. Gus approves the plan or catches it, and says why in plain words ("who shops at 3 AM?"). Your trick gets pinned to the **corkboard** on the wall.
+
+**Ranks** (saved in the browser) unlock one blank at a time, so new players start with two choices:
+
+| Rank | Plan | Also unlocks |
+| --- | --- | --- |
+| ⭐ Rookie | what, where | |
+| ⭐⭐ Hustler | + who (the disguise) | support chat |
+| ⭐⭐⭐ Schemer | + when | leaked memo |
+| ⭐⭐⭐⭐ Operator | + trick (plans with several orders) | |
+| ⭐⭐⭐⭐⭐ Mastermind | + tweak the disguise piece by piece (card, email, device, VPN) | |
+
+A round gives 1 XP when caught and 2 when you get away with it (ranks at 2, 4, 7 and 11 XP). Gus goes easier on Rookies and Hustlers. Add `?rank=1`…`?rank=5` to either page's URL to try a rank.
 5. Sit back down to see the corkboard scene, patch notes and the shop on your computer.
 
 **The boss** patrols out of his office with a vision cone on the floor. If he walks behind your chair while you're forging, the computer tells you to press **Space** to hide the screen; miss it and you get +15 heat. If he spots you carrying the envelope inside his cone, he stops you for a few seconds and you get +10 heat.
@@ -35,7 +47,7 @@ Then open http://localhost:8765. `serve.py` is a plain static server with browse
 - **Why I caught you:** when you drop the envelope, the camera cuts to the counter. Gus holds up your order slip and scans it, circles the rows that gave you away (card, buyer, ship to, device / IP, cart, timing), and slams the stamp down: confetti on APPROVED, a red flash on DECLINED.
 - When the boss's suspicion builds, you hear a heartbeat and the screen edges turn red.
 
-Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Controls**): `WASD` move · `Left Ctrl` sprint (`Left Shift` on Windows/Linux, where Ctrl+W closes the tab) · mouse look (click to capture it) · mouse wheel zoom · `E` or right-click interact · `F5`/`V` first ⇄ third person · hold `Tab` leaderboard · `Esc` Game Menu (pauses the office). On the computer: `1`–`6` or mouse wheel toolkit · `Q` close the list · `T` write to support · `F3`/`D` the data row Gus reads · `Space` hide the screen · `Left Shift` stand up. Bindings live in `keys.js`; the menu is `menu.js`/`menu.css`.
+Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Controls**): `WASD` move · `Left Ctrl` sprint (`Left Shift` on Windows/Linux, where Ctrl+W closes the tab) · mouse look (click to capture it) · mouse wheel zoom · `E` or right-click interact · `F5`/`V` first ⇄ third person · hold `Tab` leaderboard · `Esc` Game Menu (pauses the office). On the computer: `1`–`3` or click play a card · mouse wheel moves between the blanks · `T` write to support · `Space` hide the screen · `Left Shift` stand up. Bindings live in `keys.js`; the menu is `menu.js`/`menu.css`.
 
 ## How the two halves talk
 
@@ -70,4 +82,4 @@ In the browser console, `forged` (in the office page) exposes the player and the
 
 ## The data
 
-Every order you send is one row with the IEEE-CIS columns (`TransactionID` … `V339`, `id_01` … `id_38`, `DeviceType`, `DeviceInfo`) plus game columns (`session_id`, `scheme_id`, `campaign_id`, `step`, `verdict`, `score`, `top_reasons`…). Press **D** at the computer to see the current order's row. The **⬇ CSV** button in that panel downloads every order sent from this browser, and the console has `forgedRows.all()`, `.csv()` and `.clear()` (in the computer's frame: `os.html`). How the anonymized C, D and M columns are filled is documented at the top of `toRows()` in `orders.js`.
+Players never see the data. Every order sent is one row with the IEEE-CIS columns (`TransactionID` … `V339`, `id_01` … `id_38`, `DeviceType`, `DeviceInfo`) plus game columns (`session_id`, `scheme_id`, `campaign_id`, `step`, `verdict`, `score`, `top_reasons`…). For the team: add `?debug` to the page URL, then **D** at the computer shows the plan's rows and **⬇ CSV** downloads every order sent from this browser. The console also has `forgedRows.all()`, `.csv()` and `.clear()` (in the computer's frame: `os.html`). How the anonymized C, D and M columns are filled is documented at the top of `toRows()` in `orders.js`.

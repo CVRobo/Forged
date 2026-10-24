@@ -23,22 +23,19 @@ const ACTIONS = [
   { id: "mute", group: "office", name: "Mute / unmute sound", keys: ["KeyM", null] },
   { id: "volumeDown", group: "office", name: "Volume down", keys: ["BracketLeft", "Minus"] },
   { id: "volumeUp", group: "office", name: "Volume up", keys: ["BracketRight", "Equal"] },
-  { id: "tool1", group: "computer", name: "Card market", keys: ["Digit1", null] },
-  { id: "tool2", group: "computer", name: "Burner email", keys: ["Digit2", null] },
-  { id: "tool3", group: "computer", name: "VPN / proxy", keys: ["Digit3", null] },
-  { id: "tool4", group: "computer", name: "Device spoofer", keys: ["Digit4", null] },
-  { id: "tool5", group: "computer", name: "Drop address", keys: ["Digit5", null] },
-  { id: "tool6", group: "computer", name: "Clock", keys: ["Digit6", null] },
-  { id: "drop", group: "computer", name: "Close the toolkit list", keys: ["KeyQ", null] },
+  { id: "tool1", group: "computer", name: "Play card 1", keys: ["Digit1", null] },
+  { id: "tool2", group: "computer", name: "Play card 2", keys: ["Digit2", null] },
+  { id: "tool3", group: "computer", name: "Play card 3", keys: ["Digit3", null] },
+  { id: "drop", group: "computer", name: "Close a list", keys: ["KeyQ", null] },
   { id: "chat", group: "computer", name: "Write to customer support", keys: ["KeyT", null] },
-  { id: "detector", group: "computer", name: "What Gus sees (data row)", keys: ["F3", "KeyD"] },
+  { id: "detector", group: "computer", name: "Debug: data rows (with ?debug)", keys: ["F3", "KeyD"] },
   { id: "hide", group: "computer", name: "Hide the screen", keys: ["Space", null] },
   { id: "standUp", group: "computer", name: "Stand up", keys: ["ShiftLeft", null] },
 ];
 // fixed, shown in Controls but not rebindable
 const FIXED = [
   { group: "both", name: "Game menu / free the mouse", label: "Esc" },
-  { group: "computer", name: "Cycle tools", label: "Mouse wheel" },
+  { group: "computer", name: "Move between the blanks", label: "Mouse wheel" },
   { group: "office", name: "Look around", label: "Mouse" },
   { group: "office", name: "Voice chat always on (top-right button)", label: "🎤 Mic" },
 ];

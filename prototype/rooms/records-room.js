@@ -6,7 +6,7 @@
  *    the boss. Costs ~6 s in transit, and 25% of the time it jams and spits it back.
  *  - The archive: "Dig through the archive" pops up a clipboard with the
  *    inspector's last 5 verdicts (scheme, vendor, caught, tells) as intel.
- *  - The shredder: after a FLAGGED verdict, shred the evidence (sends `shred`).
+ *  - The shredder: after a CAUGHT verdict, shred the evidence (sends `shred`).
  * Everything is built once; onUpdate only moves things. */
 (() => {
 "use strict";
@@ -455,7 +455,7 @@ function drawLog(g, w, h) {
     const col = r.caught ? "#e0352b" : "#1d9a4b";
     g.save(); g.translate(118, y + 42); g.rotate(-.12);
     g.strokeStyle = col; g.lineWidth = 5; g.strokeRect(-62, -20, 124, 40);
-    g.fillStyle = col; g.font = "22px Bungee, Impact, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(r.caught ? "DECLINED" : "APPROVED", 0, 2);
+    g.fillStyle = col; g.font = "22px Bungee, Impact, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(r.caught ? "CAUGHT" : "APPROVED", 0, 2);
     g.restore(); g.textAlign = "left"; g.textBaseline = "alphabetic";
     g.fillStyle = "#888"; g.font = "bold 14px 'Space Mono', monospace"; g.fillText(`#${String(r.n).padStart(3, "0")}${r.old ? " · old file" : ""}`, 64, y + 88);
     g.fillStyle = "#2b1d14"; g.font = "bold 21px 'Space Mono', monospace"; g.fillText(wrapCut(g, r.scheme || "Unknown scheme", w - 260), 196, y + 26);
@@ -539,12 +539,12 @@ safe(() => {
   // a pile of old strips inside the window
   for (let i = 0; i < 10; i++) { const st = box(.02, .02, .3, paperMat, FW.rand(-.3, .3), .2 + FW.rand(0, .2), FW.rand(-.2, .2), g); st.rotation.y = FW.rand(0, 3); }
   shred.g = g;
-  // the sheet that gets fed in, with a FLAGGED stamp
+  // the sheet that gets fed in, with a CAUGHT stamp
   const sheetTex = FW.canvasTex(128, 160, (c, w, h) => {
     c.fillStyle = "#fffaf0"; c.fillRect(0, 0, w, h);
     c.fillStyle = "#2b1d14"; for (let i = 0; i < 7; i++) c.fillRect(14, 18 + i * 18, 60 + (i * 23) % 40, 5);
     c.save(); c.translate(w / 2, h * .7); c.rotate(-.25); c.strokeStyle = "#e0352b"; c.lineWidth = 5; c.strokeRect(-52, -16, 104, 32);
-    c.fillStyle = "#e0352b"; c.font = "bold 20px Impact, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("DECLINED", 0, 1); c.restore();
+    c.fillStyle = "#e0352b"; c.font = "bold 20px Impact, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("CAUGHT", 0, 1); c.restore();
   });
   const sheet = new THREE.Mesh(new THREE.PlaneGeometry(.42, .52), new THREE.MeshBasicMaterial({ map: sheetTex, side: THREE.DoubleSide }));
   sheet.visible = false; sheet.rotation.y = Math.PI; scene.add(sheet); shred.sheet = sheet;
@@ -605,14 +605,14 @@ function updateShred(now, dt) {
   if (!alive && e > 2000) { shred.busy = false; if (shred.g) shred.g.position.set(SHRED.x, 0, SHRED.z); }
 }
 FW.addInteraction({
-  label: () => "Shred the evidence (last DECLINED file)",
+  label: () => "Shred the evidence (last CAUGHT file)",
   can: () => !!shred.pending && !shred.busy && !FW.P.carrying && FW.P.phase !== "judging" && near(SHRED_SPOT.x, SHRED_SPOT.z, 1.5),
   act: () => safe(doShred),
 });
 FW.addInteraction({
   label: () => "Feed the shredder",
   can: () => !shred.pending && !shred.busy && !FW.P.carrying && near(SHRED_SPOT.x, SHRED_SPOT.z, 1.3),
-  act: () => FW.say(FW.player, pick(["Nothing incriminating to feed it. Yet.", "It looks hungry.", "Come back after a DECLINED one."]), 2400),
+  act: () => FW.say(FW.player, pick(["Nothing incriminating to feed it. Yet.", "It looks hungry.", "Come back after a CAUGHT one."]), 2400),
 });
 
 /* ======================= Verdicts from the computer ======================= */

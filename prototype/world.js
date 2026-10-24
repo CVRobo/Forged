@@ -794,7 +794,7 @@ const corkTex = canvasTex(1024, 640, (g, w, h) => {
     g.fillStyle = "#fff"; g.fillRect(-90, -60, 180, 120);
     g.fillStyle = "#2b1d14"; g.font = "bold 18px 'Space Mono'"; g.textAlign = "center";
     g.fillText(p.scheme.slice(0, 16), 0, -22); g.font = "15px 'Space Mono'"; g.fillText(p.vendor.slice(0, 18), 0, 2);
-    g.fillStyle = p.caught ? "#e0352b" : "#1d9a4b"; g.font = "26px Bungee, Impact"; g.fillText(p.caught ? "DECLINED" : "GOT AWAY", 0, 42);
+    g.fillStyle = p.caught ? "#e0352b" : "#1d9a4b"; g.font = "26px Bungee, Impact"; g.fillText(p.caught ? "CAUGHT" : "GOT AWAY", 0, 42);
     g.restore();
     g.fillStyle = "#e0352b"; g.beginPath(); g.arc(p.x + 90, p.y + 10, 10, 0, 7); g.fill();
   });
@@ -1209,12 +1209,12 @@ function wtoast(text, kind = "") {
 }
 const OBJECTIVES = {
   idle: "Sit at your computer and open FORGED.exe",
-  briefing: "Pick a scheme on your computer",
-  forging: "Build your orders on your computer",
+  briefing: "Make your plan on the computer",
+  forging: "Make your plan on the computer",
   printing: "Printing…",
   pickup: "Grab the order slip from the printer",
   carrying: "Drop it in Gus's IN tray. Act natural.",
-  judging: "Gus is reviewing your orders…",
+  judging: "Gus is checking your order…",
   result: "Head back to your computer",
 };
 function setPhase(ph) {
@@ -1283,11 +1283,11 @@ function startPrinting() {
 
 function onVerdict(m) {
   const cls = m.caught ? "flagged" : "paid";
-  say(inspector, `<span class="stamp">${m.caught ? "DECLINED" : "APPROVED"}</span>"${m.line}"`, 6000, cls);
+  say(inspector, `<span class="stamp">${m.caught ? "CAUGHT" : "APPROVED"}</span>"${m.line}"`, 6000, cls);
   pins.push({ x: 60 + (pins.length % 4) * 230, y: 130 + Math.floor(pins.length / 4 % 3) * 160, r: rand(-.12, .12), scheme: m.scheme, vendor: m.vendor, caught: m.caught });
   redraw(corkTex);
-  if (m.caught) { if (!CINE.active) P.shake = .5; wtoast("DECLINED: Gus pinned your trick to the corkboard", "bad"); }
-  else wtoast(`PAID +${money(m.payout)}`, "good");
+  if (m.caught) { if (!CINE.active) P.shake = .5; wtoast("CAUGHT: Gus pinned your trick to the corkboard", "bad"); }
+  else wtoast(`GOT AWAY +${money(m.payout)}`, "good");
   scanSlot.material.emissive.set(m.caught ? "#e0352b" : "#7cff9a"); scanSlot.material.emissiveIntensity = 1.2;
   setTimeout(() => { scanSlot.material.emissive.set("#7cff9a"); scanSlot.material.emissiveIntensity = .2; }, 3000);
   tvHistory.push({ caught: m.caught, version: tvVersion }); redraw(tvTex);
@@ -1442,7 +1442,7 @@ scanBeam.position.z = .01; scanPaper.add(scanBeam);
 const stampTex = canvasTex(512, 200, (g, w, h) => {
   const paid = scanDoc.verdict === "paid", col = paid ? "#1d9a4b" : "#e0352b";
   g.strokeStyle = col; g.lineWidth = 18; g.strokeRect(14, 14, w - 28, h - 28);
-  const word = paid ? "APPROVED" : "DECLINED";
+  const word = paid ? "APPROVED" : "CAUGHT";
   let size = 110;
   g.font = size + "px Bungee, Impact";
   const tw = g.measureText(word).width;

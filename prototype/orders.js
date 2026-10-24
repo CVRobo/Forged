@@ -345,26 +345,26 @@ function remember(hist, ctx, rows) {
  * The real detector (B) replaces this and returns the same shape. */
 
 const TELL_LABELS = {
-  email_risky: "anonymous email provider",
-  email_mismatch: "email doesn't match the cardholder",
-  new_card: "brand-new card on a big order",
-  foreign_card: "foreign card at a local shop",
-  ip_far: "IP far from the billing address",
-  proxy: "order placed through a VPN",
-  emulator: "emulator: browser and screen don't fit",
-  new_device: "new device on an old account",
-  device_reuse: "one device used with several cards",
-  far_ship: "goods shipped far from the cardholder",
-  new_address: "new shipping address on an old card",
-  gift_card: "large gift card",
-  amount_unusual: "amount way above this shop's usual",
-  amount_jump: "tiny test charges, then a big one",
-  velocity: "several orders on one card, fast",
-  night: "order at an odd hour",
-  heat: "you've been getting sloppy (heat)",
+  email_risky: "that email screams 'burner'",
+  email_mismatch: "the email's name isn't the card's name",
+  new_card: "a brand-new card buying big",
+  foreign_card: "a card from abroad, here?",
+  ip_far: "shopping from 800 miles away",
+  proxy: "hiding behind a VPN",
+  emulator: "a phone that isn't a real phone",
+  new_device: "an old account on a strange device",
+  device_reuse: "the same computer with another card",
+  far_ship: "shipped across the ocean",
+  new_address: "a new address on an old card",
+  gift_card: "a suspiciously big gift card",
+  amount_unusual: "way more than people spend here",
+  amount_jump: "$1 tests, then a big buy",
+  velocity: "too many orders, too fast",
+  night: "who shops at 3 AM?",
+  heat: "you've been getting sloppy",
   device_mobile: "ordered from a phone",
-  friday: "Friday order",
-  yahoo: "Yahoo email",
+  friday: "it's Friday",
+  yahoo: "a Yahoo email",
 };
 const TELL_BOX = {
   email_risky: "buyer", email_mismatch: "buyer", yahoo: "buyer", new_card: "card", foreign_card: "card", velocity: "card",
@@ -432,7 +432,8 @@ function judgeOrders(ctx) {
       if (learned[x[0]]) x[1] *= 1 + .3 * learned[x[0]]; // Gus learned this trick from you before
     });
     const tells = t.sort((a, b) => b[1] - a[1]);
-    let suspicion = tells.reduce((a, x) => a + x[1], 0) * skill - persuasion * .18 + rand(-10, 10);
+    // leniency: Gus goes easy on new players (game.js passes more at low ranks)
+    let suspicion = tells.reduce((a, x) => a + x[1], 0) * skill - persuasion * .18 + rand(-10, 10) - (ctx.leniency || 0);
     if (f.amount < 5) suspicion -= 12; // nobody reviews a $1 charge
     const caught = suspicion > 38;
     if (caught) stopped = true; // a flagged order blocks the card for the rest of the campaign
@@ -447,9 +448,118 @@ function judgeOrders(ctx) {
   return { caught, results, tells, payout, reported };
 }
 
+/* ======================= Plan cards (what the player sees) =======================
+ * The player never sees the boxes above. They fill in a one-line plan with
+ * picture cards dealt into their hand, and buildCampaign() turns the plan into
+ * orders. Ranks unlock one more blank at a time; Mastermind can tweak the
+ * disguise piece by piece, which is where the most creative data comes from. */
+
+const RANKS = [
+  { n: 1, title: "Rookie", xp: 0, slots: ["what", "where"], windows: [], unlocks: "Pick what to buy and where it goes" },
+  { n: 2, title: "Hustler", xp: 2, slots: ["who", "what", "where"], windows: ["clerk"], unlocks: "WHO cards: choose your disguise" },
+  { n: 3, title: "Schemer", xp: 4, slots: ["who", "what", "when", "where"], windows: ["clerk", "memo"], unlocks: "WHEN cards and the leaked memo" },
+  { n: 4, title: "Operator", xp: 7, slots: ["who", "what", "when", "where", "trick"], windows: ["clerk", "memo"], unlocks: "TRICK cards: plans with several orders" },
+  { n: 5, title: "Mastermind", xp: 11, slots: ["who", "what", "when", "where", "trick"], windows: ["clerk", "memo"], custom: true, unlocks: "Tweak your disguise piece by piece" },
+];
+const rankFor = xp => [...RANKS].reverse().find(r => xp >= r.xp);
+
+const PERSONAS = [
+  { id: "me", ico: "🧑", name: "Just me", line: "My laptop, my Wi-Fi", heat: 0,
+    kit: { card: "fresh_visa", email: "lookalike", proxy: "none", device: "laptop" } },
+  { id: "grandma", ico: "👵", name: "Grandma's account", line: "Her login, my laptop", heat: 5,
+    kit: { card: "aged_mc", email: "hijacked", proxy: "none", device: "laptop" } },
+  { id: "ghost", ico: "🕶️", name: "The Ghost", line: "Untraceable. Very shady.", heat: 2,
+    kit: { card: "fresh_visa", email: "proton", proxy: "free_vpn", device: "emulator" } },
+  { id: "lookalike", ico: "🪞", name: "The Look-alike", line: "Same name, new phone", heat: 3,
+    kit: { card: "fresh_visa", email: "lookalike", proxy: "paid_vpn", device: "burner_android" } },
+  { id: "tourist", ico: "🧳", name: "The Tourist", line: "A card from far away", heat: 1,
+    kit: { card: "foreign_visa", email: "yahoo", proxy: "free_vpn", device: "laptop" } },
+  { id: "bigshot", ico: "💼", name: "The Big Shot", line: "Platinum card, no history", heat: 3,
+    kit: { card: "amex", email: "lookalike", proxy: "none", device: "laptop" } },
+  { id: "neighbor", ico: "🏡", name: "The Neighbor", line: "Shops from next door", heat: 4, unlock: "neighbor",
+    kit: { card: "aged_mc", email: "lookalike", proxy: "residential", device: "burner_android" } },
+  { id: "clone", ico: "📱", name: "The Phone Clone", line: "Their account, their phone", heat: 6, unlock: "clone",
+    kit: { card: "aged_mc", email: "hijacked", proxy: "paid_vpn", device: "clone" } },
+];
+const WHENS = [
+  { id: "now", ico: "⚡", name: "Right now", line: "No time to lose", heat: 0 },
+  { id: "afternoon", ico: "🥪", name: "Lunch break", line: "When everyone shops", heat: 0 },
+  { id: "night", ico: "🌙", name: "3 AM", line: "Nobody's watching. Right?", heat: 1 },
+  { id: "day", ico: "📅", name: "Tomorrow", line: "Patience pays… maybe", heat: 0 },
+  { id: "week", ico: "🗓️", name: "Next week", line: "The card might die", heat: 0 },
+];
+const WHERES = [
+  { id: "mule", ico: "🏚️", name: "Cousin's garage", line: "A few miles from them", physical: true, heat: 3 },
+  { id: "reshipper", ico: "🚢", name: "Warehouse overseas", line: "Far away. Safe for me.", physical: true, heat: 5 },
+  { id: "burner_email", ico: "📧", name: "My secret inbox", line: "The code comes to me", physical: false, heat: 2 },
+];
+const TRICKS = [
+  { id: "none", ico: "✋", name: "No trick", line: "Keep it simple", heat: 0 },
+  { id: "test_first", ico: "🧪", name: "Test the card", line: "A $1 charge first", heat: 1 },
+  { id: "three_times", ico: "🔁", name: "Do it 3 times", line: "Triple loot, triple risk", heat: 6 },
+  { id: "warm_up", ico: "🐢", name: "Warm it up", line: "A normal buy the day before", heat: 2 },
+  { id: "come_back", ico: "↩️", name: "Come back later", line: "Again next week", heat: 3 },
+  { id: "small_bites", ico: "🍰", name: "Small bites", line: "Three cheap orders instead", heat: 3 },
+];
+// the parts a Mastermind can swap on their disguise
+const TWEAKS = [
+  { id: "card", ico: "💳", name: "Card", options: CARDS },
+  { id: "email", ico: "📧", name: "Email", options: EMAILS },
+  { id: "device", ico: "📱", name: "Device", options: DEVICES },
+  { id: "proxy", ico: "🌐", name: "Hide", options: PROXIES },
+];
+
+/* deal `n` cards for one blank of the plan. `plan.what` decides which WHERE cards fit */
+function dealHand(slot, ctx) {
+  const { level, plan, unlocks = [], n = 3 } = ctx;
+  const shop = SHOPS[level];
+  const shuffle = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(v => v[1]);
+  if (slot === "what") {
+    const loot = shop.catalog.filter(i => i.cd !== "S").map(i => ({ id: i.sku, ico: i.ico, name: i.name,
+      line: i.name.includes("$") ? "Code sent by email" : price(i.price), item: i }));
+    const phys = shuffle(loot.filter(c => c.item.kind === "physical")), dig = shuffle(loot.filter(c => c.item.kind === "digital"));
+    return shuffle([phys[0], dig[0], ...shuffle([...phys.slice(1), ...dig.slice(1)]).slice(0, n - 2)]);
+  }
+  if (slot === "where") {
+    const item = itemOf(shop, { sku: plan.what });
+    return WHERES.filter(w => w.physical === (item.kind === "physical"));
+  }
+  if (slot === "who") return shuffle(PERSONAS.filter(p => !p.unlock || unlocks.includes(p.unlock))).slice(0, n);
+  if (slot === "when") return shuffle(WHENS).slice(0, n);
+  if (slot === "trick") return [TRICKS[0], ...shuffle(TRICKS.slice(1)).slice(0, n - 1)];
+  return [];
+}
+const price = n => "$" + n.toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+
+/* the plan → the orders Gus scores. Blanks the player's rank doesn't have yet use safe defaults */
+function buildCampaign(level, plan) {
+  const shop = SHOPS[level];
+  const kit = { ...(find(PERSONAS, plan.who) || PERSONAS[0]).kit, ...(plan.custom || {}) };
+  const item = itemOf(shop, { sku: plan.what });
+  const base = { ...kit, sku: item.sku, ship: plan.where || (item.kind === "digital" ? "burner_email" : "mule"), clock: plan.when || "afternoon" };
+  fixShip(shop, base);
+  const byPrice = [...shop.catalog].sort((a, b) => a.price - b.price);
+  // `ship` for the extra orders: test charges and warm-ups go to the cardholder, like a real customer's would
+  const extra = (it, clock, ship = base.ship) => { const o = { ...base, sku: it.sku, clock, ship }; fixShip(shop, o); return o; };
+  const smallPhysical = byPrice.find(i => i.kind === "physical");
+  switch (plan.trick) {
+    case "test_first": return [extra(byPrice[0], base.clock, "holder_email"), { ...base, clock: "now" }];
+    case "three_times": return [base, { ...base, clock: "now" }, { ...base, clock: "now" }];
+    case "warm_up": return [extra(smallPhysical, base.clock, "billing"), { ...base, clock: "day" }];
+    case "come_back": return [base, { ...base, clock: "week" }];
+    case "small_bites": { // three of a cheaper item of the same kind
+      const same = byPrice.filter(i => i.kind === item.kind && i.cd !== "S" && i.sku !== item.sku);
+      const cheap = same.filter(i => i.price <= item.price / 2).pop() || same[0] || item;
+      return [extra(cheap, base.clock), extra(cheap, "afternoon"), extra(cheap, "day")];
+    }
+    default: return [base];
+  }
+}
+
 window.ForgedOrders = {
   SHOPS, HOLDERS, TOOLS, SCHEMES, CARDS, EMAILS, PROXIES, DEVICES, SHIPS, CLOCKS, HOLDER_DEVICES,
   TELL_LABELS, TELL_BOX, MEMOS, COLUMNS,
   find, optionFor, itemOf, shipOptions, fixShip, facts, newHistory, toRows, remember, judgeOrders,
+  RANKS, rankFor, PERSONAS, WHENS, WHERES, TRICKS, TWEAKS, dealHand, buildCampaign,
 };
 })();

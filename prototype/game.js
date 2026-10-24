@@ -49,18 +49,18 @@ function offline(err) {
 }
 
 /* ======================= Content =======================
- * The order content (shops, cards, toolkit, starter campaigns, the IEEE-CIS row
- * builder and the scripted Gus) lives in orders.js as window.ForgedOrders. */
+ * The order content (shops, cards, plan cards, ranks, the IEEE-CIS row builder
+ * and the scripted Gus) lives in orders.js as window.ForgedOrders. */
 
 const O = window.ForgedOrders;
 const price = n => "$" + n.toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
-const cap = s => s.replace(/\b\w/g, c => c.toUpperCase());
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 const LEVELS = {
   1: {
     name: "Sunny Diner Supply", short: "Sunny Diner", icon: "🥞", difficulty: "Easy",
     swatches: ["#f4a63a", "#1f8a8a", "#fff6e2"],
-    inspector: { name: "Gus", personality: "Cheerful risk engine, easily distracted by pie" },
+    inspector: { name: "Gus", personality: "Cheerful fraud robot, easily distracted by pie" },
     clerk: { name: "Brenda", avatar: "🥪", quirk: "always on lunch break",
       hello: "Sunny Diner support, Brenda speaking. Make it quick hon, my sandwich is getting warm.",
       keywords: ["lunch", "quick", "sandwich", "fast", "easy", "pie"],
@@ -72,14 +72,14 @@ const LEVELS = {
     memo: O.MEMOS[1],
     lines: {
       idle: ["Mmm… pie. Oh! Send me whatever.", "Is it lunch yet? Orders are so boring.", "I flagged my own lunch order once."],
-      pass: ["Looks like a regular! Approved.", "Yep! Totally normal customer! Shipping it!", "Such a loyal shopper. APPROVED."],
-      catch: ["Hey… that card is acting weird.", "Hold on, that's not a real customer!", "I may be sleepy but I'm not THAT sleepy."],
+      pass: ["Looks like a regular! Approved.", "Yep! Totally normal customer!", "Such a loyal shopper. APPROVED."],
+      catch: ["Hey… wait a minute.", "Hold on…", "Nice try!"],
     },
   },
   2: {
     name: "St. Mercy Pharmacy", short: "St. Mercy", icon: "🏥", difficulty: "Medium",
     swatches: ["#9fd8c4", "#2f6fd6", "#ffffff"],
-    inspector: { name: "Ms. Procedure", personality: "Procedural risk engine, reads every order in a monotone" },
+    inspector: { name: "Ms. Procedure", personality: "Procedural fraud robot, reads every order in a monotone" },
     clerk: { name: "Theo", avatar: "😰", quirk: "terrified of the manager",
       hello: "St. Mercy patient support. H-hi. Is this approved? Does the manager know about this?",
       keywords: ["manager", "approved", "policy", "signed", "urgent", "compliance"],
@@ -90,44 +90,31 @@ const LEVELS = {
       } },
     memo: O.MEMOS[2],
     lines: {
-      idle: ["Please submit orders in triplicate.", "I have read the risk handbook four times.", "Procedure is a comfort."],
-      pass: ["Order complete. Processing. Approved.", "Compliant. Moving on.", "This meets section 4.2. Approved."],
-      catch: ["Irregularity detected. Filing a report.", "That order violates procedure.", "Non-compliant. Declined."],
+      idle: ["Please submit orders in triplicate.", "I have read the fraud handbook four times.", "Procedure is a comfort."],
+      pass: ["Order complete. Approved.", "Compliant. Moving on.", "This meets section 4.2. Approved."],
+      catch: ["Irregularity detected.", "Non-compliant.", "That violates procedure."],
     },
   },
   3: { name: "Port Nocturne Shipping", short: "Port Nocturne", icon: "🚢", difficulty: "Hard", swatches: ["#1d2a44", "#ff9a2e", "#f4efe6"], inspector: { name: "Old Salt", personality: "Gruff, remembers everything" }, locked: true },
   4: { name: "Neon Arcade Holdings", short: "Neon Arcade", icon: "🕹️", difficulty: "Boss", swatches: ["#ff2bd6", "#19e3ff", "#120014"], inspector: { name: "GL1TCH", personality: "Paranoid, flags anything unusual" }, locked: true },
 };
 
-/* the starter campaigns: name, icon, payout multiplier, risk and the hover tips */
-const SCHEMES = O.SCHEMES;
-const schemeTips = id => O.SCHEMES[id];
-const RISK = ["", "Low", "Medium", "High"];
-const riskBadge = tip => tip.risk
-  ? `<span class="sc-risk r${tip.risk}">Risk ${"●".repeat(tip.risk)}${"○".repeat(3 - tip.risk)} ${RISK[tip.risk]}</span>`
-  : `<span class="sc-risk">Risk: up to you</span>`;
-
-const USED_KEY = "forged-schemes-used";
-function usedSchemes() { try { return JSON.parse(localStorage.getItem(USED_KEY) || "[]"); } catch (e) { return []; } }
-function markSchemeUsed(id) {
-  try { const u = usedSchemes(); if (!u.includes(id)) localStorage.setItem(USED_KEY, JSON.stringify([...u, id])); } catch (e) { /* not remembered */ }
-}
-
-const TOOLS = O.TOOLS;
+/* Every plan the player sends gets a name for the corkboard and the collection,
+ * e.g. "👵 Grandma's account · 🧪 Test the card". Filled in as plans are made. */
+const SCHEMES = {};
 
 const PERKS = [
-  { id: "cookies", ico: "🍪", name: "Cookie Jar", desc: "Stolen browser cookies: new devices look familiar.", cost: 600 },
-  { id: "patience", ico: "⏳", name: "Patience", desc: "Cards never get reported while you wait.", cost: 500 },
+  { id: "cookies", ico: "🍪", name: "Cookie Jar", desc: "New devices look familiar to Gus.", cost: 600 },
+  { id: "patience", ico: "⏳", name: "Patience", desc: "Cards never die while you wait.", cost: 500 },
   { id: "night", ico: "🌙", name: "Night Shift", desc: "Double pay, more suspicion.", cost: 900 },
-  { id: "mules", ico: "📦", name: "Mule Network", desc: "Drop addresses cost no heat.", cost: 700 },
-  { id: "smooth", ico: "😎", name: "Smooth Talker", desc: "Support persuasion bonus.", cost: 500 },
+  { id: "redraw", ico: "🔄", name: "Lucky Draw", desc: "Redraw your hand once per round.", cost: 400 },
+  { id: "smooth", ico: "😎", name: "Smooth Talker", desc: "Support chat works better.", cost: 500 },
   { id: "shred", ico: "🗑️", name: "Paper Shredder", desc: "One caught trick is not learned.", cost: 1200 },
 ];
 
 const UNLOCKS = [
-  { id: "residential", ico: "🏠", name: "Residential Proxies", desc: "New IP: a neighbor's home internet.", cost: 800 },
-  { id: "cloner", ico: "📱", name: "Device Cloner", desc: "New device: a copy of the cardholder's phone.", cost: 900 },
-  { id: "budget", ico: "➕", name: "Extra Edit", desc: "+1 change per round.", cost: 1000 },
+  { id: "neighbor", ico: "🏡", name: "The Neighbor", desc: "New disguise: shops from next door.", cost: 800 },
+  { id: "clone", ico: "📱", name: "The Phone Clone", desc: "New disguise: their account, their phone.", cost: 900 },
   { id: "dossier", ico: "📂", name: "Dossier", desc: "Reveals the fake memo rule next round.", cost: 600, consumable: true },
 ];
 
@@ -138,23 +125,41 @@ const INSPECTOR_STAGES = [
   { upTo: 99, emoji: "🤖", prop: "🧿", title: "Cyborg with a Monocle" },
 ];
 
-/* which ticket box to highlight in the forensic replay, per tell */
-const TELL_REGION = O.TELL_BOX;
+/* which blank of the plan to circle in the forensic replay, per tell */
+const TELL_REGION = {
+  email_risky: "who", email_mismatch: "who", yahoo: "who", new_card: "who", foreign_card: "who", ip_far: "who", proxy: "who",
+  emulator: "who", new_device: "who", device_reuse: "who", device_mobile: "who",
+  far_ship: "where", new_address: "where", gift_card: "what", amount_unusual: "what",
+  amount_jump: "trick", velocity: "trick", night: "when", friday: "when",
+};
 const TELL_LABELS = O.TELL_LABELS;
+
+/* ======================= Player rank =======================
+ * Saved across runs. Each round gives XP (more when it works); every rank adds
+ * one more blank to the plan, so a new player starts with two choices. */
+const XP_KEY = "forged.xp";
+const loadXp = () => {
+  const q = loc => { try { return +new URLSearchParams(loc.search).get("rank"); } catch (e) { return 0; } };
+  const forced = q(location) || (EMBED ? q(parent.location) : 0); // ?rank=5 on either page to test a rank
+  if (forced >= 1 && forced <= O.RANKS.length) return O.RANKS[forced - 1].xp;
+  try { return +localStorage.getItem(XP_KEY) || 0; } catch (e) { return 0; }
+};
+const saveXp = () => { try { localStorage.setItem(XP_KEY, String(S.xp)); } catch (e) { /* only this visit */ } };
+const rank = () => O.rankFor(S.xp);
 
 /* ======================= Dossier ======================= */
 
 const DOSSIER_ENTRIES = {
-  "heat-basics":     { icon: "🔥", title: "Heat",              text: "Every risky change and repeated scheme raises your heat bar. Above 40 % Gus gets a free suspicion bonus on every order. Heat decays 40 % between rounds, so one bad round won't ruin you, but two in a row will." },
-  "version-bump":    { icon: "🧠", title: "Gus Learns",        text: "Every time you're caught (or even succeed sloppily), Gus is retrained. His version number goes up, and the tell that tripped you gets weighed more from then on. Vary your tricks." },
-  "memo-deduction":  { icon: "📝", title: "Memo Rules",        text: "Two of the three memo rules are real: Gus actually watches for those. The third is a decoy. Mark them as you learn which is fake so you can break the fake rule safely." },
-  "shop-intro":      { icon: "🛒", title: "The Shop",          text: "Between rounds you can buy perks (passive bonuses, max 3) and unlocks (new toolkit options or one-shot intel). The Dossier unlock reveals which memo rule is the decoy for one round." },
-  "route-goods":     { icon: "📦", title: "Get the Goods",     text: "If every order ships to the cardholder's home (or emails the code to them), you get nothing and the campaign won't send. At least one order needs a drop address or your burner inbox." },
-  "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. If he walks behind your desk while you work, press Space to hide the screen, or take +15 heat. In the 3D office, his vision cone can catch you carrying the envelope." },
-  "tells-explained": { icon: "🔍", title: "What Gus Checks",   text: "Gus reads one row per order: the card and its history, the email, the device and IP, the address, the item, and the timing. Each toolkit choice changes some of these. Press D to see the exact row." },
-  "streak-bonus":    { icon: "🔥", title: "Scheme Streaks",    text: "Using the same scheme twice in a row adds a USED warning and extra heat. Succeeding with different schemes in a row builds a streak. Streaks don't pay more, they just prove you're versatile." },
-  "campaigns":       { icon: "➕", title: "Campaigns",         text: "+ Next order copies the current order so you can add a step: a test charge, a second buy days later. Gus scores every order and remembers every card, email, device and address for the whole run. One declined order blocks the card for the rest of the campaign." },
-  "persuasion":      { icon: "😎", title: "Support Chat",      text: "The support agent has a quirk (shown in the window header). Work their keywords into a short note for the best score. High persuasion lowers Gus's suspicion, so it's worth the effort." },
+  "heat-basics":     { icon: "🔥", title: "Heat",              text: "Risky cards and getting caught raise your heat. Above 40 % Gus gets suspicious of everything. Heat cools down between rounds." },
+  "version-bump":    { icon: "🧠", title: "Gus Learns",        text: "Every time Gus catches you, he remembers what gave you away and watches for it harder. Keep changing your plan." },
+  "memo-deduction":  { icon: "📝", title: "Memo Rules",        text: "Two of the three memo rules are real: Gus actually watches for those. The third is a decoy." },
+  "shop-intro":      { icon: "🛒", title: "The Shop",          text: "Between rounds you can buy perks and new disguises. Perks last the whole run (3 max)." },
+  "route-goods":     { icon: "📦", title: "Get the Goods",     text: "WHERE decides who gets the loot. Cousin's garage is close to the victim, the overseas warehouse is safe but far, and gift card codes go to your secret inbox." },
+  "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. If he walks behind your desk, press Space to hide the screen. In the office, keep the envelope out of his sight." },
+  "tells-explained": { icon: "🔍", title: "What Gus Checks",   text: "Who's buying, from where, what, when, and how fast. The blank that gave you away glows red after a catch." },
+  "streak-bonus":    { icon: "🔥", title: "Streaks",           text: "Getting away with it several rounds in a row builds a streak. Changing your plan keeps it alive." },
+  "campaigns":       { icon: "🃏", title: "Tricks",            text: "A trick turns one order into a few: test the card with $1 first, warm it up with a normal buy, or come back next week. Gus checks every order, and one catch blocks the card." },
+  "persuasion":      { icon: "😎", title: "Support Chat",      text: "The support agent has a quirk (shown in the window header). A short note that plays to it lowers Gus's suspicion." },
 };
 
 const DOSSIER_STORAGE = "forged-dossier";
@@ -218,12 +223,14 @@ const S = {
   perks: [], unlocks: [], dossier: false, shredUsed: false,
   history: [], cards: [], caughtCount: 0, streak: 0,
   hist: null, learned: {}, session: null, // what Gus remembers this run, and how often he learned each tell from you
+  xp: 0, rankUp: null, // the player's rank (saved), and a rank reached this round
   // per round
-  scheme: null, holder: null, inv: null, uses: {}, edits: 0, maxEdits: 6, persuasion: 0,
-  memo: [], tool: null, submitted: false, bossTimer: null, bossWindow: false, rows: null,
+  scheme: null, holder: null, inv: null, plan: {}, hands: {}, active: null, redrawn: false, persuasion: 0,
+  memo: [], submitted: false, bossTimer: null, bossWindow: false, rows: null,
   roundId: null, // from POST /round/start; null when offline
   patches: 0, shame: [], // retrains this run caused, and what each one learned
 };
+S.xp = loadXp();
 
 /* ======================= Sound (tiny WebAudio synth) ======================= */
 
@@ -349,7 +356,7 @@ function renderLevels() {
 function startRun(level) {
   Object.assign(S, { level, round: 0, money: 0, heat: 0, version: 1, perks: [], unlocks: [], dossier: false,
     shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [],
-    hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null });
+    hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null, xp: loadXp(), rankUp: null });
   stage.dataset.level = level;
   $("#desk-mess").innerHTML = "";
   const L = LEVELS[level];
@@ -368,22 +375,17 @@ function nextRound() {
   S.round++;
   S.heat = Math.round(S.heat * 0.6);
   const prev = S.holder; // a new stolen card every round
-  Object.assign(S, { scheme: null, inv: null, uses: {}, edits: 0, persuasion: 0, tool: null, submitted: false,
+  Object.assign(S, { scheme: null, inv: null, plan: {}, hands: {}, active: null, redrawn: false, persuasion: 0, submitted: false,
     printed: false, delivered: false, lastResult: null, rows: null, holder: pick(O.HOLDERS.filter(h => h !== prev)) });
-  post("phase", { phase: "briefing" });
-  S.maxEdits = 6 + (S.unlocks.includes("budget") ? 1 : 0);
-  TOOLS.forEach(t => S.uses[t.id] = 0);
   $("#tb-round").textContent = S.round;
-  $("#invoice").innerHTML = ""; $("#invoice").className = "paper ticket";
+  $("#invoice").innerHTML = ""; $("#invoice").className = "paper plan";
   $("#strip").innerHTML = "";
   $("#scheme-banner").textContent = "";
   $("#chat").innerHTML = ""; $("#persuade-fill").style.width = "0%";
   $("#envelope").classList.remove("printed");
-  renderCaseFile();
   dealMemo();
   renderInspector();
-  renderTools(); updateHud();
-  showBriefing();
+  startPlanning();
   startRoundOnServer();
 }
 
@@ -429,294 +431,172 @@ function renderMemo() {
   });
 }
 
+/* the victim: whose card is on your desk this round. More detail as you rank up */
 function renderCaseFile() {
-  const shop = O.SHOPS[S.level], h = S.holder;
+  const h = S.holder, r = rank();
+  if (!h) { $("#case-body").innerHTML = ""; return; }
+  const phone = h.phone === "iphone" ? "an iPhone" : "an Android phone";
   $("#case-body").innerHTML = `
-    <span class="case-tab">STOLEN CARD ON YOUR DESK</span>
-    ${h ? `<table class="case-table">
-      <tr><td><b>${h.name}</b><br><small style="opacity:.6">${h.city}</small></td>
-        <td class="mono">${h.email}<br><small style="opacity:.6">always shops from ${h.phone === "iphone" ? "an iPhone" : "an Android phone"}</small></td></tr>
-    </table>` : ""}
-    <span class="case-tab">THE SHOP</span>
-    <table class="case-table">
-      <tr><td>Website</td><td class="mono">${shop.domain}</td></tr>
-      <tr><td>Usual order</td><td class="mono">${price(shop.typical)}</td></tr>
-    </table>
-    <span class="case-tab">CATALOG</span>
-    <table class="case-table">${shop.catalog.map(i => `<tr><td>${i.ico} ${i.name}</td><td class="mono">${price(i.price)}</td></tr>`).join("")}</table>
-    <span class="case-tab">NOTES</span>
-    <ul class="case-notes">${shop.notes.map(n => `<li>${n}</li>`).join("")}</ul>`;
-}
-
-function showBriefing() {
-  const L = LEVELS[S.level];
-  $("#brief-kicker").textContent = `ROUND ${S.round} · ${L.name.toUpperCase()} · ${L.inspector.name.toUpperCase()} v${S.version}`;
-  const last = S.history.slice(-2).map(h => h.scheme);
-  const used = usedSchemes();
-  $("#scheme-cards").innerHTML = Object.entries(SCHEMES).map(([id, sc]) => {
-    const repeat = last.filter(s => s === id).length;
-    const tip = schemeTips(id), fresh = !used.includes(id);
-    return `<button class="scheme-card ${fresh ? "fresh" : ""}" data-scheme="${id}">
-      ${repeat ? `<span class="sc-warn">USED ${repeat}× · +HEAT</span>` : fresh ? `<span class="sc-new">NEW · hover for tips</span>` : ""}
-      <div class="sc-ico">${sc.icon}</div>
-      <div class="sc-name">${sc.name}</div>
-      <div class="sc-desc">${tip.simple}</div>
-      <div class="sc-foot">
-        ${riskBadge(tip)}
-        <span class="sc-pay">Payout ×${sc.pay}</span>
-      </div>
-    </button>`;
-  }).join("");
-  $$(".scheme-card").forEach(c => {
-    c.onclick = () => {
-      if (c.disabled) return; // locked during the tutorial
-      sfx("pick"); hideSchemeTip(); overlay("briefing", false); beginForge(c.dataset.scheme);
-    };
-    if (c.classList.contains("fresh")) {
-      c.onmouseenter = c.onfocus = () => showSchemeTip(c);
-      c.onmouseleave = c.onblur = hideSchemeTip;
-    }
-  });
-  overlay("briefing");
-  if (!guidedDone() && S.round === 1 && EMBED) setTimeout(() => startGuided(), 350);
-  else if (!tutorialDone() && S.round === 1) setTimeout(() => startTutorial(0), 350);
-}
-
-/* hover tips for a scheme the player hasn't used yet */
-function showSchemeTip(card) {
-  const id = card.dataset.scheme, sc = SCHEMES[id], tip = schemeTips(id), el = $("#scheme-tip");
-  el.innerHTML = `
-    <div class="st-head"><span>${sc.icon} ${sc.name}</span>${riskBadge(tip)}</div>
-    <div class="st-sub good">Recommended</div>
-    <ul>${tip.good.map(([i, t]) => `<li><span>${i}</span>${t}</li>`).join("")}</ul>
-    <div class="st-sub bad">Ill-advised</div>
-    <ul>${tip.bad.map(([i, t]) => `<li><span>${i}</span>${t}</li>`).join("")}</ul>
-    <div class="st-tells"><b>What gives it away:</b> ${tip.tells}</div>`;
-  // beside the card: to the right for the first two, to the left for the last two
-  const sr = stage.getBoundingClientRect(), r = card.getBoundingClientRect();
-  const x = (r.left - sr.left) / scale, y = (r.top - sr.top) / scale, w = r.width / scale, tw = 360;
-  const right = x + w + 14 + tw <= 1600 - 16 && x < 800;
-  el.style.left = (right ? x + w + 14 : x - 14 - tw) + "px";
-  el.classList.add("show");
-  el.style.top = clamp(y - 20, 16, 900 - el.offsetHeight - 16) + "px";
+    <div class="victim">
+      <div class="victim-face">${h.phone === "iphone" ? "🧑‍🦰" : "🧔"}</div>
+      <div><div class="victim-name">${h.name}</div><div class="victim-city">📍 ${h.city}</div></div>
+    </div>
+    <ul class="victim-facts">
+      <li>💳 Their card is on your desk.</li>
+      ${r.n >= 2 ? `<li>📱 Always shops from ${phone}.</li><li>📧 ${h.email}</li>` : ""}
+      ${r.n >= 3 ? `<li>🛒 People here spend about ${price(O.SHOPS[S.level].typical)}.</li>` : ""}
+    </ul>`;
 }
 function hideSchemeTip() { $("#scheme-tip").classList.remove("show"); }
 
-/* ======================= Order ticket =======================
- * One checkout in 5 boxes. Nothing is typed: the buttons in each box (or the
- * toolkit, 1-6) swap what's in it. Card, email, device and IP belong to the
- * persona and apply to every order; address, item and time are per order. */
+/* ======================= The plan =======================
+ * One sentence with blanks. The glowing blank's hand of cards is dealt into
+ * the dock; picking a card fills it and moves on. The orders Gus scores (and
+ * the data rows) are built from the plan behind the scenes. */
 
-const BOXES = [
-  { id: "card", ico: "💳", title: "Card", chips: ["card"] },
-  { id: "buyer", ico: "👤", title: "Buyer", chips: ["email"] },
-  { id: "ship", ico: "📦", title: "Ship to", chips: ["ship"] },
-  { id: "device", ico: "💻", title: "Device & IP", chips: ["device", "proxy"] },
-  { id: "cart", ico: "🛒", title: "Cart & time", chips: ["item", "clock"] },
-];
-const CHIP_LABEL = { card: "Swap card", email: "Change email", ship: "Change address", device: "Device", proxy: "IP", item: "Item", clock: "Time" };
-const CAMPAIGN_TOOLS = ["card", "email", "proxy", "device"];
-const MAX_ORDERS = 5;
-const curOrder = () => S.inv.orders[S.inv.cur];
+const SLOT_WORDS = { who: "I'll pose as", what: "and buy", when: "at", where: "then send it to", trick: "with the trick" };
+const SLOT_ICO = { who: "🎭", what: "🛒", when: "⏰", where: "📦", trick: "🃏" };
+const SLOT_ASK = { who: "Who do you pretend to be?", what: "What do you buy?", when: "When?", where: "Where does it go?", trick: "Any trick?" };
 const factsOf = o => O.facts(S.level, S.holder, o, { perks: S.perks });
 const campaignTotal = () => S.inv ? S.inv.orders.reduce((a, o) => a + factsOf(o).amount, 0) : 0;
+const planReady = () => !!S.plan && rank().slots.every(sl => S.plan[sl]);
 
-function beginForge(schemeId) {
-  const L = LEVELS[S.level];
-  S.scheme = schemeId;
-  markSchemeUsed(schemeId);
-  S.inv = { orders: SCHEMES[schemeId].build(O.SHOPS[S.level]), cur: 0, coverEmail: "", no: Math.floor(rand(10200, 99800)) };
-  $("#scheme-banner").textContent = `${SCHEMES[schemeId].icon} ${SCHEMES[schemeId].name}`;
-  renderTicket();
-  clerkSay(L.clerk.hello);
+function cardFor(slot, id) {
+  if (slot === "what") { const i = O.itemOf(O.SHOPS[S.level], { sku: id }); return { id, ico: i.ico, name: i.name, line: price(i.price) }; }
+  return O.find({ who: O.PERSONAS, when: O.WHENS, where: O.WHERES, trick: O.TRICKS }[slot], id);
+}
+
+function startPlanning() {
+  const L = LEVELS[S.level], r = rank();
+  S.inv = { orders: [], cur: 0, coverEmail: "" };
+  dealAll();
+  S.active = r.slots[0];
+  // fewer windows for new players: the support chat and the memo arrive with the ranks
+  $("#win-clerk").classList.toggle("win-off", !r.windows.includes("clerk"));
+  $("#win-memo").classList.toggle("win-off", !r.windows.includes("memo"));
+  $("#win-case").style.top = r.windows.includes("memo") ? "352px" : "76px"; // the victim moves up while there's no memo
+  renderCaseFile();
+  rebuild();
+  if (r.windows.includes("clerk")) clerkSay(L.clerk.hello);
   inspectorSay(pick(L.lines.idle));
   scheduleBoss();
-  updateHud();
   post("phase", { phase: "forging" });
-  if (tut.on && TUTORIAL[tut.i].wait === "scheme") setTimeout(() => { tut.i++; showTutStep(); }, 350);
-  guideCheck("scheme-picked");
+  if (!guidedDone() && S.round === 1 && EMBED) setTimeout(() => startGuided(), 350);
+  else if (!tutorialDone() && S.round === 1 && !EMBED) setTimeout(() => startTutorial(0), 350);
 }
 
-function shipLine(f) {
-  const h = S.holder;
-  return { billing: `${h.city}: ${h.name.split(" ")[0]}'s home`, mule: `${h.city.split(",")[0]}: 412 Elm St (your mule)`,
-    reshipper: "Rotterdam forwarding warehouse", holder_email: h.email, burner_email: f.email.hijacked ? "your ProtonMail burner" : f.emailAddr }[f.ship.id];
+function dealAll() {
+  rank().slots.forEach(sl => { if (sl !== "where") S.hands[sl] = O.dealHand(sl, { level: S.level, plan: S.plan, unlocks: S.unlocks }); });
 }
 
-function renderTicket() {
-  const P = $("#invoice");
-  if (!S.inv) { P.innerHTML = ""; $("#strip").innerHTML = ""; return; }
-  const o = curOrder(), f = factsOf(o), h = S.holder, shop = O.SHOPS[S.level];
-  const res = S.lastResult && S.lastResult.results ? S.lastResult.results[S.inv.cur] : null;
-  const off = S.submitted ? "disabled" : "";
-  const chips = ids => ids.map(id => id === "item"
-    ? `<button class="tchip free" data-item ${off} title="Free: doesn't use an edit">🛒 ${CHIP_LABEL.item}</button>`
-    : `<button class="tchip" data-tool="${id}" ${off}>${TOOLS.find(t => t.id === id).ico} ${CHIP_LABEL[id]}</button>`).join("");
-  const box = (b, main, sub, hint) => `<div class="tbox region" data-region="${b.id}">
-      <div class="tbox-head"><span class="tbox-title">${b.ico} ${b.title}</span><span class="tchips">${chips(b.chips)}</span></div>
-      <div class="tbox-main">${main}</div><div class="tbox-sub">${sub}</div>${hint ? `<div class="tbox-hint">${hint}</div>` : ""}</div>`;
-  const account = f.email.hijacked ? `Their real account: ${Math.round(f.email.accountDays / 365)} years, ${f.email.pastOrders} orders` : "Account created today";
-  const phone = h.phone === "iphone" ? "iPhone" : "Android phone";
-  const verdictTxt = res && (res.declined ? { card_reported: "CARD REPORTED", card_blocked: "CARD BLOCKED" }[res.reason] || "DECLINED" : "APPROVED");
-  P.innerHTML = `
-    <div class="t-head">
-      <div class="t-logo">${LEVELS[S.level].icon}</div>
-      <div class="t-id"><div class="t-shop">${shop.domain}</div><div class="t-no">Order #${shop.prefix}-${S.inv.no + S.inv.cur}</div></div>
-      <div class="t-step">ORDER ${S.inv.cur + 1}<small>of ${S.inv.orders.length}</small></div>
-    </div>
-    <div class="t-grid">
-      ${box(BOXES[0], `${cap(f.card.brand)} ${f.card.type} ••••${f.card.last4}`, `${h.name} · ${f.card.foreign ? "issued abroad" : h.city}`, f.card.sub)}
-      ${box(BOXES[1], f.emailAddr, account, f.email.sub)}
-      ${box(BOXES[2], f.ship.label, shipLine(f), f.ship.sub)}
-      ${box(BOXES[3], f.dev.clone ? `Cloned ${phone}` : f.dev.label, `${f.dev.os} · ${f.dev.browser} · ${f.dev.screen}`, `🌐 ${f.proxy.label}: ${f.proxy.dist2} mi from the billing address`)}
-      ${box(BOXES[4], `${f.item.ico} ${f.item.name}`, `⏰ ${f.clock.label}`, f.clock.sub)}
-    </div>
-    <div class="t-foot">
-      <div class="t-route ${f.ship.toYou ? "you" : "victim"}">${f.ship.toYou ? "✓ The goods reach you" : "✗ The goods go to the cardholder"}</div>
-      <div class="t-total">TOTAL <b>${price(f.amount)}</b></div>
-    </div>
-    ${verdictTxt ? `<div class="t-verdict ${res.declined ? "bad" : "ok"}">${verdictTxt}</div>` : ""}`;
-  // forensic replay: what tipped Gus off on this order
-  if (res) res.tells.slice(0, 2).forEach(t => t[2] && P.querySelector(`[data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
-  P.classList.toggle("forensic", !!(res && res.declined));
-  $$(".tchip[data-tool]", P).forEach(b => b.onclick = e => { e.stopPropagation(); selectTool(b.dataset.tool); });
-  const ib = $(".tchip[data-item]", P);
-  if (ib) ib.onclick = e => { e.stopPropagation(); openCart(ib); };
-  renderStrip();
-  updateDebug();
+/* the orders, the scheme name and the screen, after any change to the plan */
+function rebuild() {
+  S.inv.orders = S.plan.what ? O.buildCampaign(S.level, S.plan) : [];
+  S.inv.cur = 0;
+  const who = cardFor("who", S.plan.who || "me"), trick = S.plan.trick && S.plan.trick !== "none" ? cardFor("trick", S.plan.trick) : null;
+  S.scheme = (S.plan.who || "me") + "+" + (S.plan.trick || "none") + (S.plan.custom ? "+custom" : "");
+  SCHEMES[S.scheme] = { name: who.name + (trick ? " · " + trick.name : "") + (S.plan.custom ? " (custom)" : ""), icon: trick ? trick.ico : who.ico, pay: 1 };
+  renderPlan(); renderHand(); updateHud();
 }
 
-/* the campaign strip under the ticket: one panel per order */
-function renderStrip() {
-  const el = $("#strip");
-  const results = S.lastResult && S.lastResult.results;
-  const n = S.inv.orders.length;
-  const panels = S.inv.orders.map((o, i) => {
-    const f = factsOf(o), r = results && results[i];
-    return `<button class="sp ${i === S.inv.cur ? "cur" : ""} ${f.ship.toYou ? "you" : ""}" data-i="${i}" title="Show order ${i + 1}">
-      <span class="sp-n">#${i + 1}</span><span class="sp-ico">${f.item.ico}</span>
-      <span class="sp-amt">${price(f.amount)}</span><span class="sp-when">${f.clock.label}</span>
-      ${r ? `<span class="sp-st ${r.declined ? "bad" : "ok"}">${r.declined ? "✗" : "✓"}</span>` : ""}
-      ${n > 1 && !S.submitted ? `<span class="sp-x" data-x="${i}" title="Remove this order">×</span>` : ""}</button>`;
-  }).join("");
-  const toYou = S.inv.orders.reduce((a, o) => { const f = factsOf(o); return a + (f.ship.toYou ? f.amount : 0); }, 0);
-  el.innerHTML = `<div class="strip-label">CAMPAIGN<small>${n} order${n > 1 ? "s" : ""} · ${price(toYou)} to you</small></div>
-    <div class="strip-panels">${panels}${!S.submitted && n < MAX_ORDERS ? `<button class="sp sp-add" id="sp-add" title="Copy this order as the next step">+ Next order</button>` : ""}</div>`;
-  $$(".sp[data-i]", el).forEach(b => b.onclick = e => {
-    const x = e.target.closest("[data-x]");
-    if (x) { removeOrder(+x.dataset.x); return; }
-    S.inv.cur = +b.dataset.i; sfx("click"); hidePopover(); renderTicket();
-  });
-  const add = $("#sp-add");
-  if (add) add.onclick = addOrder;
+function nextEmpty(from) {
+  const sl = rank().slots, i = sl.indexOf(from);
+  return [...sl.slice(i + 1), ...sl.slice(0, i + 1)].find(s => !S.plan[s]) || null;
 }
 
-function addOrder() {
-  if (!S.inv || S.submitted || S.inv.orders.length >= MAX_ORDERS) return;
-  S.inv.orders.splice(S.inv.cur + 1, 0, { ...curOrder(), clock: "now" });
-  S.inv.cur++;
-  sfx("pick"); hidePopover(); renderTicket(); updateHud();
-  showTip("first-campaign", "➕ Gus scores every order. One declined order blocks the card for the rest.", "campaigns");
-}
-function removeOrder(i) {
-  if (S.submitted || S.inv.orders.length < 2) return;
-  S.inv.orders.splice(i, 1);
-  if (S.inv.cur >= i && S.inv.cur > 0) S.inv.cur--;
-  sfx("snip"); hidePopover(); renderTicket(); updateHud();
-}
-
-/* the item is free to change: it's what you buy, not a trick */
-function openCart(anchor) {
-  const shop = O.SHOPS[S.level], o = curOrder();
-  openPopoverAt(anchor, "🛒 Pick the item · free", shop.catalog.map(i => ({
-    label: `${i.ico} ${i.name} · ${price(i.price)}`, sub: i.kind === "digital" ? "Digital: the code is emailed" : "Shipped to an address",
-    current: o.sku === i.sku,
-    act: () => { o.sku = i.sku; O.fixShip(shop, o); sfx("pen"); renderTicket(); updateHud(); },
-  })));
-}
-
-/* ======================= Toolkit ======================= */
-
-function toolAvailable() { return true; }
-
-function renderTools() {
-  $("#tools").innerHTML = TOOLS.map((t, i) => {
-    const left = t.cap - (S.uses[t.id] || 0);
-    return `<div class="tool ${left <= 0 ? "empty" : ""} ${S.tool === t.id ? "active" : ""}" data-tool="${t.id}" title="${t.name}: ${t.hint}">
-      <span class="key">${i + 1}</span><span class="ico">${t.ico}</span><span class="nm">${t.name}</span>
-      <span class="uses">${left}</span></div>`;
-  }).join("");
-  $$(".tool").forEach(el => el.onclick = () => selectTool(el.dataset.tool));
-  $("#edits-left").textContent = `Changes ${S.edits}/${S.maxEdits}`;
-  $("#envelope").classList.toggle("ready", S.edits >= 2);
-}
-
-function selectTool(id) {
-  if (!S.inv || S.submitted) return;
-  const t = TOOLS.find(x => x.id === id);
-  if (S.tool === id && $("#popover").classList.contains("show")) return dropTool();
-  if (S.uses[id] >= t.cap) { sfx("bad"); toast(`No ${t.name} uses left this round`, "bad"); return; }
-  if (S.edits >= S.maxEdits) { sfx("bad"); toast("No changes left: time to send it!", "bad"); return; }
-  S.tool = id;
-  sfx("pick"); renderTools();
-  const all = CAMPAIGN_TOOLS.includes(id);
-  hint(`${t.hint}${all ? " (every order)" : " (this order)"}`);
-  const o = curOrder(), shop = O.SHOPS[S.level];
-  const opts = id === "ship" ? O.shipOptions(shop, o) : t.options;
-  const anchor = $(`#invoice .tchip[data-tool="${id}"]`) || $(`#tools [data-tool="${id}"]`);
-  openPopoverAt(anchor, `${t.ico} ${t.name} · ${all ? "every order" : "this order"}`, opts.map(op => {
-    const locked = op.unlock && !S.unlocks.includes(op.unlock);
-    const heat = id === "ship" && S.perks.includes("mules") ? 0 : op.heat;
-    return { label: (locked ? "🔒 " : "") + op.label, sub: locked ? "Unlock it in the shop" : op.sub,
-      current: o[id] === op.id, disabled: locked, heat, act: () => applyOption(t, op, heat) };
-  }));
-}
-
-function applyOption(t, op, heat) {
-  (CAMPAIGN_TOOLS.includes(t.id) ? S.inv.orders : [curOrder()]).forEach(o => o[t.id] = op.id);
-  sfx({ card: "snip", email: "pen", proxy: "msg", device: "pick", ship: "chunk", clock: "click" }[t.id] || "pick");
-  spend(t.id, heat);
-  renderTicket();
-  if (t.id === "ship" && op.toYou) {
-    showTip("first-route", "📦 The goods reach you now. At least one order must, or there's no payout!", "route-goods");
-    guideCheck("goods-routed");
+function playCard(i) {
+  const sl = S.active, card = sl && (S.hands[sl] || [])[i];
+  if (!card || S.submitted) return;
+  S.plan[sl] = card.id;
+  if (sl === "what") { // WHERE depends on what you buy: physical goods need an address, codes an inbox
+    S.hands.where = O.dealHand("where", { level: S.level, plan: S.plan });
+    if (S.plan.where && !S.hands.where.some(c => c.id === S.plan.where)) delete S.plan.where;
+  }
+  if (sl === "who") delete S.plan.custom;
+  sfx("pick");
+  S.active = nextEmpty(sl);
+  rebuild();
+  if (planReady()) {
+    guideCheck("plan-ready");
+    showTip("first-plan", EMBED ? "✉️ Plan ready! Drag the envelope onto PRINT." : "✉️ Plan ready! Drag the envelope into the outbox.");
   }
 }
 
-function dropTool() {
-  S.tool = null;
-  hidePopover(); hint(""); renderTools();
+function selectSlot(sl) {
+  if (S.submitted || !rank().slots.includes(sl)) return;
+  if (sl === "where" && !S.plan.what) { sfx("bad"); toast("Pick what to buy first"); sl = "what"; }
+  S.active = sl; sfx("click");
+  renderPlan(); renderHand();
 }
 
+/* Mastermind: swap one part of the disguise at a time (click to cycle) */
+function tweak(id) {
+  if (S.submitted || !S.plan.who) return;
+  const t = O.TWEAKS.find(x => x.id === id);
+  const kit = { ...O.find(O.PERSONAS, S.plan.who).kit, ...(S.plan.custom || {}) };
+  const opts = t.options.filter(op => !op.unlock || S.unlocks.includes(op.unlock) || (op.unlock === "residential" && S.unlocks.includes("neighbor")) || (op.unlock === "cloner" && S.unlocks.includes("clone")));
+  const next = opts[(opts.findIndex(op => op.id === kit[id]) + 1) % opts.length];
+  S.plan.custom = { ...(S.plan.custom || {}), [id]: next.id };
+  sfx("pen"); rebuild();
+}
+
+function renderPlan() {
+  const P = $("#invoice"), r = rank();
+  if (!S.inv) { P.innerHTML = ""; return; }
+  const results = S.lastResult && S.lastResult.results;
+  const kit = S.plan.who ? { ...O.find(O.PERSONAS, S.plan.who).kit, ...(S.plan.custom || {}) } : null;
+  const tweaks = r.custom ? `<div class="pl-tweaks ${kit ? "" : "off"}">${O.TWEAKS.map(t => {
+    const op = kit && t.options.find(o => o.id === kit[t.id]);
+    return `<button class="pl-tweak" data-tweak="${t.id}" ${kit && !S.submitted ? "" : "disabled"} title="Click to swap">${t.ico} ${op ? op.label : t.name}</button>`;
+  }).join("")}</div>` : "";
+  const rows = r.slots.map(sl => {
+    const id = S.plan[sl], c = id && cardFor(sl, id);
+    return `<div class="pl-row region ${S.active === sl ? "active" : ""} ${c ? "filled" : ""}" data-region="${sl}">
+      <span class="pl-words">${SLOT_WORDS[sl]}</span>
+      <button class="pl-slot" data-slot="${sl}" ${S.submitted ? "disabled" : ""}>
+        <span class="pl-ico">${c ? c.ico : SLOT_ICO[sl]}</span><span class="pl-name">${c ? c.name : "…"}</span></button>
+    </div>${sl === "who" ? tweaks : ""}`;
+  }).join("");
+  const n = S.inv.orders.length;
+  const loot = S.inv.orders.reduce((a, o) => { const f = factsOf(o); return a + (f.ship.toYou ? f.amount : 0); }, 0);
+  const res = results ? `<span class="pl-results">${S.inv.orders.map((o, i) => `<i class="${results[i] && results[i].declined ? "bad" : "ok"}">${factsOf(o).item.ico}${results[i] && results[i].declined ? "✗" : "✓"}</i>`).join("")}</span>`
+    : n > 1 ? `<span class="pl-orders">${n} orders</span>` : "";
+  P.innerHTML = `
+    <div class="pl-head"><div class="pl-title">THE PLAN</div><div class="pl-sub">${O.SHOPS[S.level].domain}<br>${S.holder.name}'s card</div></div>
+    <div class="pl-rows">${rows}</div>
+    <div class="pl-foot">${res}<span class="pl-loot">Loot <b>${price(loot)}</b></span></div>
+    ${S.lastResult ? `<div class="t-verdict ${S.lastResult.caught ? "bad" : "ok"}">${S.lastResult.caught ? "CAUGHT" : "GOT AWAY"}</div>` : ""}`;
+  // forensic replay: the blanks that gave you away
+  if (S.lastResult && S.lastResult.caught) S.lastResult.tells.slice(0, 2).forEach(t => t[2] && P.querySelector(`[data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
+  P.classList.toggle("forensic", !!(S.lastResult && S.lastResult.caught));
+  $$(".pl-slot", P).forEach(b => b.onclick = () => selectSlot(b.dataset.slot));
+  $$(".pl-tweak", P).forEach(b => b.onclick = () => tweak(b.dataset.tweak));
+  updateDebug();
+}
+
+/* the hand: the cards for the glowing blank, in the dock */
+function renderHand() {
+  const sl = S.active, cards = sl && !S.submitted ? (S.hands[sl] || []) : [];
+  $("#hand-ask").textContent = sl && !S.submitted ? SLOT_ASK[sl] : "YOUR HAND";
+  $("#tools").innerHTML = cards.length ? cards.map((c, i) => `
+    <button class="hcard ${S.plan[sl] === c.id ? "chosen" : ""}" data-i="${i}">
+      <span class="key">${i + 1}</span><span class="hc-ico">${c.ico}</span><span class="hc-name">${c.name}</span><span class="hc-line">${c.line}</span></button>`).join("") +
+    (S.perks.includes("redraw") && !S.redrawn && sl !== "where" ? `<button class="hcard redraw" id="btn-redraw" title="Lucky Draw: once per round">🔄<span class="hc-name">Redraw</span></button>` : "")
+    : `<div class="hand-done">${S.submitted ? "Sent! Fingers crossed." : planReady() ? "✓ Plan ready! Drag the envelope →" : "Click a blank in the plan"}</div>`;
+  $$(".hcard[data-i]").forEach(b => b.onclick = () => playCard(+b.dataset.i));
+  const rd = $("#btn-redraw");
+  if (rd) rd.onclick = () => { S.redrawn = true; S.hands[sl] = O.dealHand(sl, { level: S.level, plan: S.plan, unlocks: S.unlocks }); sfx("whoosh"); renderHand(); };
+  $("#envelope").classList.toggle("ready", planReady());
+}
+const renderTools = renderHand;
+
+/* the risk of the cards you picked shows up as heat when you send the plan */
+function planHeat() {
+  return ["who", "when", "where", "trick"].reduce((a, sl) => { const c = S.plan[sl] && cardFor(sl, S.plan[sl]); return a + (c && c.heat || 0); }, 0);
+}
+
+function dropTool() { hidePopover(); }
 function hint(text) { $("#tool-hint").textContent = text; $("#tool-hint").classList.toggle("show", !!text); }
-
-function spend(id, heat) {
-  S.uses[id]++; S.edits++;
-  addHeat(heat);
-  S.tool = null; hint(""); renderTools();
-  updateHud();
-  guideCheck("edit");
-}
-
-document.addEventListener("pointermove", e => {
-  const c = $("#tool-cursor");
-  if (c) { c.style.left = e.clientX + "px"; c.style.top = e.clientY + "px"; }
-});
-
-/* options list under (or above) a button; `heat` shows what the choice costs */
-function openPopoverAt(anchor, title, options) {
-  const r = anchor.getBoundingClientRect(), below = toStage(r.left, r.bottom), above = toStage(r.left, r.top);
-  const pop = $("#popover");
-  pop.innerHTML = `<div class="pop-title">${title}</div>` + options.map((o, i) => `
-    <button class="pop-opt ${o.current ? "current" : ""}" data-i="${i}" ${o.current || o.disabled ? "disabled" : ""}>
-      <span class="po-top">${o.label}${o.current ? `<i class="po-now">✓ now</i>` : o.heat ? `<i class="po-heat">+${o.heat} 🔥</i>` : ""}</span>
-      <small>${o.sub}</small></button>`).join("");
-  pop.classList.add("show");
-  const w = pop.offsetWidth, h = pop.offsetHeight;
-  pop.style.left = clamp(below.x, 10, 1590 - w) + "px";
-  pop.style.top = (below.y + 6 + h <= 890 ? below.y + 6 : clamp(above.y - h - 6, 10, 890 - h)) + "px";
-  $$(".pop-opt", pop).forEach(b => b.onclick = ev => { ev.stopPropagation(); hidePopover(); options[b.dataset.i].act(); });
-}
 function hidePopover() { $("#popover").classList.remove("show"); }
 
 /* ======================= Heat / HUD ======================= */
@@ -734,8 +614,10 @@ function updateHud() {
   $("#heat-num").textContent = Math.round(S.heat) + "%";
   $("#tb-money").textContent = money(S.money);
   $("#tb-perks").innerHTML = S.perks.map(id => `<span title="${PERKS.find(p => p.id === id).name}">${PERKS.find(p => p.id === id).ico}</span>`).join("");
-  $("#edits-left").textContent = `Changes ${S.edits}/${S.maxEdits}`;
-  $("#envelope").classList.toggle("ready", S.edits >= 2);
+  const r = rank();
+  $("#tb-rank").textContent = "⭐".repeat(r.n) + " " + r.title;
+  $("#edits-left").textContent = r.n < O.RANKS.length ? `${S.xp - r.xp}/${O.RANKS[r.n].xp - r.xp} XP to the next rank` : "Max rank";
+  $("#envelope").classList.toggle("ready", planReady());
   updateDebug();
   const st = stageFor(S.version);
   post("hud", { level: S.level, money: S.money, heat: S.heat, version: S.version, round: S.round,
@@ -900,9 +782,8 @@ $("#envelope").addEventListener("pointerdown", e => {
 });
 
 function trySubmit() {
-  if (S.edits < 2) { sfx("bad"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); toast("Make at least 2 changes before sending", "bad"); return; }
-  // validity gate (MOCK rule check): something has to reach you
-  if (!S.inv.orders.some(o => factsOf(o).ship.toYou)) { sfx("bad"); toast("Nothing reaches you! 📦 Ship to a drop address or email the code to your burner.", "bad"); return; }
+  if (!planReady()) { sfx("bad"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); toast("Fill in every blank of the plan first", "bad"); return; }
+  addHeat(planHeat());
   if (EMBED) {
     // in the office the envelope is printed, then carried to the inspector by hand
     S.submitted = S.printed = true; clearTimeout(S.bossTimer); dropTool();
@@ -933,7 +814,7 @@ window.addEventListener("message", e => {
 const campaignCtx = () => ({ level: S.level, holder: S.holder, orders: S.inv.orders, hist: S.hist, session: S.session,
   round: S.round, scheme: S.scheme, campaign: S.session + "-r" + S.round, perks: S.perks });
 
-/* the rows for the campaign on screen; random parts (minutes, ids) stay put until the orders change */
+/* the rows for the plan on screen; random parts (minutes, ids) stay put until the plan changes */
 let rowCache = { key: null, rows: null };
 function previewRows() {
   const key = JSON.stringify([S.round, S.inv.orders]);
@@ -944,12 +825,13 @@ function previewRows() {
 // MOCK verdict: the scripted Gus in orders.js
 function mockJudge() {
   const rows = previewRows();
-  const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion, learned: S.learned });
-  const payout = Math.round(r.payout * SCHEMES[S.scheme].pay * (S.perks.includes("night") ? 2 : 1));
+  const leniency = [0, 18, 10, 4, 0, 0][rank().n]; // a Rookie's first plans should mostly work
+  const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion, learned: S.learned, leniency });
+  const payout = Math.round(r.payout * (S.perks.includes("night") ? 2 : 1));
   return { ...r, rows, payout, line: null, newVersion: null, source: "mock" };
 }
 
-/* turn a POST /submit response into the shape the UI uses; tells are [name, weight, box] */
+/* turn a POST /submit response into the shape the UI uses; tells are [name, weight, blank] */
 function adaptVerdict(r, mock) {
   const verdict = String(r.verdict ?? "").toUpperCase();
   const caught = verdict ? ["FLAGGED", "DECLINED"].includes(verdict) : !!r.caught;
@@ -957,8 +839,7 @@ function adaptVerdict(r, mock) {
   const tells = raw.map(t => {
     const name = typeof t === "string" ? t : t.tell_type ?? t.feature ?? t.name ?? t.tell;
     const weight = typeof t === "string" ? 1 : +(t.strength ?? t.weight ?? t.score ?? 1);
-    const region = typeof t === "string" ? null : t.region;
-    return [name, weight, region || TELL_REGION[name] || null];
+    return [name, weight, TELL_REGION[name] || null];
   }).filter(t => t[0]);
   const v = +(r.new_version ?? r.version);
   return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)), results: r.results ?? mock.results, rows: mock.rows,
@@ -967,6 +848,7 @@ function adaptVerdict(r, mock) {
 
 async function judge() {
   const mock = mockJudge();
+  mock.tells.forEach(t => t[2] = TELL_REGION[t[0]] || null); // orders.js names ticket boxes; the plan has blanks
   if (!API || !S.roundId) return mock;
   try {
     const { verdict, ...rec } = record(); // the verdict is what we're asking for
@@ -981,7 +863,7 @@ function finishRows(res) {
   rows.forEach((row, i) => {
     const x = res.results && res.results[i];
     Object.assign(row, {
-      // BLOCKED: never scored, the card was already declined or reported earlier in the campaign
+      // BLOCKED: never scored, the card was already declined or reported earlier in the plan
       verdict: x ? (x.declined ? (x.reason === "flagged" ? "DECLINED" : "BLOCKED") : "APPROVED") : res.caught ? "DECLINED" : "APPROVED",
       score: x ? +x.score.toFixed(3) : null,
       top_reasons: x ? JSON.stringify(x.tells.slice(0, 3).map(t => [t[0], +t[1].toFixed(1)])) : null,
@@ -998,7 +880,8 @@ async function submit() {
   sfx("chunk");
   const L = LEVELS[S.level];
   const ob = $("#outbox"); ob.classList.add("scanning");
-  inspectorSay(`Reviewing your orders…`);
+  inspectorSay(`Checking your order…`);
+  renderHand();
   const pending = judge(); // start the request now, the animation covers the wait
 
   await sleep(900);
@@ -1006,7 +889,7 @@ async function submit() {
   const st = $(".inspect-stage");
   st.classList.remove("done");
   $("#big-stamp").className = "big-stamp"; $("#cash-pop").classList.remove("show");
-  $("#inspect-line").textContent = `${L.inspector.name} v${S.version} is reviewing ${S.inv.orders.length > 1 ? S.inv.orders.length + " orders" : "your order"}…`;
+  $("#inspect-line").textContent = `${L.inspector.name} is checking it…`;
   $("#inspect-line").classList.add("show", "reading");
   overlay("inspect"); sfx("scan");
 
@@ -1015,25 +898,26 @@ async function submit() {
   S.rows = finishRows(res);
   const { caught, tells, payout } = res;
   const bs = $("#big-stamp");
-  bs.textContent = caught ? "DECLINED" : "APPROVED";
+  bs.textContent = caught ? "CAUGHT" : "APPROVED";
   bs.classList.add("show", caught ? "flagged" : "paid");
   sfx("stamp");
   st.classList.add("done");
-  const said = res.line || (res.reported && !tells.length ? "The cardholder called their bank. Card blocked!" : pick(L.lines[caught ? "catch" : "pass"]));
+  // Gus says why, in plain words: that's the only explanation the player gets
+  const said = res.line || (res.reported && !tells.length ? "The cardholder called their bank. Card's dead!"
+    : caught && tells.length ? `${pick(L.lines.catch)} ${cap(tellLabel(tells[0][0]))}!` : pick(L.lines[caught ? "catch" : "pass"]));
   $("#inspect-line").classList.remove("reading");
-  $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
+  $("#inspect-line").textContent = `${L.inspector.name}: "${said}"`;
   inspectorSay(said);
-  const n = S.inv.orders.length;
   post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name,
-    vendor: `${n} order${n > 1 ? "s" : ""} · ${O.SHOPS[S.level].domain}`, tells: tells.slice(0, 3).map(t => t[0]) });
+    vendor: `${SCHEMES[S.scheme].icon} ${SCHEMES[S.scheme].name}`, tells: tells.slice(0, 3).map(t => t[0]) });
   $("#inspect-line").classList.add("show");
   if (caught) {
     sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
     S.streak = 0; S.caughtCount++;
-    if (S.caughtCount === 1) showTip("first-caught", "🔍 Declined! The red boxes show what Gus spotted. Press D for the full row.", "tells-explained");
+    if (S.caughtCount === 1) showTip("first-caught", "🔍 Caught! The red blank is what gave you away.", "tells-explained");
     addHeat(12);
   }
-  if (payout > 0) { // orders that got through before a decline still pay
+  if (payout > 0) { // orders that got through before a catch still pay
     S.money += payout;
     if (!caught) S.streak++;
     $("#cash-pop").textContent = "+" + money(payout); $("#cash-pop").classList.add("show");
@@ -1042,10 +926,11 @@ async function submit() {
     if (!caught) S.cards.push({ scheme: S.scheme, payout, round: S.round, isNew: true });
   }
   S.history.push({ round: S.round, scheme: S.scheme, caught, payout, version: S.version, tells: tells.map(t => t[0]) });
-  // forensic replay: open the first declined order on the ticket
-  const firstBad = res.results ? res.results.findIndex(r => r.declined) : -1;
-  if (firstBad >= 0) S.inv.cur = firstBad;
-  renderTicket();
+  // rank: every round teaches something, getting away with it teaches more
+  const before = rank();
+  S.xp += caught ? 1 : 2; saveXp();
+  if (rank().n > before.n) S.rankUp = rank();
+  renderPlan();
   updateHud();
   guideCheck("verdict-done");
 }
@@ -1077,7 +962,7 @@ function showCorkboard() {
     <div class="cork-card main" style="left:380px;top:40px;transform:rotate(-3deg)">
       <b>${SCHEMES[S.scheme].icon} ${SCHEMES[S.scheme].name}</b>
       ${S.inv.orders.length} order${S.inv.orders.length > 1 ? "s" : ""} on ${S.holder.name}'s card<br>${money(r.payout)} to you
-      <div class="cc-stamp ${r.caught ? "" : "paid"}">${r.caught ? "DECLINED" : "GOT AWAY"}</div>
+      <div class="cc-stamp ${r.caught ? "" : "paid"}">${r.caught ? "CAUGHT" : "GOT AWAY"}</div>
     </div>` +
     (top.length ? top : [["heat", 0, null]]).map((t, i) => `
     <div class="cork-card" style="left:${pos[i][0]}px;top:${pos[i][1]}px;transform:rotate(${rand(-5, 5)}deg)">
@@ -1102,11 +987,16 @@ function showBetween() {
   const n = 40 + S.round * 17 + Math.floor(rand(0, 30));
   $("#patch-title").textContent = `Inspector v${S.version}`;
   const items = learned.length
-    ? learned.map(l => `<li>Now catches: <b>${l}</b> — learned from ${n} orders.</li>`)
+    ? learned.map(l => `<li>Gus now watches for: <b>${l}</b></li>`)
     : [`<li>No new tricks learned. <b>Clean job.</b></li>`];
   const st = stageFor(S.version);
   if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b></li>`);
-  if (S.streak >= 2) { items.push(`<li>🔥 Streak ×${S.streak} — vary your schemes to keep it.</li>`); showTip("first-streak", "🔥 Streak! Different schemes in a row. Keep varying!", "streak-bonus"); }
+  if (S.streak >= 2) { items.push(`<li>🔥 Streak ×${S.streak}: keep changing your plan.</li>`); showTip("first-streak", "🔥 Streak! Keep changing your plan to keep it.", "streak-bonus"); }
+  if (S.rankUp) {
+    items.unshift(`<li class="rank-up">⭐ <b>Rank up: ${S.rankUp.title}!</b> New: ${S.rankUp.unlocks}.</li>`);
+    toast(`⭐ Rank up: ${S.rankUp.title}!`, "good"); setTimeout(() => sfx("cash"), 300);
+    S.rankUp = null;
+  }
   $("#patch-list").innerHTML = items.join("");
   loadPatchNotes(S.prevVersion, items.slice(learned.length ? learned.length : 1));
   const caught = S.history.filter(h => h.caught).length;
@@ -1195,25 +1085,19 @@ $("#btn-quit").onclick = () => { sfx("click"); quitToTitle(); };
  * in the 3D world. Replaces the auto-start of the old 12-step UI tour for
  * round 1. The old tour remains accessible via the "Tutorial" button. */
 
-const GUIDE_KEY = "forged-guided-done";
+const GUIDE_KEY = "forged-guided-done-v2";
 const GUIDE = { on: false, step: 0, waitingFor3D: null };
 
+// no "sit down" step: a run only starts once you're at the computer
 const GUIDE_STEPS = [
-  { id: "sit",       world: true,  label: "Go to your desk",      instr: "Walk to your desk and press E to sit down." },
-  { id: "scheme",    instr: "Read the memo and the card & shop file, then pick a scheme.",
-    spotlight: ["#scheme-cards"] },
-  { id: "edit-bank", instr: "Use 📦 Drop address so the goods reach you, not the cardholder.",
-    spotlight: [".tool[data-tool=ship]"] },
-  { id: "edit-tool", instr: "Make one more change: you need at least 2 to send.",
-    spotlight: ["#tools"] },
-  { id: "clerk",     instr: "Send a short note to customer support. Match their quirk!",
-    spotlight: ["#win-clerk"], skippable: true },
-  { id: "submit",    instr: EMBED ? "Drag the envelope onto PRINT to send your orders." : "Drag the envelope into the OUTBOX.",
+  { id: "scheme",    instr: "Fill in the plan: click a card at the bottom.",
+    spotlight: ["#invoice"] },
+  { id: "submit",    instr: EMBED ? "Drag the envelope onto PRINT." : "Drag the envelope into the OUTBOX.",
     spotlight: ["#envelope"] },
   { id: "pickup",    world: true,  label: "Grab at printer",      instr: "Walk to the printer and press E to grab it." },
   { id: "deliver",   world: true,  label: "Drop in IN tray",      instr: "Carry it to Gus's IN tray and press E." },
-  { id: "verdict",   instr: "Gus is reviewing your orders..." },
-  { id: "done",      instr: "Tutorial complete! You're ready to forge on your own.", auto: true },
+  { id: "verdict",   instr: "Gus is checking your order..." },
+  { id: "done",      instr: "You got it! More cards unlock as you rank up.", auto: true },
 ];
 
 function guidedDone() { try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; } }
@@ -1283,7 +1167,10 @@ function renderGuideCard() {
   // Position the card
   if (spotlight.length) {
     const r = tutRect(spotlight);
-    if (r) {
+    if (r && r.y > 600) { // low targets (the envelope): above them, so the card doesn't cover what it points at
+      card.style.left = clamp(r.x + r.w - 380, 20, 1200) + "px";
+      card.style.top = Math.max(r.y - 150, 80) + "px";
+    } else if (r) {
       card.style.left = Math.min(r.x + r.w + 20, 1100) + "px";
       card.style.top = Math.max(r.y, 80) + "px";
     }
@@ -1301,10 +1188,7 @@ function guideCheck(event, data) {
   const step = GUIDE_STEPS[GUIDE.step];
   if (!step) return;
   switch (step.id) {
-    case "scheme": if (event === "scheme-picked") advanceGuide(); break;
-    case "edit-bank": if (event === "goods-routed") advanceGuide(); break;
-    case "edit-tool": if (event === "edit" && S.edits >= 2) advanceGuide(); break;
-    case "clerk": if (event === "clerk-sent") advanceGuide(); break;
+    case "scheme": if (event === "plan-ready") advanceGuide(); break;
     case "submit": if (event === "submitted") advanceGuide(); break;
     case "verdict": if (event === "verdict-done") handleGuidedVerdict(); break;
   }
@@ -1337,59 +1221,19 @@ function handleGuidedVerdict() {
  * arrow and a card. Runs once per browser (the first scheme pick), and any
  * time from Game Menu → Tutorial. */
 
-const TUT_KEY = "forged-tutorial-done";
-const TUT_SCHEME = "account_takeover"; // the tutorial's steps are written for this scheme
-
-// while the tutorial waits for a scheme, only the tutorial's scheme can be picked
-function lockSchemes(on) {
-  $$(".scheme-card").forEach(c => {
-    const lock = on && c.dataset.scheme !== TUT_SCHEME;
-    c.disabled = lock;
-    c.classList.toggle("tut-locked", lock);
-    c.title = lock ? "Available after the tutorial" : "";
-  });
-}
-// Steps with `until` are hands-on: the player does the thing, the card turns green and
-// moves on. `can` says whether the step is still possible (uses left); if not, "Skip step" shows.
-const usesLeft = id => S.inv && S.uses[id] < TOOLS.find(t => t.id === id).cap && S.edits < S.maxEdits;
+const TUT_KEY = "forged-tutorial-done-v2"; // v2: the plan cards replaced the invoice tour
+// the old tour picked a scheme first; plans have no scheme picker, so nothing to lock
+function lockSchemes() {}
+// Steps with `until` are hands-on: the player does the thing, the card turns green and moves on.
 const TUTORIAL = [
-  { at: [`.scheme-card[data-scheme=${TUT_SCHEME}]`], side: "top", wait: "scheme", title: "Pick your scheme",
-    text: () => `Each card is a ready-made fraud campaign, with its <b>risk</b> and <b>payout</b>. <b>Hover a card</b> to see which tools help, which to avoid, and what gives it away.<br><br>For this tutorial, start with <b>Account takeover</b>: one order from the cardholder's own account. The others unlock as soon as the tutorial ends.` },
-  { at: ["#win-memo"], side: "right", title: "The leaked memo",
-    until: () => S.memo.some(m => m.mark),
-    text: () => `The boss's orders to Gus, the shop's risk engine: what he's watching this round. <b>Two rules are real, one is fake.</b> You work out which from what gets caught.<br><br><b>Try it:</b> click any rule to mark it REAL. Click again for FAKE.` },
-  { at: ["#win-case"], side: "right", title: "The card and the shop",
-    text: () => `At the top, this round's stolen card: <b>whose it is, where they live, their real email and phone</b>. Below, what normal looks like at this shop. <b>The more your orders look like this cardholder's normal, the harder they are to catch.</b>` },
-  { at: ["#scheme-banner", "#invoice"], side: "right", title: "Your order",
-    text: () => `One checkout in 5 boxes. <b>You never type anything:</b> the buttons in each box swap what's in it. The line at the bottom says who gets the goods. Right now it's the cardholder, so you'd earn nothing.` },
-  { at: ["#dock .dock-label", "#tools"], side: "top", title: "The toolkit",
-    text: () => `Each tool swaps one box: ${kb("tool1")}–${kb("tool6")}, a click, the box's buttons, or the mouse wheel. Card, email, device and IP belong to your persona and apply to every order. Address and time apply to the order on screen. The 🔥 number is the heat a choice costs. <b>You need 2 changes to send</b>, ${S.maxEdits} at most.` },
-  { at: [".tool[data-tool=ship]", "#invoice [data-region=ship]"], side: "right", title: "Get the goods: drop address",
-    until: () => S.inv && S.inv.orders.some(o => factsOf(o).ship.toYou), can: () => usesLeft("ship"),
-    text: () => `<b>Do it:</b> press ${kb("tool5")} (or 📦 Change address) and pick <b>Mule in the same city</b>.<br><br>Without it, the order ships to the victim's home and you get nothing.` },
-  { at: [".tool[data-tool=device]", "#invoice [data-region=device]"], side: "right", title: "Blend in: device and IP",
-    until: () => S.inv && (S.uses.device >= 1 || S.uses.proxy >= 1), can: () => usesLeft("device") || usesLeft("proxy"),
-    text: () => `This is the cardholder's own account, and they always shop from their phone, near home. Your Windows laptop and home IP stand out.<br><br><b>Do it:</b> press ${kb("tool4")} for another device, or ${kb("tool3")} for a VPN near the cardholder. Cloning their phone unlocks in the shop.` },
-  { at: ["#strip"], side: "top", title: "Campaigns",
-    text: () => `The whole scheme, one panel per order. <b>+ Next order</b> copies the order on screen so you can add a step: a tiny test charge first, or a second buy a day later. Gus scores every order, and <b>one declined order blocks the card</b> for the rest.` },
-  { at: ["#win-clerk"], side: "left", title: "Sweet-talk support",
-    enter: () => { tut.base = S.clerkReplies || 0; }, until: () => (S.clerkReplies || 0) > tut.base,
-    text: () => `<b>Do it:</b> press ${kb("chat")} (or click the box), type a short note to customer support and press Enter. ${LEVELS[S.level].clerk.name}'s quirk is in the window's corner: <i>${LEVELS[S.level].clerk.quirk}</i>. Notes that play to it fill the <b>Convinced</b> bar, which lowers Gus's suspicion.` },
-  { at: [], noDim: true, drill: true, title: "Practice: the boss",
-    enter: () => { tut.hid = false; tutBossDrill(); }, until: () => tut.hid,
-    text: () => `The boss walks by while you work. When the red <b>FOOTSTEPS!</b> banner appears, press ${kb("hide")} fast to slide a newspaper over the screen. Miss it in a real round and you take +15 heat.<br><br><b>Practice now</b> (no heat): footsteps are coming…` },
-  { at: ["#win-inspector"], side: "left", title: "Gus, the risk engine",
-    text: () => `Who's judging your orders, and which version he is. Every round he's retrained on your tricks and gets smarter: <b>intern → magnifier → UV lamp → cyborg</b>. A tell that caught you once weighs more from then on.` },
-  { at: ["#topbar .tb-heat", "#topbar .tb-money"], side: "bottom", title: "Heat and money",
-    text: () => `<b>Heat</b> rose with each change you just made. It also climbs when you repeat a scheme, and high heat makes Gus suspicious. <b>Siphoned</b> is your money so far.` },
-  { at: [], noDim: true, title: "What Gus sees", hold: 2600,
-    until: () => $("#debug-panel").classList.contains("show"), leave: () => $("#debug-panel").classList.remove("show"),
-    text: () => `<b>Do it:</b> press ${kb("detector")} to see exactly what Gus's model reads: <b>one row per order</b>, in the same format as the real card-fraud data the model trains on. Every choice you made is in there.` },
-  { at: ["#envelope"], side: "left", title: EMBED ? "Print and deliver" : "Send it", last: true,
-    until: () => S.printed || S.submitted, can: () => S.edits >= 2,
-    text: () => EMBED
-      ? `<b>Do it:</b> drag this envelope onto <b>PRINT</b> (the dark box at the top right). You'll stand up: grab the order slip at the printer (${kb("interact")}), drop it in Gus's IN tray (${kb("interact")}), then sit back down for the verdict and the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.`
-      : `<b>Do it:</b> drag this envelope into the <b>OUTBOX</b> (the dark box at the top right). Gus stamps each order APPROVED or DECLINED, then you spend your money in the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.` },
+  { at: ["#invoice", "#tools"], side: "right", title: "Make a plan",
+    until: () => planReady(),
+    text: () => `Fill in the blanks. <b>Click a card</b> at the bottom (or press ${kb("tool1")}–${kb("tool3")}) to fill the glowing one.` },
+  { at: ["#win-inspector"], side: "left", title: "Fool Gus",
+    text: () => `Gus is the shop's fraud robot. Get past him and you get paid. <b>He learns from every catch</b>, so keep changing your plan.` },
+  { at: ["#envelope"], side: "left", title: EMBED ? "Print it" : "Send it", last: true,
+    until: () => S.printed || S.submitted, can: () => planReady(),
+    text: () => EMBED ? `Drag the envelope onto <b>PRINT</b>, then carry the slip to Gus.` : `Drag the envelope into the <b>OUTBOX</b>.` },
 ];
 
 const tut = { on: false, i: 0 };
@@ -1586,13 +1430,19 @@ function hideInvoice() {
   setTimeout(() => np.classList.remove("show"), 1700);
 }
 
-/* ======================= What Gus sees (the IEEE-CIS rows) ======================= */
+/* ======================= Debug: the data rows (hidden from players) =======================
+ * Players never see rows or columns. With ?debug on the page (or the office) URL,
+ * D opens the current order's IEEE-CIS row and the CSV export. */
 
+const DEBUG = (() => {
+  const has = loc => { try { return new URLSearchParams(loc.search).has("debug"); } catch (e) { return false; } };
+  return has(location) || (EMBED && has(parent.location));
+})();
 function record() {
-  if (!S.inv) return { note: "pick a scheme first" };
+  if (!S.inv) return { note: "make a plan first" };
   return {
     mode: "online", level: S.level, scheme: S.scheme, campaign_id: S.session + "-r" + S.round,
-    orders: S.inv.orders.map(o => ({ ...o })),
+    plan: { ...S.plan }, rank: rank().n, orders: S.inv.orders.map(o => ({ ...o })),
     cover_note: S.inv.coverEmail || "", persuasion: Math.round(S.persuasion), // Smooth Talker raises this
     after_hours: S.perks.includes("night"), // Night Shift: pays double
     detector_version: S.version, heat: Math.round(S.heat),
@@ -1603,13 +1453,13 @@ function record() {
 const compact = row => Object.fromEntries(Object.entries(row).filter(([, v]) => v != null && v !== ""));
 function updateDebug() {
   if (!$("#debug-panel").classList.contains("show")) return;
-  if (!S.inv) { $("#debug-title").textContent = "No order yet"; $("#debug-json").textContent = "Pick a scheme first."; return; }
-  const rows = S.rows || previewRows(), i = S.inv.cur;
-  $("#debug-title").textContent = `Order ${i + 1} of ${rows.length}, as an IEEE-CIS row`;
-  $("#debug-json").textContent = JSON.stringify(compact(rows[i]), null, 2) +
+  if (!S.inv || !S.inv.orders.length) { $("#debug-title").textContent = "No order yet"; $("#debug-json").textContent = "Pick what to buy first."; return; }
+  const rows = S.rows || previewRows();
+  $("#debug-title").textContent = `${rows.length} order${rows.length > 1 ? "s" : ""} as IEEE-CIS rows`;
+  $("#debug-json").textContent = rows.map((r, i) => `// order ${i + 1}\n` + JSON.stringify(compact(r), null, 2)).join("\n\n") +
     "\n\n// Blank columns (V1-V339 and the rest) are empty (NaN), as in most rows of the dataset.";
 }
-function toggleDebug() { $("#debug-panel").classList.toggle("show"); updateDebug(); }
+function toggleDebug() { if (!DEBUG) return; $("#debug-panel").classList.toggle("show"); updateDebug(); }
 
 /* every sent order is kept in this browser and can be exported as a CSV with the dataset's columns */
 const ROWS_KEY = "forged.ieee.rows";
@@ -1703,9 +1553,9 @@ document.addEventListener("keydown", e => {
   if (EMBED && K.is("standUp", code)) { e.preventDefault(); post("stand"); return; }
   if (K.is("detector", code)) { e.preventDefault(); toggleDebug(); return; }
   if (!$("#screen-desk").classList.contains("active") || $(".overlay.show")) return;
-  for (let i = 1; i <= 6; i++) if (K.is("tool" + i, code)) { e.preventDefault(); selectTool(TOOLS[i - 1].id); return; }
+  for (let i = 1; i <= 3; i++) if (K.is("tool" + i, code)) { e.preventDefault(); playCard(i - 1); return; }
   if (K.is("drop", code)) { dropTool(); return; }
-  if (K.is("chat", code) && S.inv && !S.submitted) { e.preventDefault(); $("#chat-text").focus(); }
+  if (K.is("chat", code) && S.inv && !S.submitted && rank().windows.includes("clerk")) { e.preventDefault(); $("#chat-text").focus(); }
 });
 
 // mouse buttons can be bound too ("Mouse3" = back button…); left click stays the pointer
@@ -1716,19 +1566,15 @@ document.addEventListener("mousedown", e => {
   else if (K.is("hide", code) && S.bossWindow) { e.preventDefault(); hideInvoice(); }
 });
 
-// mouse wheel cycles through the tools you can still use, like a hotbar
+// mouse wheel moves between the blanks of the plan
 let wheelAt = 0;
 $("#screen-desk").addEventListener("wheel", e => {
   if (S.paused || (tut.on && !TUTORIAL[tut.i].until) || $(".overlay.show") || !S.inv || S.submitted) return;
   if (e.target.closest(".win-body, #debug-panel, #popover")) return; // let windows scroll
   e.preventDefault();
   const now = performance.now(); if (now - wheelAt < 140) return; wheelAt = now; // trackpads send bursts
-  if (S.edits >= S.maxEdits) return;
-  const usable = TOOLS.filter(t => !t.instant && toolAvailable(t) && S.uses[t.id] < t.cap);
-  if (!usable.length) return;
-  const i = usable.findIndex(t => t.id === S.tool), dir = e.deltaY > 0 ? 1 : -1;
-  const next = usable[i < 0 ? (dir > 0 ? 0 : usable.length - 1) : (i + dir + usable.length) % usable.length];
-  if (next.id !== S.tool) selectTool(next.id);
+  const sl = rank().slots, i = sl.indexOf(S.active), dir = e.deltaY > 0 ? 1 : -1;
+  selectSlot(sl[i < 0 ? 0 : (i + dir + sl.length) % sl.length]);
 }, { passive: false });
 
 document.addEventListener("pointerdown", e => {
