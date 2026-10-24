@@ -162,7 +162,7 @@ async def submit(req: SubmitRequest):
     # Build case_file snapshot from level_data
     case_file_snapshot = {
         "company": level_data["company"],
-        "vendors": [v if isinstance(v, dict) else v for v in level_data["vendors"]],
+        "vendors": [v if isinstance(v, dict) else v.model_dump() for v in level_data["vendors"]],
         "approvers": level_data["approvers"],
         "notes": level_data["notes"],
     }

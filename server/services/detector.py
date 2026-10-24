@@ -22,6 +22,15 @@ TELL_DESCRIPTIONS: dict[str, str] = {
     "heat": "This vendor has been flagged frequently in recent submissions",
     "letterhead": "Letterhead doesn't match the vendor's official branding",
     "unknown_vendor": "Vendor is not recognized in the company's approved list",
+    # tells the ML detector adds
+    "amount_unusual": "Amount is unusual for this vendor or its purchase order",
+    "bad_po": "No open purchase order matches this invoice",
+    "dup_number": "Looks like an invoice that was already paid",
+    "stamp_wrong": "Stamps don't fit this vendor's habits",
+    "short_terms": "Payment is due unusually fast",
+    "after_hours": "Sent outside business hours",
+    "vague_items": "Line items are vague",
+    "urgent_email": "Cover email pressures for a fast or changed payment",
 }
 
 
@@ -67,7 +76,9 @@ def detect(record: InvoiceRecord, version: int, memo: list[dict]) -> tuple[list[
 
         ml_tells, raw_suspicion = predict(record, version, memo)
         logger.info("ML detector returned %d tells (suspicion=%.1f)", len(ml_tells), raw_suspicion)
-        return ml_tells, raw_suspicion
+        tells = [Tell(tell_type=t["tell_type"], strength=t["strength"], region=t.get("region"),
+                      description=TELL_DESCRIPTIONS.get(t["tell_type"])) for t in ml_tells]
+        return tells, raw_suspicion
     except Exception as exc:
         logger.warning("ML detector unavailable (%s), using rule-based fallback", exc)
 

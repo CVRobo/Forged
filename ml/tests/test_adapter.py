@@ -66,3 +66,9 @@ def test_night_shift_sends_after_hours():
 
 def test_accepts_the_servers_pydantic_object_as_well_as_a_dict():
     assert to_invoice(SimpleNamespace(**record())) == to_invoice(record())
+
+
+def test_a_weekend_date_moves_to_monday_instead_of_reading_as_after_hours():
+    # The prototype prints a random "Fri, Oct N", and Oct 10 2026 is a Saturday.
+    assert to_invoice(record(date="Fri, Oct 10")).issue_date == date(2026, 10, 12)
+    assert features(record(date="Fri, Oct 10"))["offhours_send"] == 0

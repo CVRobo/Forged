@@ -95,14 +95,25 @@ A trial of Stage 2 (gradient-boosted trees with the spec 4.3 monotone constraint
 
 ## What the server needs to change (A's files)
 
-0. **Install the ML requirements in the server's environment** (`pip install -r ml/requirements.txt`). `server/requirements.txt` has no scikit-learn or numpy. Without them `from ml.detector import predict` fails and `server/services/detector.py` silently falls back to rule-based tells. With them, the server's own `detect()` picks the model up (checked: it logs "ML detector returned 5 tells").
-1. **Use the model's verdict.** `server/routes/round.py` still multiplies suspicion by `0.55 + 0.12 * (version - 1)`, adds random noise of ±12, and flags above 38. `predict()` scales its suspicion so that formula lands on the model's threshold, but the noise still flips verdicts near the line, and that breaks the "same trick, now FLAGGED" demo. Use `prediction.flagged` and keep persuasion as a separate gate (spec 5.4).
-2. **Retrain on PAID tricks, for real.** Today the server bumps the version after 5 *caught* submissions without training anything. Queue the PAID player submissions, call `retrain(records)`, and use its `new_version`. `POST /admin/retrain?force=true` maps to `retrain(records, force=True)`.
-3. **Send what the model can't guess.** For each session: the earlier records (`predict(record, history=...)`), the invoices paid so far, and the open orders. On each record: a due date and a send time. Without the paid invoice being copied, a Duplicate Dance can't be labelled.
-4. **One vendor list.** Level 1 in `server/content/levels.py` has 3 vendors, and the model's world has 6 (`ml/world.py`). Show the player the same case file the model uses.
-5. **Expose the data.** `GET /detector/versions` → `versions()`, `GET /detector/replay_grid` → `replay_grid()`. `GET /metrics` can read `versions()` too. The memo's two real rules come from `memo_rules()`.
-6. **Warm up.** Call `warm()` at startup, or run `python -m ml.detector --train` before the demo.
-7. **Fix the contract.** `docs/contracts.md` documents `predict(record) -> dict`, but the server calls `predict(record, version, memo)` and unpacks two values. `Prediction` supports both: it unpacks as `(tells, suspicion)`, and `.to_dict()` gives the dict.
+Already done on `b/ml-generator`, as small fixes in A's files:
+- **ML dependencies** are in `server/requirements.txt`.
+- **Warm-up:** the app trains or loads the detector in a background thread at startup.
+- **Visible fallback:** a failed ML import now logs a warning.
+- **Tell wrapping:** `detect()` wraps ML tells into `Tell`, with descriptions for the new tell names. Before this, `round.py` crashed on `t.model_dump()`.
+- **Snapshot crash:** the `round.py` case-file snapshot crashed every `/submit` with "Vendor is not JSON serializable", ML or not. It now calls `v.model_dump()`.
+- **Contract:** `docs/contracts.md` section 3 documents the real interface.
+
+Checked end to end: A's real `/round/start` and `/submit` routes, with an in-memory Redis, return 200. The verdicts are the ML model's, and Level 2 falls back to the rule-based tells.
+
+Still A's:
+1. **Use the model's verdict.** `round.py` still multiplies suspicion by `0.55 + 0.12 * (version - 1)`, adds random noise of ±12, and flags above 38. `predict()` scales its suspicion so that formula lands on the model's threshold, but the noise still flips verdicts near the line, and that breaks the "same trick, now FLAGGED" demo. Use `prediction.flagged` and keep persuasion as a separate gate (spec 5.4).
+2. **Retrain for real, and stop inventing metrics.** Today the server bumps the version after 5 *caught* submissions without training anything, then writes catch rate, FPR and held-out rate as the previous values plus `random.uniform` increments (`round.py`, around line 197). `GET /metrics` serves those numbers. Queue the PAID player submissions, call `retrain(records)`, use its `new_version`, and have `/metrics` return `versions()`. `POST /admin/retrain?force=true` maps to `retrain(records, force=True)`.
+3. **One version number.** The UI's "Inspector vN" is the server's Redis counter, not the model that judged the invoice. Show `prediction.version`.
+4. **Store what the model saw.** Add `prediction.score`, `threshold`, `flagged`, `version`, `features` and the payload label to the `store_submission` call, so verdicts can be reproduced.
+5. **Send what the model can't guess.** The invoice being duplicated, the paid invoices and open orders, a due date and a send time. Without the copied paid invoice, a Duplicate Dance can't be labelled. Session history in `predict(record, history=...)` only after the server also interleaves background legit invoices, because training sessions include them.
+6. **One vendor list.** Level 1 in `server/content/levels.py` has 3 vendors, and the model's world has 6 (`ml/world.py`). Show the player the same case file the model uses.
+7. **Expose the data.** `GET /detector/versions` → `versions()`, `GET /detector/replay_grid` → `replay_grid()`. The memo's two real rules come from `memo_rules()`.
+8. **Keep the stage demo apart from the booth.** Once retraining is real, public playtests will retrain the live model, so by stage time the demo trick may already be caught. Point the stage server at a fresh `FORGED_MODEL_DIR`.
 
 New tell names for C's labels: `short_terms`, `after_hours`, `vague_items`, `urgent_email`. The rest reuse the prototype's.
 
@@ -112,3 +123,4 @@ New tell names for C's labels: `short_terms`, `after_hours`, `vague_items`, `urg
 - The stats page at `frontend/src/app/stats/page.tsx`. It needs A's endpoints from item 5 above.
 - Step 8: the search attacker and the robustness audit.
 - Stage 2 trees, if the team wants the stronger learner.
+- Only Sunny Diner is modelled. `predict()` raises for other levels, so the server uses its rules there, and `retrain()` skips their records.

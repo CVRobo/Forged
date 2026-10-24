@@ -26,6 +26,7 @@ from ml.world import Truth
 # suspicion is scaled so that rule lands exactly on this model's threshold.
 SERVER_CUTOFF = 38.0
 SERVER_SKILL = (0.55, 0.12)
+MODELLED_LEVELS = {1}  # only Sunny Diner has a world in ml/world.py; other levels use the server's rules
 
 
 @dataclass
@@ -56,6 +57,8 @@ def predict(record, version: int | None = None, memo=None, history=(), model_ver
     """record: the game's InvoiceRecord (dict or pydantic). version: the server's inspector
     version, used only for the compatibility suspicion. history: this session's earlier
     records, oldest first. model_version: judge with a specific saved version."""
+    if _get(record, "level", 1) not in MODELLED_LEVELS:
+        raise NotImplementedError(f"level {_get(record, 'level')} isn't modelled yet")
     live = model_version or warm()
     det = store.load_detector(live)
     level_id = LEVEL_IDS.get(_get(record, "level", 1), "sunny_diner")
@@ -72,10 +75,12 @@ def predict(record, version: int | None = None, memo=None, history=(), model_ver
 def retrain(examples: list, force: bool = False, version: int | None = None) -> dict:
     """examples: game records, optionally with "label", "verdict", "round_id", "session_id" and
     "detector_version". Labels come from the payload check, not from "label" (spec 2.1)."""
-    rows = [to_row(e, version) for e in examples]
+    modelled = [e for e in examples if _get(e, "level", 1) in MODELLED_LEVELS]
+    rows = [to_row(e, version) for e in modelled]
     result = training.retrain_on(rows, force=force)
+    result["examples"]["skipped_levels"] = len(examples) - len(modelled)
     result["examples"]["label_disagreements"] = sum(
-        (_get(e, "label") == "fraud") != r.is_fraud for e, r in zip(examples, rows) if _get(e, "label"))
+        (_get(e, "label") == "fraud") != r.is_fraud for e, r in zip(modelled, rows) if _get(e, "label"))
     return result
 
 

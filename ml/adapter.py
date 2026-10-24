@@ -100,13 +100,15 @@ def _lines(raw: list[str]) -> list[LineItem]:
 
 
 def _date(text: str) -> date:
+    """The prototype prints a random "Fri, Oct N", and some of those days fall on a weekend.
+    Weekend dates move to the Monday, so they don't read as sent after hours."""
     m = re.search(r"([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})", text or "")
     if m and m[1].lower() in MONTHS:
-        return date(YEAR, MONTHS[m[1].lower()], int(m[2]))
+        return business_day(date(YEAR, MONTHS[m[1].lower()], int(m[2])))
     try:
-        return date.fromisoformat(text)
+        return business_day(date.fromisoformat(text))
     except (TypeError, ValueError):
-        return date.today()
+        return business_day(date.today())
 
 
 def _tool_uses(record) -> list[ToolUse]:

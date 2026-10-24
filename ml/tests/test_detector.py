@@ -100,3 +100,14 @@ def test_the_replay_grid_skips_batches_a_version_trained_on():
     assert grid["versions"][0] == 1 and grid["batches"] == [1]
     assert grid["recall"][0][0] is not None and grid["n"][0][0] == 6
     assert all(row[0] is None for row in grid["recall"][1:])  # later versions trained on batch 1
+
+
+def test_levels_without_a_modelled_world_go_to_the_servers_fallback():
+    with pytest.raises(NotImplementedError):
+        detector.predict(record(level=2))
+
+
+def test_retrain_skips_records_from_levels_that_arent_modelled():
+    detector.warm()
+    result = detector.retrain([record(level=2, bank_account="••••7781", field_altered=["bank"])])
+    assert result["examples"]["skipped_levels"] == 1 and result["examples"]["total"] == 0
