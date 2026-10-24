@@ -362,7 +362,7 @@ function renderLevels() {
 function startRun(level) {
   Object.assign(S, { level, round: 0, money: 0, heat: 0, version: 1, perks: [], unlocks: [], dossier: false,
     shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [],
-    hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null, xp: loadXp(), rankUp: null });
+    hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null, xp: loadXp(), rankUp: null, lanBrain: false });
   Object.assign(S, loadBrain(level)); // Gus keeps what he learned from your past wins
   stage.dataset.level = level;
   $("#desk-mess").innerHTML = "";
@@ -711,7 +711,20 @@ function loadBrain(level) {
   return { version: 1, learned: {}, memory: [] };
 }
 function saveBrain() {
+  if (S.lanBrain) return; // a LAN room's shared Gus never overwrites your own
   try { localStorage.setItem(BRAIN_KEY(S.level), JSON.stringify({ version: S.version, learned: S.learned, memory: S.memory.slice(-40) })); } catch (e) {}
+}
+/* LAN game (lan.js): everyone at the same shop plays one Gus. The room's brain replaces yours while
+ * you're in the room, your wins teach it (gus-learned, posted from showCorkboard), and leaving brings yours back. */
+function applyRoomBrain(b) {
+  if (API || +b.level !== S.level) return; // with a server, the server already shares Gus
+  Object.assign(S, { version: Math.max(1, +b.version || 1), learned: { ...(b.learned || {}) }, memory: (b.memory || []).slice(-40), lanBrain: true });
+  renderInspector(); updateHud();
+}
+function soloBrain() {
+  if (!S.lanBrain) return;
+  Object.assign(S, loadBrain(S.level), { lanBrain: false });
+  renderInspector(); updateHud();
 }
 const leniency = () => [0, 18, 10, 4, 0, 0][rank().n]; // a Rookie's first plans should mostly work
 
@@ -920,6 +933,8 @@ window.addEventListener("message", e => {
   if (m.type === "quit") quitToTitle();
   if (m.type === "dossier") openDossier();
   if (m.type === "tutorial-3d-done") tutWorldEvent(m.step);
+  if (m.type === "gus-brain") applyRoomBrain(m); // LAN game: the room's Gus for your shop
+  if (m.type === "gus-solo") soloBrain();       // left the LAN room: your own Gus again
 });
 
 /* ======================= Inspection (MOCK verdict) ======================= */
@@ -1066,12 +1081,18 @@ function showCorkboard() {
   if (!r.caught && !forgotten) {
     if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
     else S.version++;
+    const taught = { tells: {}, memory: [] }; // what this win taught him, for a LAN room's shared Gus
     (r.results || []).forEach((x, i) => {
       if (x.declined || !S.rows[i]) return;
-      S.memory.push(O.signature(S.rows[i])); // he'll recognize this trick
-      x.tells.slice(0, 2).forEach(t => { S.learned[t[0]] = (S.learned[t[0]] || 0) + 1; if (!S.studied.includes(t[0])) S.studied.push(t[0]); });
+      const sig = O.signature(S.rows[i]);
+      S.memory.push(sig); taught.memory.push(sig); // he'll recognize this trick
+      x.tells.slice(0, 2).forEach(t => {
+        S.learned[t[0]] = (S.learned[t[0]] || 0) + 1; taught.tells[t[0]] = (taught.tells[t[0]] || 0) + 1;
+        if (!S.studied.includes(t[0])) S.studied.push(t[0]);
+      });
     });
     saveBrain();
+    if (r.newVersion == null) post("gus-learned", { level: S.level, version: S.version, ...taught });
   }
   renderInspector(); updateHud();
   if (S.version > oldV) {
