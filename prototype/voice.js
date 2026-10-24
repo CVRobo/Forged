@@ -113,12 +113,12 @@ const VOICE = {
 };
 function speak(name, text) {
   try {
-    // If server-backed TTS is active, skip browser speech synthesis
-    if (FW.voice && FW.voice._serverTTS) return;
-    const synth = window.speechSynthesis;
-    if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
     const snd = FW.sound;
     if (snd && snd.muted) return;
+    // a server voice (voice-server.js) plays the line itself when it has audio for it; otherwise the browser speaks
+    if (FW.voice && FW.voice.serverSpeak && FW.voice.serverSpeak(name, text)) return;
+    const synth = window.speechSynthesis;
+    if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
     synth.cancel();
     const u = new SpeechSynthesisUtterance(text);
     const v = VOICE[name] || { pitch: 1, rate: 1 };

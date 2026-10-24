@@ -7,94 +7,123 @@
  * Voice path: MediaRecorder captures mic → POST /npc/voice → plays TTS reply.
  *
  * Falls back gracefully: if the server is unreachable the original keyword
- * responder (voice.js) handles everything locally. */
+ * responder (voice.js) answers, and any line without Cartesia audio (no
+ * CARTESIA_API_KEY, a failed or slow call) is spoken by the browser's voice. */
 (() => {
 "use strict";
 const FW = window.FW;
 if (!FW || !FW.voice) return;
 
 const API_BASE = window.FORGED_API || "http://localhost:8000";
+const CHAT_TIMEOUT = 8000, SPEAK_TIMEOUT = 4000; // ms; after that the local brain / browser voice takes over
 
-// ---------------------------------------------------------------------------
-// Auto-start a round so NPC endpoints work from the 3D world
-// ---------------------------------------------------------------------------
-
-let _ensuringRound = null;
-
-async function _ensureRound() {
-    if (FW.roundId || sessionStorage.getItem("forged.roundId")) return;
-    if (_ensuringRound) return _ensuringRound;
-    _ensuringRound = (async () => {
-        try {
-            const res = await fetch(`${API_BASE}/round/start`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ level: 1 }),
-            });
-            if (!res.ok) return;
-            const data = await res.json();
-            const rid = data.round_id || data.roundId;
-            if (rid) {
-                FW.roundId = rid;
-                sessionStorage.setItem("forged.roundId", rid);
-                console.log("[voice-server] auto-started round:", rid);
-            }
-        } catch (e) { console.warn("[voice-server] round/start failed:", e); }
-    })();
-    return _ensuringRound;
+function _post(path, body, ms) {
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), ms); // also bounds reading the body
+    return fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctl.signal,
+    });
 }
 
-_ensureRound();
+// ---------------------------------------------------------------------------
+// The NPC round: started on first use for the level you're playing, and
+// replaced when it's gone (Redis restarts with every deploy and free-plan
+// sleep) or when you switch level. A failed start is retried on the next line.
+// ---------------------------------------------------------------------------
 
-// Tell voice.js to skip browser speechSynthesis — we handle TTS via Cartesia
-FW.voice._serverTTS = true;
+const ROUND_KEY = "forged.npcRound";
+let _round = _loadRound(); // { id, level } or null
+let _starting = null;
+
+function _loadRound() {
+    try { return JSON.parse(sessionStorage.getItem(ROUND_KEY)) || null; } catch (e) { return null; }
+}
+function _saveRound(r) {
+    _round = r;
+    try { r ? sessionStorage.setItem(ROUND_KEY, JSON.stringify(r)) : sessionStorage.removeItem(ROUND_KEY); } catch (e) {}
+}
+const _level = () => (FW.P && FW.P.level) || 1;
+
+async function _startRound(level) {
+    try {
+        const res = await _post("/round/start", { level }, CHAT_TIMEOUT);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const id = data.round_id || data.roundId;
+        if (!id) return null;
+        _saveRound({ id, level });
+        console.log("[voice-server] started NPC round:", id);
+        return id;
+    } catch (e) {
+        console.warn("[voice-server] round/start failed:", e);
+        return null;
+    }
+}
+
+function _ensureRound() {
+    if (_round && _round.level === _level()) return Promise.resolve(_round.id);
+    if (!_starting) _starting = _startRound(_level()).finally(() => { _starting = null; });
+    return _starting;
+}
 
 // ---------------------------------------------------------------------------
 // Text responder: replaces keyword matching with server /npc/chat + TTS
 // ---------------------------------------------------------------------------
 
 FW.voice.setResponder(async (npcName, text, ctx) => {
-    await _ensureRound();
-    const roundId = FW.roundId || sessionStorage.getItem("forged.roundId");
-    if (!roundId) return FW.voice.respond(npcName, text, ctx);
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const roundId = await _ensureRound();
+        if (!roundId) break;
+        try {
+            const res = await _post("/npc/chat", { round_id: roundId, npc: npcName, text }, CHAT_TIMEOUT);
+            if (res.status === 404 && attempt === 0) { _saveRound(null); continue; } // round expired or Redis restarted
+            if (!res.ok) throw new Error(`${res.status}`);
+            const data = await res.json();
 
-    try {
-        // Use the voice endpoint even for typed text so we get TTS audio back.
-        // Send the text as a pseudo-audio request with the transcript pre-filled.
-        const res = await fetch(`${API_BASE}/npc/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ round_id: roundId, npc: npcName, text }),
-        });
-        if (!res.ok) throw new Error(`${res.status}`);
-        const data = await res.json();
+            // Apply gameplay effects in the 3D world
+            _applyEffects(data);
 
-        // Apply gameplay effects in the 3D world
-        _applyEffects(data);
+            // Fetch this line's audio before voice.js shows and speaks it, so voice and bubble stay together
+            await _prepareSpeech(npcName, data.reply, roundId);
 
-        // TTS: fire a separate request to get audio for the reply
-        _speakReply(data.reply, npcName, roundId);
-
-        return data.reply;
-    } catch (e) {
-        console.warn("[voice-server] /npc/chat failed, using local fallback:", e);
-        return FW.voice.respond(npcName, text, ctx);
+            return data.reply;
+        } catch (e) {
+            console.warn("[voice-server] /npc/chat failed, using local fallback:", e);
+            break;
+        }
     }
+    return FW.voice.respond(npcName, text, ctx);
 });
 
-// Fire-and-forget TTS for text-chat replies
-async function _speakReply(replyText, npcName, roundId) {
+// ---------------------------------------------------------------------------
+// Speech: the NPC's Cartesia voice when the server has audio for the line,
+// otherwise voice.js speaks it with the browser's voice
+// ---------------------------------------------------------------------------
+
+const _clips = {}; // npc -> { text, b64 }: the line voice.js is about to speak, already synthesized
+
+async function _prepareSpeech(npcName, replyText, roundId) {
+    delete _clips[npcName];
+    if (FW.sound && FW.sound.muted) return; // nobody hears it: don't pay for it
     try {
-        const res = await fetch(`${API_BASE}/npc/speak`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ npc: npcName, text: replyText, round_id: roundId }),
-        });
+        const res = await _post("/npc/speak", { npc: npcName, text: replyText, round_id: roundId }, SPEAK_TIMEOUT);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.audio_b64) _playAudio(data.audio_b64);
-    } catch (e) { /* TTS is a bonus, don't block chat */ }
+        if (data.audio_b64) _clips[npcName] = { text: String(replyText || "..."), b64: data.audio_b64 };
+    } catch (e) { /* no server audio: the browser voice speaks the line */ }
 }
+
+// voice.js speak() asks this first; true means the line is playing from the server
+FW.voice.serverSpeak = (npcName, text) => {
+    const clip = _clips[npcName];
+    if (!clip || clip.text !== text) return false;
+    delete _clips[npcName];
+    _playAudio(clip.b64, () => FW.voice.speak(npcName, text)); // blocked playback (autoplay rules): browser voice
+    return true;
+};
 
 // ---------------------------------------------------------------------------
 // Gameplay effect application
@@ -113,7 +142,7 @@ function _applyEffects(data) {
         FW.persuasion = Math.max(FW.persuasion || 0, data.persuasion_delta);
     }
     if (data.intel) {
-        FW.wtoast(`\uD83D\uDCA1 ${data.npc_name}: "${data.intel}"`, "good");
+        FW.wtoast(`💡 ${data.npc_name}: "${data.intel}"`, "good");
     }
     if (data.effect === "distraction") {
         FW.wtoast(`${data.npc_name} will cover for you`, "good");
@@ -154,7 +183,7 @@ async function stopAndSend(npcName) {
             _recorder._stream.getTracks().forEach(t => t.stop());
             _recorder = null;
 
-            const roundId = FW.roundId || sessionStorage.getItem("forged.roundId");
+            const roundId = await _ensureRound();
             if (!roundId) { resolve(null); return; }
 
             try {
@@ -186,7 +215,7 @@ async function stopAndSend(npcName) {
     });
 }
 
-function _playAudio(b64) {
+function _playAudio(b64, onFail) {
     try {
         const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
         const blob = new Blob([bytes], { type: "audio/mpeg" });
@@ -195,8 +224,8 @@ function _playAudio(b64) {
         const snd = FW.sound;
         if (snd) audio.volume = Math.max(0, Math.min(1, snd.muted ? 0 : snd.volume));
         audio.onended = () => URL.revokeObjectURL(url);
-        audio.play().catch(() => {});
-    } catch (e) { /* audio playback is a bonus */ }
+        audio.play().catch(() => { URL.revokeObjectURL(url); if (onFail) onFail(); });
+    } catch (e) { if (onFail) onFail(); }
 }
 
 // ---------------------------------------------------------------------------
