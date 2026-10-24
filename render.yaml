@@ -8,4 +8,4 @@ services:
     dockerfilePath: ./prototype/Dockerfile
     dockerContext: ./prototype
     healthCheckPath: /
-    autoDeploy: false
+    autoDeployTrigger: commit # every push to the Blueprint's branch redeploys
