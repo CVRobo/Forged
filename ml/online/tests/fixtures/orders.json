@@ -95,6 +95,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": true,
     "attack": 0,
     "value": 62
    }
@@ -199,6 +203,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "angela.morrissey1@gmail.com",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": false,
     "attack": 1,
     "value": 62
    }
@@ -303,6 +311,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "quickdeals@protonmail.com",
+    "buyer_name": "Alex Smith",
+    "buyer_is_holder": false,
     "attack": 2,
     "value": 500
    }
@@ -407,6 +419,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": true,
     "attack": 3,
     "value": 1299
    }
@@ -511,6 +527,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "angela.morrissey1@gmail.com",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": false,
     "attack": 4,
     "value": 62
    }
@@ -615,6 +635,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "angela.morrissey1@gmail.com",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": false,
     "attack": 5,
     "value": 62
    },
@@ -712,6 +736,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "angela.morrissey1@gmail.com",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": false,
     "attack": 5,
     "value": 62
    },
@@ -809,6 +837,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "angela.morrissey1@gmail.com",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": false,
     "attack": 5,
     "value": 62
    }
@@ -915,6 +947,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "angela.morrissey1@gmail.com",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": false,
     "attack": 6,
     "value": 62
    },
@@ -1012,6 +1048,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "angela.morrissey1@gmail.com",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": false,
     "attack": 6,
     "value": 62
    }
@@ -1117,6 +1157,10 @@
     "top_reasons": null,
     "detector_version": null,
     "cover_note": "",
+    "crs_id": "P06",
+    "buyer_email": "",
+    "buyer_name": "Angela Morrissey",
+    "buyer_is_holder": true,
     "attack": 7,
     "value": 200
    }

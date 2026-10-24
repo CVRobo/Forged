@@ -59,5 +59,161 @@
       "far_ship"
     ],
     "note": "retrained on 300 player orders (281 got through)"
+  },
+  {
+    "version": 3,
+    "promoted": true,
+    "created_at": 1792866672.469149,
+    "threshold": 0.24043511742082732,
+    "parent": 2,
+    "trained_on": {
+      "real": 100963,
+      "honest": 7293,
+      "sim": 5479,
+      "player": 2271
+    },
+    "evasions": 0,
+    "test": {
+      "recall": 0.6515,
+      "fpr": 0.0353,
+      "game_fpr": 0.0213,
+      "sim_catch": 0.9673,
+      "player_catch": 0.9679
+    },
+    "parent_test": {
+      "recall": 0.652,
+      "fpr": 0.0358,
+      "game_fpr": 0.0174,
+      "sim_catch": 0.9156,
+      "player_catch": 0.8252
+    },
+    "checks": {
+      "real_recall": true,
+      "real_fpr": true,
+      "game_fpr": true,
+      "player_catch": true
+    },
+    "forced": false,
+    "learned": [
+      "far_ship",
+      "device_reuse"
+    ],
+    "note": "v3: adds the CRS identity check (crs_idv, crs_risk); retrained on 2271 simulated careful-player orders over all 9 victims",
+    "crs": {
+      "source": "offline mirror",
+      "ablation": {
+        "same rows and weights, without -> with CRS": {
+          "game_fpr": [
+            0.0419,
+            0.0322
+          ],
+          "real_recall": [
+            0.6436,
+            0.6421
+          ],
+          "real_fpr": [
+            0.0359,
+            0.0342
+          ],
+          "catch_clean_victims": [
+            0.9831,
+            0.9684
+          ],
+          "catch_fraud_alert": [
+            0.9634,
+            0.9634
+          ],
+          "catch_ghost_identities": [
+            0.9825,
+            1.0
+          ]
+        },
+        "held_orders": {
+          "clean victims": 474,
+          "fraud alert": 82,
+          "ghost identities": 285
+        },
+        "how": "python -m ml.online.crs_ablation"
+      }
+    }
+  },
+  {
+    "version": 4,
+    "promoted": true,
+    "created_at": 1792867899.3112562,
+    "threshold": 0.253047344520273,
+    "parent": 3,
+    "trained_on": {
+      "real": 100963,
+      "honest": 7293,
+      "sim": 5479,
+      "player": 2271
+    },
+    "evasions": 0,
+    "test": {
+      "recall": 0.6431,
+      "fpr": 0.0357,
+      "game_fpr": 0.02,
+      "sim_catch": 0.9627,
+      "player_catch": 0.9715
+    },
+    "parent_test": {
+      "recall": 0.6515,
+      "fpr": 0.0353,
+      "game_fpr": 0.2841,
+      "sim_catch": 0.9802,
+      "player_catch": 0.9727
+    },
+    "checks": {
+      "real_recall": true,
+      "real_fpr": true,
+      "game_fpr": true,
+      "player_catch": false
+    },
+    "forced": true,
+    "learned": [
+      "new_card",
+      "far_ship",
+      "ip_far"
+    ],
+    "note": "v4: v3 retrained on live CRS sandbox answers (v3 learned the offline mirror and blocks 28% of honest shoppers on live answers)",
+    "forced_why": "gate's player_catch check missed by 0.1 point (97.15% vs 97.27%, ~1 of 841 orders) while v3 blocks 28.4% of honest game shoppers on live CRS answers; v4 blocks 2.0%",
+    "crs": {
+      "source": "sandbox",
+      "ablation": {
+        "same rows and weights, without -> with CRS (live sandbox answers)": {
+          "game_fpr": [
+            0.0419,
+            0.029
+          ],
+          "real_recall": [
+            0.6436,
+            0.6396
+          ],
+          "real_fpr": [
+            0.0359,
+            0.0357
+          ],
+          "catch_clean_victims": [
+            0.9831,
+            0.9747
+          ],
+          "catch_fraud_alert": [
+            0.9634,
+            0.9756
+          ],
+          "catch_ghost_identities": [
+            0.9825,
+            1.0
+          ]
+        },
+        "held_orders": {
+          "clean victims": 474,
+          "fraud alert": 82,
+          "ghost identities": 285
+        },
+        "how": "python -m ml.online.crs_ablation"
+      }
+    }
   }
 ]

@@ -43,10 +43,11 @@ OPTIONS = {
     "repeat": ["1", "2"], "gap": ["3", "7"],
 }
 RANK_FIELDS = {1: ["item", "ship"], 2: ["name", "email"], 3: ["device", "where"], 4: ["when", "repeat", "gap"]}
-HOLDERS = [("Pat Miller", "Columbus", "pat.miller@yahoo.com", "iphone"), ("Dee Alvarez", "Phoenix", "dee.alvarez@gmail.com", "iphone"),
-           ("Sam Okoro", "Atlanta", "samokoro@hotmail.com", "android"), ("Lou Bennett", "Tampa", "lbennett@aol.com", "iphone"),
-           ("Kim Tran", "Dallas", "kim.tran@comcast.net", "android")]
-NEAR = {"Columbus": "Cincinnati", "Phoenix": "Tucson", "Atlanta": "Nashville", "Tampa": "Orlando", "Dallas": "Austin"}
+# prototype/orders.js HOLDERS[0:5]: the victims whose identity checks out with CRS
+HOLDERS = [("Angela Morrissey", "Columbus", "angela.morrissey@yahoo.com", "iphone"), ("Daniel Whitfield", "Austin", "daniel.whitfield@gmail.com", "iphone"),
+           ("Marcus Bellamy", "Atlanta", "marcusbellamy@hotmail.com", "android"), ("Ricky Dalton", "Orlando", "rdalton@aol.com", "iphone"),
+           ("Elena Castellanos", "Dallas", "elena.castellanos@comcast.net", "android")]
+NEAR = {"Columbus": "Cincinnati", "Austin": "Houston", "Atlanta": "Nashville", "Orlando": "Tampa", "Dallas": "Fort Worth"}
 
 
 def fields_for(rank: int) -> list[str]:

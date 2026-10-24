@@ -41,7 +41,7 @@ TELL_OF = {
     "D10": "new_device", "ProductCD": "gift_card", "card4": "new_card", "card6": "new_card",
     "P_email": "email_risky", "R_email": "email_risky", "M4": "foreign_card", "M5": "new_address", "M6": "new_address",
     "id_12": "new_device", "id_16": "new_device", "proxy": "proxy", "os": "new_device", "browser": "new_device",
-    "DeviceType": "new_device", "device": "new_device",
+    "DeviceType": "new_device", "device": "new_device", "crs_idv": "identity", "crs_risk": "identity",
 }
 
 # the lines tell_for draws, in the game's terms
@@ -50,6 +50,7 @@ FAR_IP_MILES = 300     # shopping this far from the billing address (the scripte
 BIG_AMOUNT = 250       # more than people usually spend at the game's shops
 NEW_DAYS = 30          # a card, account, device or address younger than this is new
 NIGHT_END = 6          # midnight to 6 AM
+CRS_RISKY = 70         # Fraud Finder's risk from which the buyer's identity looks wrong (AtData suggests 70-80)
 COMMON_EMAIL = {"gmail", "yahoo", "hotmail", "outlook", "aol", "icloud", "comcast", "live", "msn", "att",
                 "verizon.net", "sbcglobal.net", "me.com", "mac.com", "ymail.com", "bellsouth.net", "cox.net",
                 "optonline.net", "charter.net", "earthlink.net"}
@@ -114,9 +115,11 @@ _RULES = {
     "id_16": lambda v, x: "new_device" if _str(v) in ("NotFound", "New") else None,
     "proxy": lambda v, x: "proxy" if _str(v) else None,
     "os": _device, "browser": _device, "DeviceType": _device, "device": _device,
+    "crs_idv": lambda v, x: "identity" if _str(v) in ("FAIL", "STEP_UP") else None,
+    "crs_risk": lambda v, x: "identity" if _num(v) >= CRS_RISKY else None,
 }
 TELLS = {"amount_unusual", "night", "far_ship", "new_address", "ip_far", "velocity", "new_card", "device_reuse",
-         "new_account", "new_device", "gift_card", "email_risky", "odd_domain", "foreign_card", "proxy", "emulator"}
+         "new_account", "new_device", "gift_card", "email_risky", "odd_domain", "foreign_card", "proxy", "emulator", "identity"}
 
 
 def tell_for(feature: str, x: pd.Series) -> str | None:
@@ -135,29 +138,30 @@ class Version:
     threshold: float
     meta: dict = field(default_factory=dict)
     rank_thresholds: dict = field(default_factory=dict)  # {rank: threshold}, see RANK_CUTOFF
+    features: list = field(default_factory=lambda: list(F.FEATURES))  # v1, v2: F.LEGACY_FEATURES (no CRS)
 
     def game_threshold(self, rank: int | None) -> float:
         return self.rank_thresholds.get(int(rank or 1), self.threshold)
 
     def scores(self, rows: pd.DataFrame) -> np.ndarray:
-        return self.model.predict_proba(F.encode(F.frame(rows), self.vocab))[:, 1]
+        return self.model.predict_proba(F.encode(F.frame(rows, self.features), self.vocab))[:, 1]
 
     def attention(self) -> pd.Series:
         """Each tell family's share of the model's attention (split gain, grouped by TELL_OF), largest first."""
-        gain = pd.Series(self.model.booster_.feature_importance("gain"), index=F.FEATURES)
+        gain = pd.Series(self.model.booster_.feature_importance("gain"), index=self.features)
         gain = gain.groupby(gain.index.map(lambda f: TELL_OF.get(f, f))).sum()
         return (gain / gain.sum()).sort_values(ascending=False)
 
     def explain(self, rows: pd.DataFrame, k: int = 3) -> list[list[list]]:
         """Each row's top tells: [[tell, weight], ...], weight in Gus's suspicion points (log-odds × 10).
         A feature's push toward fraud counts for the tell its value shows (tell_for), or for none."""
-        raw = F.frame(rows)
+        raw = F.frame(rows, self.features)
         x = F.encode(raw, self.vocab)
         contrib = self.model.predict(x, pred_contrib=True)[:, :-1]  # last column is the bias
         out = []
         for i in range(len(x)):
             row, per = raw.iloc[i], {}
-            for name, c in zip(F.FEATURES, contrib[i]):
+            for name, c in zip(self.features, contrib[i]):
                 tell = tell_for(name, row) if c > 0 else None
                 if tell:
                     per[tell] = per.get(tell, 0.0) + float(c)
@@ -173,7 +177,7 @@ def splits(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
 def fit(train: pd.DataFrame, weights: np.ndarray | None = None, voc: dict | None = None) -> tuple[lgb.LGBMClassifier, dict]:
     x = F.frame(train)
-    voc = voc or F.vocab(x[train["origin"].eq("real")] if "origin" in train else x)
+    voc = {**F.vocab(x[train["origin"].eq("real")] if "origin" in train else x), **(voc or {})}  # a parent's vocabulary wins
     model = lgb.LGBMClassifier(**PARAMS)
     model.fit(F.encode(x, voc), train["isFraud"].astype(int), sample_weight=weights)
     return model, voc
@@ -206,7 +210,8 @@ def current() -> int | None:
 
 def save(v: Version, promoted: bool) -> None:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": v.model, "vocab": v.vocab, "threshold": v.threshold, "rank_thresholds": v.rank_thresholds},
+    joblib.dump({"model": v.model, "vocab": v.vocab, "threshold": v.threshold, "rank_thresholds": v.rank_thresholds,
+                 "features": v.features},
                 MODEL_DIR / f"v{v.version}.joblib")
     reg = [r for r in registry() if r["version"] != v.version]
     reg.append({"version": v.version, "promoted": promoted, "created_at": time.time(), "threshold": v.threshold, **v.meta})
@@ -224,5 +229,6 @@ def load(version: int | None = None) -> Version:
     if version not in _cache:
         d = joblib.load(MODEL_DIR / f"v{version}.joblib")
         meta = next((r for r in registry() if r["version"] == version), {})
-        _cache[version] = Version(version, d["model"], d["vocab"], d["threshold"], meta, d.get("rank_thresholds", {}))
+        _cache[version] = Version(version, d["model"], d["vocab"], d["threshold"], meta, d.get("rank_thresholds", {}),
+                                  d.get("features", list(F.LEGACY_FEATURES)))
     return _cache[version]

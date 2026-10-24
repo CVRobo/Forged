@@ -17,6 +17,37 @@ The fraud model behind the typed checkout. It starts from the real IEEE-CIS data
 | `robustness.py` | Red-teams the project's own model to harden it: searches the game's checkout answers for orders Gus misses, then retrains on them (through the gate). |
 | `rows.js` | Batch converter: turns a list of typed checkouts into scored rows via the game's own code, for the robustness search. |
 | `probe.js` | Turns hand-written checkouts into rows, to test specific tricks. |
+| `crs.py` + `crs_personas.json` | The CRS identity check: two model inputs from the CRS Credit API (sandbox), see below. |
+| `crs_ablation.py` | The same retrain with and without the CRS inputs, to measure what they add. |
+
+## The CRS identity check (`crs.py`)
+
+Gus asks [CRS](https://calhacks.crscreditapi.com) who the buyer is, and uses the answers as two model inputs (v3 onward):
+
+- **`crs_idv`**: TransUnion TruValidate on the cardholder (name, SSN, DOB, address): `PASS`, `FAIL` (deceased, synthetic, an SSN issued to someone else) or `STEP_UP` (a fraud alert on file).
+- **`crs_risk`**: AtData Fraud Finder (0-100) on what the checkout presents: the buyer's email and name against the cardholder's phone and billing address.
+
+Every victim in the game is a CRS sandbox persona (`crs_personas.json`, all fake people). Five verify cleanly, one has a fraud alert, and three are ghost identities whose cards are for sale but who never shop themselves. Rows name their victim and buyer (`crs_id`, `buyer_email`, `buyer_name`, `buyer_is_holder`), and `features.frame` asks CRS for any row that does.
+
+**Where the answers come from.** With `CRS_USERNAME` and `CRS_PASSWORD` in the repo's `.env`, from the CRS sandbox. Login happens once per process and is never retried, because CRS locks accounts after failed logins. Every answer is kept in `crs_cache.json`, which is committed (fake people and made-up emails only), so a machine without the keys, or the deployed game, gets the same answers training saw. An identity the sandbox was never asked about, without keys, gets an offline mirror of how the sandbox answers: the persona's own login and name get its published score, its login under another name gets 100, and any other email gets what the sandbox gave that provider on average (about 90). `FORGED_CRS=off` forces cache and mirror.
+
+How the sandbox answers matters: a persona's exact request gets CRS's prepared answer, and anything else goes to the real vendor (AtData), which can't vouch for a made-up address and scores it 80-100, or returns no score for one it can't deliver to (we count that as 100). So the honest customer on their own login scores low, and every other mailbox scores high, honest or not. Weighted by how often each happens, honest shoppers average 43 and attackers 81.
+
+**What's real and what isn't.** The real IEEE-CIS rows predate CRS, so their CRS inputs are blank: the model learns the inputs' weight only from game-format rows (simulated shoppers and players). That ghost identities never shop honestly is our simulation's assumption, which is why the model treats an identity that fails CRS as near-certain fraud.
+
+**What it adds** (`python -m ml.online.crs_ablation`: the same retrain from v2, same rows and weights, live sandbox answers, tested on 841 held-out simulated careful-player orders):
+
+| | without CRS | with CRS |
+| --- | --- | --- |
+| Honest game shoppers blocked | 4.2% | **2.9%** |
+| Real fraud caught / real customers blocked | 64.4% / 3.6% | 64.0% / 3.6% |
+| Attacks caught, ghost identities (285) | 98.3% | **100%** |
+| Attacks caught, fraud-alert victim (82) | 96.3% | **97.6%** |
+| Attacks caught, clean victims (474) | 98.3% | 97.5% |
+
+So the identity check mostly makes Gus fairer to honest shoppers and closes stolen-identity fraud. It can't help with account takeover on a clean identity: the identity is the victim's, and it verifies. In the game, an order on a ghost identity that v2 let through (score 0.23, cut 0.25) is flagged by v4 at 0.999 with "CRS says that identity doesn't check out" as the top reason.
+
+**v3 and v4.** v3 was trained on a first offline guess at the sandbox's answers. On the live answers it would block 28% of honest game shoppers, so v4 retrained it on the live answers (2.0%). v4 catches the same held-out attacks within one order (97.2% vs 97.3%), which the gate's strictly-better check rejects, so v4 was promoted by hand; `versions.json` records it as `forced` with the reason.
 
 ## Adversarial robustness (`robustness.py`)
 

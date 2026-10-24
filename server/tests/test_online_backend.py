@@ -149,12 +149,13 @@ def test_metrics_are_each_versions_test_results(router):
 
 def test_a_version_that_failed_its_gate_stays_out_of_sight(registry):
     reg = json.loads((registry / "versions.json").read_text())
-    reg.append({**reg[-1], "version": 3, "promoted": False, "learned": ["proxy"]})
+    live = [r["version"] for r in reg if r.get("promoted")]
+    reg.append({**reg[-1], "version": reg[-1]["version"] + 1, "promoted": False, "learned": ["proxy"]})
     (registry / "versions.json").write_text(json.dumps(reg))
     api = client(meta_routes.router)
-    assert [n["version"] for n in api.get("/patch-notes", params={"since": 1}).json()] == [2]
-    assert [r["version"] for r in api.get("/metrics").json()] == [1, 2]
-    assert online_data.model_version() == 2
+    assert [n["version"] for n in api.get("/patch-notes", params={"since": 1}).json()] == live[1:]
+    assert [r["version"] for r in api.get("/metrics").json()] == live
+    assert online_data.model_version() == live[-1]
 
 
 # ---------- health ----------
@@ -250,7 +251,7 @@ def test_results_keep_the_models_own_score():
 
 def test_a_card_can_get_reported_while_you_wait(monkeypatch):
     monkeypatch.setattr(online_data, "_roll", lambda: 0.0)  # unlucky
-    r = submit("week_apart", rank=3)  # Schemer: both orders sit under the line
+    r = submit("week_apart", rank=2)  # Hustler: both orders sit under the line
     assert [o["reason"] for o in r.results] == [None, "card_reported"]
     assert r.verdict == "DECLINED"
     assert r.payout == round(ORDERS["week_apart"]["values"][0])  # the first order still paid
@@ -259,7 +260,7 @@ def test_a_card_can_get_reported_while_you_wait(monkeypatch):
 
 def test_patience_keeps_the_card_alive(monkeypatch):
     monkeypatch.setattr(online_data, "_roll", lambda: 0.0)
-    r = submit("week_apart", rank=3, perks=["patience"])
+    r = submit("week_apart", rank=2, perks=["patience"])
     assert [o["reason"] for o in r.results] == [None, None] and r.verdict == "APPROVED"
 
 
