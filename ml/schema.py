@@ -42,6 +42,59 @@ class ToolUse(BaseModel):
     params: dict = {}  # mug: {"strength": legibility lost, default 0.35}
 
 
+AuthResult = Literal["pass", "fail", "none"]
+# How the sender got its From address (docs/realistic-data-plan.md section 2). vendor_mailbox is a
+# real vendor writing from its own address; the other four are the attacker's options.
+SenderIdentity = Literal["vendor_mailbox", "lookalike_domain", "free_mail", "spoofed_domain", "compromised_mailbox"]
+
+
+class EmailMessage(BaseModel):
+    """The real medium: an RFC 5322 message reduced to the headers BEC detection uses."""
+    message_id: str
+    thread_id: str | None = None      # set when replying into an existing vendor thread
+    in_reply_to: str | None = None
+    from_name: str                    # display name
+    from_addr: str                    # e.g. billing@petesflour.com
+    reply_to: str | None = None
+    cc: list[str] = []
+    subject: str
+    body: str                         # free text, kept as the player wrote it
+    sent_at: datetime
+    # Set by the game world from the sender identity, never typed by the player
+    # (RFC 8601 Authentication-Results, domain registration age, first contact).
+    sender_identity: SenderIdentity | None = None
+    spf: AuthResult = "none"
+    dkim: AuthResult = "none"
+    dmarc: AuthResult = "none"
+    sender_domain_age_days: int | None = None
+    first_time_sender: bool = False
+
+
+class VendorChangeRequest(BaseModel):
+    """Act 1 of the two-act attack: a request to move a vendor's payments to a new account."""
+    request_id: str
+    vendor_id: str
+    new_bank_account: str
+    channel: Literal["email", "phone", "portal"]
+    email: EmailMessage | None = None
+    phone_number_given: str | None = None  # a number offered "for verification"
+    requested_at: datetime
+    callback: Literal["none", "number_on_file", "number_from_request"] = "none"
+    callback_result: Literal["not_called", "vendor_confirmed", "vendor_denied", "attacker_confirmed"] = "not_called"
+    applied: bool = False                  # did the vendor master change?
+
+
+class BankChangeEvent(BaseModel):
+    """One row of the vendor master change log (the ERP's bank-data change history)."""
+    vendor_id: str
+    old_account: str
+    new_account: str
+    changed_at: datetime
+    request_id: str
+    channel: Literal["email", "phone", "portal"]
+    verified: bool  # confirmed by a callback to the number on file
+
+
 class Invoice(BaseModel):  # raw, player-editable state
     invoice_id: str
     vendor_name: str
@@ -57,6 +110,7 @@ class Invoice(BaseModel):  # raw, player-editable state
     tool_uses: list[ToolUse] = []
     cover_email: str = ""
     sent_at: datetime | None = None  # proposed, for offhours_send; None counts as business hours
+    email: EmailMessage | None = None  # the email that delivered it, in the realistic channel
 
     @property
     def amount(self) -> float:
@@ -75,6 +129,7 @@ class VendorProfile(BaseModel):  # one per approved vendor, per level
     first_seen_round: int
     catalog: dict[str, float]  # line description -> usual unit price
     usual_stamps: list[StampKind] = []  # proposed, for stamp_matches_vendor
+    phone: str = ""  # the number on file, for callbacks
 
 
 class OpenOrder(BaseModel):
@@ -89,6 +144,7 @@ class CaseFile(BaseModel):
     vendors: list[VendorProfile]
     open_orders: list[OpenOrder]
     paid_invoices: list[Invoice]  # for duplicate checks, grows during a run
+    bank_changes: list[BankChangeEvent] = []  # vendor master change log, grows during a run
 
 
 class LevelConfig(BaseModel):  # spec 5.3: one shared model, per-level settings

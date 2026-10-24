@@ -61,12 +61,16 @@ def _load(folder: str, version: int) -> Detector:
 
 
 def append_rows(rows: list[Submission], name: str = "buffer") -> None:
-    if not rows:
+    append_text_rows([r.model_dump_json() for r in rows], name)
+
+
+def append_text_rows(lines: list[str], name: str) -> None:
+    if not lines:
         return
     folder = model_dir()
     folder.mkdir(parents=True, exist_ok=True)
     with (folder / f"{name}.jsonl").open("a") as f:
-        f.writelines(r.model_dump_json() + "\n" for r in rows)
+        f.writelines(line + "\n" for line in lines)
 
 
 def load_rows(name: str = "buffer") -> list[Submission]:

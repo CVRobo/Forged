@@ -38,6 +38,8 @@ class VendorSpec:
     uses_po: bool
     terms_days: int = 30
     usual_stamps: tuple[str, ...] = ()
+    phone: str = ""              # the number on file, for callbacks
+    domain_age_days: int = 3000  # how long the vendor has owned its domain
 
     @property
     def letterhead_id(self) -> str:
@@ -58,25 +60,25 @@ VENDORS = (
     VendorSpec("petes", "Pancake Pete's Flour Co.", "petesflour.com", "3321", (
         CatalogLine("Flour, 50lb sack", 62, 8, 16), CatalogLine("Pancake mix, bulk", 95, 2, 6),
         CatalogLine("Delivery", 76, 1, 1),
-    ), cadence_days=14, uses_po=True, usual_stamps=("RECEIVED",)),
+    ), cadence_days=14, uses_po=True, usual_stamps=("RECEIVED",), phone="(510) 555-0142", domain_age_days=4800),
     VendorSpec("bubbles", "Bubbles Dish Soap Ltd.", "bubblessoap.co", "9902", (
         CatalogLine("Dish soap, 5gal", 48, 4, 8), CatalogLine("Sponges (100)", 39, 1, 3),
         CatalogLine("Rubber gloves", 11, 6, 14),
-    ), cadence_days=7, uses_po=True, terms_days=15),
+    ), cadence_days=7, uses_po=True, terms_days=15, phone="(510) 555-0177", domain_age_days=2600),
     VendorSpec("dread", "Existential Dread Consulting LLC", "dreadconsulting.com", "1111", (
         CatalogLine("Menu font audit", 900, 1, 1), CatalogLine("Vibes assessment", 700, 0, 1),
         CatalogLine("Travel", 400, 0, 1),
-    ), cadence_days=30, uses_po=True),
+    ), cadence_days=30, uses_po=True, phone="(415) 555-0108", domain_age_days=1900),
     VendorSpec("lettuce", "Crunchy Lettuce Farms", "crunchylettuce.farm", "4471", (
         CatalogLine("Romaine, case", 34, 6, 14), CatalogLine("Tomatoes, case", 41, 4, 10),
         CatalogLine("Onions, 50lb", 28, 1, 3), CatalogLine("Delivery", 35, 1, 1),
-    ), cadence_days=7, uses_po=True, terms_days=15, usual_stamps=("RECEIVED",)),
+    ), cadence_days=7, uses_po=True, terms_days=15, usual_stamps=("RECEIVED",), phone="(707) 555-0123", domain_age_days=5200),
     VendorSpec("sparky", "Sparky's Electric Co.", "sparkyelectric.com", "6060", (
         CatalogLine("Electricity (kWh)", 0.31, 1800, 2600),
-    ), cadence_days=30, uses_po=False, terms_days=14),
+    ), cadence_days=30, uses_po=False, terms_days=14, phone="(510) 555-0160", domain_age_days=7300),
     VendorSpec("mop", "Mop Masters Cleaning", "mopmasters.com", "7123", (
         CatalogLine("Monthly cleaning service", 400, 1, 1),
-    ), cadence_days=30, uses_po=False),
+    ), cadence_days=30, uses_po=False, phone="(510) 555-0191", domain_age_days=1400),
 )
 VENDOR_SPECS = {v.vendor_id: v for v in VENDORS}
 
@@ -99,6 +101,7 @@ BOSS_DOMAINS = ("owner-office.net", "sunnydiner-hq.com", "sunnydinner.com", "big
 BOSS_LINES = ("Urgent confidential payment", "Owner discretionary expense", "Equipment deposit", "Supplier prepayment")
 BILLING_DOMAINS = ("quickinvoice.com", "billtrail.io", "invoicely.co")  # services real vendors send bills through
 BRANCHES = ("East", "Oakland", "Downtown", "Wholesale")  # new branches of approved vendors, onboarded separately
+FREE_MAIL_DOMAINS = ("gmail.com", "outlook.com", "yahoo.com")
 TLDS = (".com", ".co", ".biz", ".net")
 
 
@@ -116,6 +119,7 @@ def vendor_profile(spec: VendorSpec, first_seen_round: int) -> VendorProfile:
         letterhead_id=spec.letterhead_id, amount_mean=round(mean, 2), amount_std=round(std, 2),
         cadence_days=spec.cadence_days, first_seen_round=first_seen_round,
         catalog={l.description: l.unit_price for l in spec.lines}, usual_stamps=list(spec.usual_stamps),
+        phone=spec.phone,
     )
 
 
