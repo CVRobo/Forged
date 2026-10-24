@@ -71,20 +71,29 @@ async def round_start(req: RoundStartRequest):
     decoy_text = await claude_service.generate_memo_decoy(level, real_tells)
     memo = _pick_memo(level_data, decoy_text)
 
-    # 4. Generate round ID and save state
+    # 4. Resolve session — continue existing or create new
+    if req.session_id and game_state.load_session(req.session_id) is not None:
+        session_id = req.session_id
+    else:
+        session_id, _ = game_state.create_session()
+
+    # 5. Generate round ID and save state
     round_id = str(uuid.uuid4())
     round_state = {
         "level": level,
         "version": version,
+        "session_id": session_id,
         "memo": [m.model_dump() for m in memo],
         "persuasion": 0,
         "created_at": time.time(),
     }
     game_state.save_round(round_id, round_state)
+    game_state.append_round_to_session(session_id, round_id)
 
-    # 5. Build response
+    # 6. Build response
     return RoundStartResponse(
         round_id=round_id,
+        session_id=session_id,
         memo=memo,
         inspector_version=version,
         case_file=CaseFile(
@@ -148,16 +157,49 @@ async def submit(req: SubmitRequest):
     # 7. Redis writes
     record_dict = req.record.model_dump()
     verdict = "FLAGGED" if caught else "PAID"
+    session_id = round_state.get("session_id")
 
-    game_state.store_submission(req.round_id, record_dict, verdict, version)
+    # Build case_file snapshot from level_data
+    case_file_snapshot = {
+        "company": level_data["company"],
+        "vendors": [v if isinstance(v, dict) else v for v in level_data["vendors"]],
+        "approvers": level_data["approvers"],
+        "notes": level_data["notes"],
+    }
+
+    game_state.store_submission(
+        req.round_id, record_dict, verdict, version,
+        session_id=session_id,
+        level=level,
+        case_file=case_file_snapshot,
+        memo_rules=round_state.get("memo"),
+        persuasion=persuasion,
+        tells=[t.model_dump() for t in tells],
+        suspicion=suspicion,
+    )
 
     if caught:
         queue_len = game_state.queue_for_retrain(req.round_id)
         # Check if retrain threshold reached — bump version
         if queue_len >= config.RETRAIN_THRESHOLD:
-            game_state.drain_retrain_queue()
+            drained_ids = game_state.drain_retrain_queue()
             new_version = version + 1
             game_state.set_current_version(new_version)
+
+            # Meaningful version bump: patch notes + metrics
+            learned = game_state.aggregate_retrain_tells(drained_ids)
+            game_state.add_patch_note(new_version, learned, len(drained_ids))
+
+            # Generate slightly-improved metrics over previous version
+            prev_metrics = game_state.get_all_metrics()
+            if prev_metrics:
+                last = prev_metrics[-1]
+                cr = min(last["catch_rate"] + random.uniform(0.04, 0.10), 0.98)
+                fp = min(last["false_positive_rate"] + random.uniform(0.005, 0.02), 0.25)
+                ho = min(last["held_out_catch_rate"] + random.uniform(0.03, 0.08), 0.95)
+            else:
+                cr, fp, ho = 0.35, 0.08, 0.30
+            game_state.save_version_metrics(new_version, cr, fp, ho)
         else:
             new_version = version
     else:

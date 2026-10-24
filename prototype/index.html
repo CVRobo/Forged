@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="world.css">
+<link rel="stylesheet" href="menu.css">
 </head>
 <body>
 <div id="world"></div>
@@ -28,7 +29,7 @@
 <div id="prompt"></div>
 <div id="bubbles"></div>
 <div id="wtoasts"></div>
-<div id="controls"><kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Mouse</kbd> look · <kbd>Scroll</kbd>/<kbd>V</kbd> 1st ⇄ 3rd person · <kbd>E</kbd> interact · <kbd>Esc</kbd> stand up / free mouse</div>
+<div id="controls"></div><!-- filled from keys.js by world.js -->
 
 <!-- the player's computer screen: the desk UI runs inside it -->
 <div id="monitor">
@@ -37,7 +38,7 @@
     <div class="bezel-bottom">
       <span class="brand">FORGED OS</span>
       <span class="led"></span>
-      <button id="btn-stand">⏏ Stand up <kbd>Esc</kbd></button>
+      <span id="bezel-hint"></span>
     </div>
   </div>
 </div>
@@ -53,11 +54,20 @@
       <li>Watch out for <b>the boss</b> walking behind your desk.</li>
     </ol>
     <button id="btn-start">Clock in ▶</button>
-    <div class="start-fine">Click to capture the mouse · Esc to free it</div>
+    <div class="start-fine">Click to capture the mouse · Esc opens the Game Menu (keys, how to play, quit)</div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="keys.js"></script>
+<script src="menu.js"></script>
 <script src="world.js"></script>
+<!-- plugins: rooms and features built on window.FW (see PLUGINS.md) -->
+<script src="rooms/boss-office.js"></script>
+<script src="rooms/break-room.js"></script>
+<script src="rooms/records-room.js"></script>
+<script src="audio.js"></script>
+<script src="voice.js"></script>
+<script src="features.js"></script>
 </body>
 </html>

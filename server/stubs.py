@@ -14,6 +14,7 @@ import uuid
 from fastapi import APIRouter, Query
 
 from server.content.levels import SCHEME_PAY, STUB_LEVELS
+from server.services.detector import TELL_DESCRIPTIONS
 from server.models.schemas import (
     CaseFile,
     ClerkRequest,
@@ -53,28 +54,28 @@ def _compute_stub_tells(record) -> list[Tell]:
     tells: list[Tell] = []
 
     if record.bank_account not in ("3321", "9902", "1111", "5150", "2208", "4470"):
-        tells.append(Tell(tell_type="bank_changed", strength=26.0, region="bank"))
+        tells.append(Tell(tell_type="bank_changed", strength=26.0, region="bank", description=TELL_DESCRIPTIONS["bank_changed"]))
 
     if record.domain_mismatch:
-        tells.append(Tell(tell_type="domain_mismatch", strength=18.0, region="header"))
+        tells.append(Tell(tell_type="domain_mismatch", strength=18.0, region="header", description=TELL_DESCRIPTIONS["domain_mismatch"]))
 
     if record.field_altered:
-        tells.append(Tell(tell_type="altered", strength=12.0 * len(record.field_altered), region=None))
+        tells.append(Tell(tell_type="altered", strength=12.0 * len(record.field_altered), region=None, description=TELL_DESCRIPTIONS["altered"]))
 
     if record.copy_generation > 0:
-        tells.append(Tell(tell_type="copy_gen", strength=8.0 * record.copy_generation, region=None))
+        tells.append(Tell(tell_type="copy_gen", strength=8.0 * record.copy_generation, region=None, description=TELL_DESCRIPTIONS["copy_gen"]))
 
     if record.legibility.get("bank", 1.0) < 0.6:
-        tells.append(Tell(tell_type="low_legibility", strength=10.0, region="bank"))
+        tells.append(Tell(tell_type="low_legibility", strength=10.0, region="bank", description=TELL_DESCRIPTIONS["low_legibility"]))
 
     if record.heat > 40:
-        tells.append(Tell(tell_type="heat", strength=record.heat * 0.3, region=None))
+        tells.append(Tell(tell_type="heat", strength=record.heat * 0.3, region=None, description=TELL_DESCRIPTIONS["heat"]))
 
     if not record.letterhead_match:
-        tells.append(Tell(tell_type="letterhead", strength=14.0, region="header"))
+        tells.append(Tell(tell_type="letterhead", strength=14.0, region="header", description=TELL_DESCRIPTIONS["letterhead"]))
 
     if record.scheme == "phantom":
-        tells.append(Tell(tell_type="unknown_vendor", strength=20.0, region="header"))
+        tells.append(Tell(tell_type="unknown_vendor", strength=20.0, region="header", description=TELL_DESCRIPTIONS["unknown_vendor"]))
 
     # Sort by strength descending
     tells.sort(key=lambda t: t.strength, reverse=True)
@@ -90,9 +91,11 @@ def _compute_stub_tells(record) -> list[Tell]:
 async def stub_round_start(req: RoundStartRequest):
     level = req.level if req.level in STUB_LEVELS else 1
     data = STUB_LEVELS[level]
+    session_id = req.session_id or str(uuid.uuid4())
 
     return RoundStartResponse(
         round_id=f"stub-{uuid.uuid4().hex[:8]}",
+        session_id=session_id,
         memo=_pick_memo(level),
         inspector_version=1,
         case_file=CaseFile(
