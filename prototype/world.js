@@ -2230,13 +2230,19 @@ function buildViewArm(sx) {
 const viewHands = { right: buildViewArm(1), left: buildViewArm(-1) };
 
 // apply (and save) a new look for the player: the 3D body and the first-person arms
+// what you wear on screen, first-person arm included, without changing your saved look
+// (lan.js dresses you in your room colour this way)
+function dressPlayer(look) {
+  const L = Object.assign({}, DEFAULT_LOOK, look);
+  restyleChar(player, L);
+  for (const v of Object.values(viewHands)) {
+    v.mats.shirt.color.set(L.shirt); v.mats.skin.color.set(L.skin);
+    v.mats.trim.color.set(L.tie ? "#ffffff" : shade(L.shirt, .12));
+  }
+}
 function setPlayerLook(look, save = true) {
   playerLook = Object.assign({}, DEFAULT_LOOK, look);
-  restyleChar(player, playerLook);
-  for (const v of Object.values(viewHands)) {
-    v.mats.shirt.color.set(playerLook.shirt); v.mats.skin.color.set(playerLook.skin);
-    v.mats.trim.color.set(playerLook.tie ? "#ffffff" : shade(playerLook.shirt, .12));
-  }
+  dressPlayer(playerLook);
   if (save) { try { localStorage.setItem(LOOK_KEY, JSON.stringify(playerLook)); } catch (e) { /* kept for this visit */ } }
 }
 
@@ -2390,7 +2396,7 @@ window.FW = {
   M, mats, box, cyl, sphere, outline, collide, walls, EXIT_X, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
   makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses, restyleChar, setTag,
   // the player's look (customize.js): getLook() → current look, setLook(look) applies and saves it
-  getLook: () => ({ ...playerLook }), setLook: setPlayerLook, DEFAULT_LOOK,
+  getLook: () => ({ ...playerLook }), setLook: setPlayerLook, dressPlayer, DEFAULT_LOOK,
   // state
   P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,
   npcs: { kevin, dana, priya, marcus, inspector, clerk, boss },

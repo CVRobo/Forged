@@ -76,8 +76,9 @@ def clean_signature(sig):
 
 
 class Player:
-    def __init__(self, pid: int, name: str, look: dict, local: bool, desk: int, now: float):
+    def __init__(self, pid: int, name: str, look: dict, local: bool, desk: int, color: int, now: float):
         self.id, self.name, self.look, self.local, self.desk = pid, name, look, local, desk
+        self.color = color  # 0-3: their shirt colour in the room (lan.js COLORS), never the same as anyone else's
         self.state = None  # [x, z, ry, sp, flags] once they send one; flags: 1 seated, 2 carrying, 4 clocked in
         self.money = self.patches = self.round = 0
         self.seen = now
@@ -87,7 +88,7 @@ class Player:
         return bool(self.state and self.state[4] & 4)
 
     def public(self) -> dict:
-        return {"id": self.id, "name": self.name, "desk": self.desk, "look": self.look, "money": self.money,
+        return {"id": self.id, "name": self.name, "desk": self.desk, "color": self.color, "look": self.look, "money": self.money,
                 "patches": self.patches, "round": self.round, "started": self.started}
 
 
@@ -122,7 +123,9 @@ class Room:
         pid, self._next = self._next, self._next + 1
         taken = {p.desk for p in self.players.values()}
         desk = min(d for d in DESKS if d not in taken)
-        self.players[pid] = Player(pid, text(name, 16) or f"Forger {pid}", clean_look(look), bool(local), desk, now)
+        used = {p.color for p in self.players.values()}
+        color = min(c for c in range(MAX_PLAYERS) if c not in used)
+        self.players[pid] = Player(pid, text(name, 16) or f"Forger {pid}", clean_look(look), bool(local), desk, color, now)
         welcome = {**self.roster(), "t": "welcome", "id": pid, "desk": desk, "share": share or self.share, "max": MAX_PLAYERS,
                    "brains": {str(level): copy.deepcopy(b) for level, b in self.brains.items()}}
         return pid, self._out(([pid], welcome), (self.ids(but=pid), self.roster()))

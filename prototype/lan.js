@@ -20,7 +20,9 @@ const param = k => { try { return new URLSearchParams(location.search).get(k); }
 const API = param("api") || ""; // with a server, the server shares Gus and this file leaves him alone
 const NAME_KEY = "forged-player"; // the leaderboard name, shared with menu.js and game.js
 const SEND_MS = 100, PING_MS = 5000, MAX = 4;
-const DESK_COLORS = { 1: "#e0352b", 2: "#2f6fd6", 3: "#1d9a4b", 4: "#8e44ad" };
+// the room gives everyone their own colour (lan_room.py), worn as the shirt and the name tag: red, blue, green, purple
+const COLORS = ["#e0352b", "#2f6fd6", "#1d9a4b", "#8e44ad"];
+const colorOf = p => COLORS[p && p.color] || COLORS[0];
 const FRESH_BRAIN = { version: 1, learned: {}, memory: [] };
 // a private address means a LAN game; a public one (a hosting service or a tunnel) is an online game
 const ON_LAN = !location.hostname || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$|^\[?::1\]?$/.test(location.hostname);
@@ -85,7 +87,7 @@ function renderLobby() {
   const owner = lan.players.find(p => p.id === lan.owner);
   $("#lan-status").textContent = inRoom() ? `${lan.players.length}/${MAX} here` : STATUS[lan.status] || "";
   $("#lan-list").innerHTML = !inRoom() ? "" : lan.players.map(p => `
-    <li style="--desk:${DESK_COLORS[p.desk] || "#2b1d14"}"><span class="lan-desk">${p.desk}</span>
+    <li style="--color:${colorOf(p)}"><span class="lan-desk">${p.desk}</span>
       <span class="lan-who">${esc(p.name)}${p.id === lan.owner ? " 👑" : ""}${p.id === lan.id ? " <i>(you)</i>" : ""}</span>
       <span class="lan-where">${p.started ? "in the office" : "at the door"}</span></li>`).join("");
   $("#lan-note").innerHTML = inRoom()
@@ -97,7 +99,8 @@ function renderLobby() {
 }
 function renderChip() {
   chip.style.display = inRoom() ? "" : "none";
-  if (inRoom()) chip.innerHTML = `👥 <b>${ON_LAN ? "LAN" : "Online"}</b> · ${lan.players.length}/${MAX} · desk ${FW.MY_DESK.n}${isOwner() ? " · 👑" : ""}`;
+  if (inRoom()) chip.innerHTML = `<span class="lan-dot" style="background:${colorOf(me())}"></span>` +
+    `<b>${ON_LAN ? "LAN" : "Online"}</b> · ${lan.players.length}/${MAX} · desk ${FW.MY_DESK.n}${isOwner() ? " · 👑" : ""}`;
 }
 
 /* ======================= Connection ======================= */
@@ -155,6 +158,7 @@ function leaveRoom(why) {
   Object.assign(B, { remote: false, faceAt: null }); // this browser walks the boss again
   P.live = false;
   setStatus(why);
+  wearMyColor(); // your own shirt again
   if (!was) return;
   lan.applying = true;
   try { FW.assignDesks({ [FW.MY_DESK.n]: "You" }, FW.MY_DESK.n); } finally { lan.applying = false; } // the coworkers come back
@@ -181,6 +185,7 @@ function applyRoster(m) {
   }
   lan.ready = true;
   syncDesks(m);
+  wearMyColor();
   setBossAuthority(first, wasOwner);
   ForgedMenu.setRoom(lan.players);
   renderLobby(); renderChip();
@@ -216,20 +221,29 @@ FW.onDeskChange(d => {
 /* ======================= The other players ======================= */
 
 const envMat = FW.M("#f2e2b8"); // the order slip they carry (world.js's envelope colour)
-const fullLook = look => Object.assign({}, FW.DEFAULT_LOOK, look || {});
+// their look from Customize, in their room colour, so no two players look alike
+const wornLook = p => Object.assign({}, FW.DEFAULT_LOOK, p.look || {}, { shirt: colorOf(p) });
+const lookKey = p => JSON.stringify(p.look || {}) + colorOf(p);
 function makeAvatar(p) {
-  const L = fullLook(p.look);
-  const ch = FW.makeChar({ shirt: L.shirt, pants: L.pants, skin: L.skin, tie: L.tie, name: p.name, tagColor: DESK_COLORS[p.desk] || "#2b1d14",
+  const L = wornLook(p);
+  const ch = FW.makeChar({ shirt: L.shirt, pants: L.pants, skin: L.skin, tie: L.tie, name: p.name, tagColor: colorOf(p),
     look: { hair: L.hair, hairColor: L.hairColor, brows: L.brows, mouth: L.mouth, nose: L.nose, glasses: L.glasses, earrings: L.earrings, mustache: L.mustache } });
   ch.g.visible = false;
   const env = FW.box(.5, .03, .32, envMat, 0, -.74, .16, ch.armR);
   env.rotation.set(Math.PI / 2, 0, .25); env.visible = false;
-  return { id: p.id, ch, env, name: p.name, desk: p.desk, look: JSON.stringify(p.look || {}), tx: 0, tz: 0, ry: 0, sp: 0, f: 0, placed: false, seated: false };
+  return { id: p.id, ch, env, name: p.name, color: colorOf(p), look: lookKey(p), tx: 0, tz: 0, ry: 0, sp: 0, f: 0, placed: false, seated: false };
 }
 function syncAvatar(a, p) {
-  const look = JSON.stringify(p.look || {});
-  if (look !== a.look) { a.look = look; FW.restyleChar(a.ch, fullLook(p.look)); }
-  if (p.name !== a.name || p.desk !== a.desk) { a.name = p.name; a.desk = p.desk; FW.setTag(a.ch, p.name, DESK_COLORS[p.desk] || "#2b1d14"); }
+  if (lookKey(p) !== a.look) { a.look = lookKey(p); FW.restyleChar(a.ch, wornLook(p)); }
+  if (p.name !== a.name || colorOf(p) !== a.color) { a.name = p.name; a.color = colorOf(p); FW.setTag(a.ch, p.name, a.color); }
+}
+// you wear your room colour too: on screen only, your saved look in Customize is left alone
+let wornKey = "";
+function wearMyColor() {
+  const mine = me(), look = FW.getLook(), key = mine ? JSON.stringify(look) + colorOf(mine) : "";
+  if (key === wornKey) return;
+  wornKey = key;
+  FW.dressPlayer(mine ? { ...look, shirt: colorOf(mine) } : look);
 }
 function dropAvatar(id) {
   const a = avatars.get(id);
@@ -375,7 +389,7 @@ function onBrain(m) {
 
 /* ======================= Every frame: you out, everyone else in ======================= */
 
-let sentAt = 0, pingAt = 0, stateKey = "", lastPos = null, lookKey = "", lookAt = 0;
+let sentAt = 0, pingAt = 0, stateKey = "", lastPos = null, sentLook = "", lookAt = 0;
 function sendState(now) {
   if (now - sentAt < SEND_MS) return;
   const pos = player.g.position;
@@ -392,8 +406,9 @@ function watchLook(now) { // changed your look in Customize: show the others
   if (now < lookAt) return;
   lookAt = now + 1000;
   const look = FW.getLook(), key = JSON.stringify(look);
-  if (lookKey && key !== lookKey) send({ t: "look", look });
-  lookKey = key;
+  if (sentLook && key !== sentLook) send({ t: "look", look });
+  sentLook = key;
+  wearMyColor(); // Customize just dressed you in your own shirt: back into your room colour
 }
 
 FW.onUpdate((dt, now) => {

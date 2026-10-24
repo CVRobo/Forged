@@ -43,9 +43,10 @@ def test_desks_follow_join_order_and_free_ones_can_be_taken():
     b, _ = room.join("B", {}, False)
     c, _ = room.join("C", {}, False)
     assert [room.players[p].desk for p in (a, b, c)] == [1, 2, 3]
+    assert [room.players[p].color for p in (a, b, c)] == [0, 1, 2]  # everyone wears a different shirt
     room.leave(b)
     d, _ = room.join("D", {}, False)
-    assert room.players[d].desk == 2  # the lowest free desk
+    assert (room.players[d].desk, room.players[d].color) == (2, 1)  # the lowest free desk and colour
     out = room.handle(c, {"t": "desk", "n": 1})  # A's: refused, and only C hears back
     assert room.players[c].desk == 3 and [pids for pids, _ in out] == [[c]]
     room.handle(c, {"t": "desk", "n": 4})
