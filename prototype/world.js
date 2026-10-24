@@ -46,19 +46,23 @@ function resize() {
 }
 addEventListener("resize", resize); resize();
 
-scene.add(new THREE.HemisphereLight("#fff6e0", "#8a7a6a", 0.5));
-const sun = new THREE.DirectionalLight("#ffffff", 0.55);
+// warm key light from the sun side, cool sky bounce from below/behind: a subtle warm/cool split
+scene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", 0.52));
+const sun = new THREE.DirectionalLight("#ffecd0", 0.62);
 sun.position.set(-8, 18, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0004;
 Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 24, bottom: -24, near: 1, far: 70 });
 scene.add(sun);
+const coolFill = new THREE.DirectionalLight("#a9c4ff", 0.16); // no shadows: tints the faces the sun misses
+coolFill.position.set(10, 6, -14); scene.add(coolFill);
 
 const RW = 26, RD = 18; // room size
 /* Cartoon look to match the 2D UI: 3-band toon shading + thick black outlines
  * (inverted hull: a slightly bigger back-face copy of each mesh). */
 // r128 samples .rgb of the gradient, so it has to be a grey RGBA ramp
-const gradientMap = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 200, 200, 200, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+const gradientMap = new THREE.DataTexture(new Uint8Array([104, 104, 108, 255, 190, 190, 192, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
 gradientMap.minFilter = gradientMap.magFilter = THREE.NearestFilter;
 gradientMap.needsUpdate = true;
 const M = (color, o = {}) => {
@@ -185,6 +189,107 @@ function room({ x0, x1, z0, z1, floor = ["#d8c8a8", "#c9b894"], wallColor, skip 
 /* Big blocky heads with googly eyes, brows, noses and hair, in the spirit of
  * Scam With Your Friends' goofy office workers. Everything is primitives. */
 
+/* --- modelling helpers: cached geometry, soft-edged boxes, merged multi-part "kits"
+ * and fake contact shadows. Parts that share a material are merged into ONE mesh
+ * (plus one outline hull), so detailed props stay cheap to draw. --- */
+const GEO = new Map();
+const geo = (key, make) => GEO.get(key) || GEO.set(key, make()).get(key);
+const BOXG = (w, h, d) => geo(`b${w}|${h}|${d}`, () => new THREE.BoxGeometry(w, h, d));
+const CYLG = (rt, rb, h, s = 16) => geo(`c${rt}|${rb}|${h}|${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
+const SPHG = (r, s = 12) => geo(`s${r}|${s}`, () => new THREE.SphereGeometry(r, s, Math.max(6, Math.round(s * .7))));
+const DOMEG = r => geo(`d${r}`, () => new THREE.SphereGeometry(r, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2));
+const ICOG = r => geo(`i${r}`, () => new THREE.IcosahedronGeometry(r, 0));
+const CONEG = (r, h, s = 6) => geo(`k${r}|${h}|${s}`, () => new THREE.ConeGeometry(r, h, s));
+const TORG = (r, t) => geo(`t${r}|${t}`, () => new THREE.TorusGeometry(r, t, 6, 14));
+// a box with rounded edges (a "soft cube"): the ring next to each edge is pulled in, then pushed onto a radius
+function RBOXG(w, h, d, r = .05) {
+  return geo(`r${w}|${h}|${d}|${r}`, () => {
+    r = Math.min(r, Math.min(w, h, d) * .45);
+    const g = new THREE.BoxGeometry(w, h, d, 4, 4, 4), p = g.attributes.position, n = g.attributes.normal;
+    const half = [w / 2, h / 2, d / 2], v = [0, 0, 0], q = [0, 0, 0];
+    for (let i = 0; i < p.count; i++) {
+      v[0] = p.getX(i); v[1] = p.getY(i); v[2] = p.getZ(i);
+      let len = 0;
+      for (let a = 0; a < 3; a++) {
+        const H = half[a];
+        if (Math.abs(Math.abs(v[a]) - H / 2) < 1e-6) v[a] = Math.sign(v[a]) * (H - r * .55);
+        q[a] = v[a] - clamp(v[a], r - H, H - r); len += q[a] * q[a];
+      }
+      len = Math.sqrt(len) || 1;
+      for (let a = 0; a < 3; a++) { const inner = v[a] - q[a]; q[a] /= len; v[a] = inner + q[a] * r; }
+      p.setXYZ(i, v[0], v[1], v[2]); n.setXYZ(i, q[0], q[1], q[2]);
+    }
+    g.computeBoundingBox(); g.computeBoundingSphere();
+    return g;
+  });
+}
+function mergeGeos(list) {
+  let n = 0; for (const g of list) n += g.attributes.position.count;
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+  let o = 0;
+  for (const g of list) { pos.set(g.attributes.position.array, o); nor.set(g.attributes.normal.array, o); o += g.attributes.position.count * 3; g.dispose(); }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.BufferAttribute(pos, 3)); out.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+  out.computeBoundingBox(); out.computeBoundingSphere();
+  return out;
+}
+// kit().add(geometry, x, y, z, rx, ry, rz, { line, sx, sy, sz }) ... .bake() -> { geo, hull }
+const _kM = new THREE.Matrix4(), _kQ = new THREE.Quaternion(), _kE = new THREE.Euler(), _kP = new THREE.Vector3(), _kS = new THREE.Vector3(), _kB = new THREE.Vector3();
+function kit() {
+  const parts = [], hull = [];
+  const k = {
+    add(g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, { line = .028, sx = 1, sy = 1, sz = 1 } = {}) {
+      _kQ.setFromEuler(_kE.set(rx, ry, rz));
+      const base = g.index ? g.toNonIndexed() : g.clone();
+      parts.push(base.clone().applyMatrix4(_kM.compose(_kP.set(x, y, z), _kQ, _kS.set(sx, sy, sz))));
+      if (line) { // outline hull: the same part grown by `line` on every side
+        if (!g.boundingBox) g.computeBoundingBox();
+        g.boundingBox.getSize(_kB);
+        hull.push(base.applyMatrix4(_kM.compose(_kP.set(x, y, z), _kQ, _kS.set(sx + 2 * line / (_kB.x || 1), sy + 2 * line / (_kB.y || 1), sz + 2 * line / (_kB.z || 1)))));
+      } else base.dispose();
+      return k;
+    },
+    bake: () => ({ geo: mergeGeos(parts), hull: hull.length ? mergeGeos(hull) : null }),
+  };
+  return k;
+}
+function place(b, mat, parent = scene, x = 0, y = 0, z = 0, ry = 0, shadow = true) {
+  const m = new THREE.Mesh(b.geo, mat);
+  m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = shadow; m.receiveShadow = true;
+  if (b.hull && !mat.transparent) m.add(new THREE.Mesh(b.hull, OUTLINE));
+  parent.add(m); return m;
+}
+// K(material) returns that material's kit; K.place(parent) bakes and adds them all
+function kits() {
+  const map = new Map();
+  const K = mat => map.get(mat) || map.set(mat, kit()).get(mat);
+  K.bake = () => [...map].map(([mat, k]) => [mat, k.bake()]);
+  K.place = (parent = scene, shadow = true) => K.bake().forEach(([mat, b]) => place(b, mat, parent, 0, 0, 0, 0, shadow));
+  return K;
+}
+// a prop built once, then placed many times sharing the same geometry
+function prefab(build) {
+  let baked = null;
+  return (parent = scene, x = 0, y = 0, z = 0, ry = 0, shadow = true) => {
+    if (!baked) { const K = kits(); build(K); baked = K.bake(); }
+    const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; parent.add(g);
+    baked.forEach(([mat, b]) => place(b, mat, g, 0, 0, 0, 0, shadow));
+    return g;
+  };
+}
+// shared materials for props (never mutated, so sharing is safe)
+const PMATS = {};
+const PM = c => PMATS[c] || (PMATS[c] = M(c));
+const PMF = PM; // leaves: icosahedrons are non-indexed, so they shade faceted anyway (toon ignores flatShading in r128)
+const GLOW = c => PMATS[c + "/b"] || (PMATS[c + "/b"] = new THREE.MeshBasicMaterial({ color: c }));
+// fake contact shadow: a soft dark blob on the floor (a plane, never a CircleGeometry: a plugin finds the boss's cone by that type)
+const blobMat = new THREE.MeshBasicMaterial({ color: "#000", transparent: true, opacity: .34, depthWrite: false,
+  map: canvasTex(64, 64, g => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, "rgba(0,0,0,.95)"); r.addColorStop(.55, "rgba(0,0,0,.55)"); r.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = r; g.fillRect(0, 0, 64, 64); }) });
+const blobGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+function blob(x, z, w, d = w, parent = scene, y = .012) {
+  const m = new THREE.Mesh(blobGeo, blobMat); m.scale.set(w, 1, d); m.position.set(x, y, z); m.renderOrder = 1; parent.add(m); return m;
+}
+
 function tagTex(text, color = "#2b1d14") {
   return canvasTex(512, 96, (g, w, h) => {
     g.font = "bold 44px 'Space Mono', monospace"; g.textAlign = "center"; g.textBaseline = "middle";
@@ -211,8 +316,10 @@ function buildHead(look) {
   const head = new THREE.Group();
   const skin = M(L.skin), hairM = M(L.hairColor);
   const W = L.wide ? .74 : .64, H = .66, D = .58;
-  box(W, H, D, skin, 0, 0, 0, head);
-  [-1, 1].forEach(sx => box(.08, .16, .12, skin, sx * (W / 2 + .03), -.02, 0, head)); // ears
+  const hp = (g, mat, x, y, z, line = .028) => { const m = new THREE.Mesh(g, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; head.add(m); return line ? outline(m, line) : m; };
+  hp(RBOXG(W, H, D, .11), skin, 0, 0, 0);                                      // soft-cube skull
+  [-1, 1].forEach(sx => hp(RBOXG(.09, .17, .13, .04), skin, sx * (W / 2 + .03), -.02, 0)); // ears
+  const hk = kit(); // hair, brows and mustache: one merged mesh
   // eyes: big white balls with pupils that look around
   const eyes = [], pupils = [];
   [-1, 1].forEach(sx => {
@@ -224,12 +331,9 @@ function buildHead(look) {
   const lids = [-1, 1].map(sx => { const l = box(.23, .1, .1, skin, sx * .15, .12, D / 2 + .04, head); l.visible = !!L.lids; return l; });
   // brows
   const tilt = { flat: 0, angry: .45, worried: -.35, raised: 0 }[L.brows] || 0;
-  [-1, 1].forEach(sx => {
-    const b = box(.2, .05, .05, hairM, sx * .15, .21 + (L.brows === "raised" && sx > 0 ? .05 : 0), D / 2 + .03, head);
-    b.rotation.z = -sx * tilt;
-  });
+  [-1, 1].forEach(sx => hk.add(RBOXG(.21, .055, .05, .02), sx * .15, .21 + (L.brows === "raised" && sx > 0 ? .05 : 0), D / 2 + .03, 0, 0, -sx * tilt, { line: .018 }));
   // nose
-  if (L.nose === "big") box(.13, .17, .16, M(shade(L.skin, -.12)), 0, -.06, D / 2 + .07, head);
+  if (L.nose === "big") hp(RBOXG(.13, .17, .16, .05), M(shade(L.skin, -.12)), 0, -.06, D / 2 + .07);
   else sphere(.07, M(shade(L.skin, -.12)), 0, -.05, D / 2 + .04, head, 10);
   // mouth
   const mouth = new THREE.Group(); mouth.position.set(0, -.2, D / 2 + .01); head.add(mouth);
@@ -239,28 +343,41 @@ function buildHead(look) {
   else if (L.mouth === "o") { mouth.add(new THREE.Mesh(new THREE.TorusGeometry(.05, .02, 8, 16), INK)); }
   else box(.2, .045, .04, INK, 0, 0, 0, mouth);
   if (L.teeth) box(.1, .06, .03, WHITE, 0, -.05, .01, mouth);
-  if (L.mustache) {
-    box(.34, .07, .06, hairM, 0, .07, .02, mouth);
-    [-1, 1].forEach(sx => { box(.08, .06, .06, hairM, sx * .19, .04, .02, mouth).rotation.z = sx * .5; });
+  if (L.mustache) { // lives in mouth space: mouth sits at (0, -.2, D/2 + .01)
+    hk.add(RBOXG(.36, .08, .07, .03), 0, -.13, D / 2 + .03, 0, 0, 0, { line: .02 });
+    [-1, 1].forEach(sx => hk.add(RBOXG(.09, .065, .06, .025), sx * .2, -.165, D / 2 + .03, 0, 0, sx * .5, { line: .02 }));
   }
-  // hair
-  const top = H / 2;
-  if (L.hair === "spiky") for (let i = 0; i < 5; i++) {
-    const c = new THREE.Mesh(new THREE.ConeGeometry(.1, .24, 6), hairM);
-    c.position.set(-.24 + i * .12, top + .08, rand(-.12, .1)); c.rotation.z = rand(-.4, .4); head.add(outline(c, .02));
+  // hair: a soft cap hugging the skull, hair down the back, then the style's silhouette on top
+  const top = H / 2, hl = { line: .022 };
+  const cap = (h = .12, grow = .05) => hk.add(RBOXG(W + grow, h, D + grow, .05), 0, top - .01, -.005, 0, 0, 0, hl);
+  const back = () => hk.add(RBOXG(W + .04, .36, .1, .04), 0, .1, -D / 2 + .02, 0, 0, 0, hl);
+  if (L.hair === "spiky") {
+    cap(.1); back();
+    for (let i = 0; i < 5; i++) hk.add(CONEG(.1, .26), -.24 + i * .12, top + .12, rand(-.12, .1), rand(-.25, .1), 0, rand(-.4, .4), { line: .02 });
+    [-1, 1].forEach(sx => hk.add(CONEG(.09, .22), sx * .14, top + .04, -.24, -.9, 0, sx * .3, { line: .02 })); // swept back
   }
-  if (L.hair === "bowl") { box(W + .06, .16, D + .06, hairM, 0, top - .02, -.01, head); box(W + .06, .12, .06, hairM, 0, top - .12, D / 2 + .02, head); }
-  if (L.hair === "bun") { box(W + .04, .12, D + .04, hairM, 0, top, 0, head); sphere(.15, hairM, 0, top + .16, -.12, head); }
-  if (L.hair === "neat") { box(W + .04, .1, D + .04, hairM, 0, top, 0, head); }
-  if (L.hair === "curly") for (let i = 0; i < 9; i++) sphere(.12, hairM, -.26 + (i % 5) * .13, top + .02 + Math.floor(i / 5) * .06, -.14 + Math.floor(i / 5) * .2, head, 8);
+  if (L.hair === "bowl") {
+    hk.add(RBOXG(W + .08, .22, D + .08, .09), 0, top - .03, -.01, 0, 0, 0, hl);
+    hk.add(RBOXG(W + .06, .1, .07, .035), 0, top - .11, D / 2 + .015, 0, 0, 0, hl); // fringe
+    back();
+  }
+  if (L.hair === "bun") { cap(.12); back(); hk.add(SPHG(.15, 10), 0, top + .14, -.14, 0, 0, 0, hl); hk.add(TORG(.09, .03), 0, top + .06, -.11, Math.PI / 2 - .5, 0, 0, { line: .015 }); }
+  if (L.hair === "neat") { cap(.11); back(); hk.add(RBOXG(.34, .07, D - .02, .03), .1, top + .06, 0, 0, 0, -.12, hl); }
+  if (L.hair === "curly") {
+    for (let i = 0; i < 9; i++) hk.add(SPHG(.12, 8), -.26 + (i % 5) * .13, top + .02 + Math.floor(i / 5) * .06, -.14 + Math.floor(i / 5) * .2, 0, 0, 0, { line: .02 });
+    for (let i = 0; i < 5; i++) hk.add(SPHG(.12, 8), -.26 + i * .13, .1, -D / 2 + .02, 0, 0, 0, { line: .02 }); // curls down the back
+  }
   if (L.hair === "messy") {
-    box(W + .04, .12, D + .04, hairM, 0, top, 0, head);
-    for (let i = 0; i < 3; i++) box(.1, .14, .1, hairM, -.18 + i * .17, top + .1, rand(-.1, .1), head).rotation.z = rand(-.6, .6);
+    cap(.12); back();
+    for (let i = 0; i < 3; i++) hk.add(RBOXG(.1, .15, .1, .03), -.18 + i * .17, top + .1, rand(-.1, .1), 0, 0, rand(-.6, .6), hl);
+    hk.add(CONEG(.07, .2), .3, top + .02, .05, 0, 0, -1.1, { line: .02 });
   }
   if (L.hair === "combover") {
-    box(W - .2, .05, D - .1, hairM, .05, top + .02, 0, head);
-    [-1, 1].forEach(sx => box(.06, .2, D - .1, hairM, sx * (W / 2 + .01), .05, 0, head));
+    hk.add(RBOXG(W - .2, .05, D - .1, .02), .05, top + .02, 0, 0, 0, 0, { line: .02 });
+    [-1, 1].forEach(sx => hk.add(RBOXG(.07, .2, D - .1, .03), sx * (W / 2 + .01), .05, 0, 0, 0, 0, hl));
+    hk.add(RBOXG(W - .1, .12, .07, .03), 0, .02, -D / 2 - .005, 0, 0, 0, hl);
   }
+  place(hk.bake(), hairM, head);
   if (L.glasses) glasses(head, D, "#1a1210");
   if (L.earrings) [-1, 1].forEach(sx => sphere(.04, M("#ffd23f"), sx * (W / 2 + .05), -.14, .02, head, 8));
   return { head, eyes, pupils, lids, D, W };
@@ -281,18 +398,47 @@ function glasses(head, D, color, lens) {
 }
 
 const characters = [];
+const BELT_M = M("#3a2a20"), GOLD_M = M("#ffd23f"), SHOE_M = M("#3b2a22"), SOLE_M = M("#d9c7a6");
+const HANDS = {};
+// palm + thumb merged into one mesh per side; sx = -1 left, 1 right (the thumb points at the body)
+const handGeo = sx => HANDS[sx] || (HANDS[sx] = kit().add(RBOXG(.15, .15, .12, .05)).add(RBOXG(.06, .1, .065, .025), -sx * .085, .02, .03, 0, 0, -sx * .4, { line: .02 }).bake());
 function makeChar({ shirt, pants = "#2b2b44", skin = "#f1c27d", look = {}, tie, name, tagColor, scale = 1 }) {
   const g = new THREE.Group();
-  const limb = (w, h, d, mat, px, py) => {
-    const pivot = new THREE.Group(); pivot.position.set(px, py, 0); g.add(pivot);
-    box(w, h, d, mat, 0, -h / 2, 0, pivot); return pivot;
+  // one material per colour per character; geometry is shared between everyone
+  const shirtM = M(shirt), pantsM = M(pants), skinM = M(skin), trimM = M(tie ? "#ffffff" : shade(shirt, .12));
+  const part = (geom, mat, x, y, z, parent = g, line = .028) => {
+    const m = new THREE.Mesh(geom, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true;
+    parent.add(m); return line ? outline(m, line) : m;
   };
-  const legL = limb(.2, .85, .22, M(pants), -.15, .88), legR = limb(.2, .85, .22, M(pants), .15, .88);
-  [legL, legR].forEach(l => box(.24, .1, .3, M("#2e2a28"), 0, -.86, .05, l)); // shoes
-  box(.62, .75, .36, M(shirt), 0, 1.25, 0, g);
-  if (tie) { box(.1, .5, .03, M(tie), 0, 1.3, .19, g); box(.14, .08, .04, M(tie), 0, 1.55, .19, g); }
-  const armL = limb(.16, .66, .18, M(shirt), -.4, 1.58), armR = limb(.16, .66, .18, M(shirt), .4, 1.58);
-  [armL, armR].forEach(a => box(.15, .14, .15, M(skin), 0, -.72, 0, a));
+  const limb = (px, py) => { const pivot = new THREE.Group(); pivot.position.set(px, py, 0); g.add(pivot); return pivot; };
+  // legs: trousers, chunky shoes on a pale sole
+  const legL = limb(-.15, .88), legR = limb(.15, .88);
+  [legL, legR].forEach(l => {
+    part(RBOXG(.21, .86, .23, .06), pantsM, 0, -.43, 0, l);
+    part(RBOXG(.24, .13, .32, .05), SHOE_M, 0, -.82, .05, l);
+    part(BOXG(.26, .045, .34), SOLE_M, 0, -.88, .055, l, .02);
+  });
+  // torso: soft block, belt + buckle, collar wings, neck, pocket, tie or buttons
+  part(RBOXG(.62, .75, .36, .1), shirtM, 0, 1.25, 0);
+  part(BOXG(.64, .08, .38), BELT_M, 0, .92, 0, g, .02);
+  part(BOXG(.11, .08, .03), GOLD_M, 0, .92, .195, g, .015);
+  [-1, 1].forEach(sx => { part(BOXG(.2, .07, .05), trimM, sx * .09, 1.6, .17, g, .02).rotation.z = sx * .45; });
+  part(CYLG(.11, .12, .14, 12), skinM, 0, 1.67, 0, g, .02);
+  part(BOXG(.14, .12, .02), trimM, .16, 1.42, .185, g, .015);
+  if (tie) {
+    const tm = M(tie);
+    part(BOXG(.13, .09, .05), tm, 0, 1.55, .19, g, .02);
+    part(BOXG(.11, .4, .03), tm, 0, 1.3, .19, g, .02);
+    part(BOXG(.08, .08, .03), tm, 0, 1.1, .19, g, .02).rotation.z = Math.PI / 4;
+  } else [1.42, 1.24, 1.06].forEach(y => part(SPHG(.022, 6), INK, 0, y, .185, g, 0));
+  // arms: sleeve, cuff, mitten hand with a thumb on the inside
+  const armL = limb(-.4, 1.58), armR = limb(.4, 1.58);
+  [[armL, -1], [armR, 1]].forEach(([a, sx]) => {
+    part(RBOXG(.17, .6, .19, .06), shirtM, 0, -.29, 0, a);
+    part(RBOXG(.18, .08, .2, .03), trimM, 0, -.58, 0, a, .02);
+    place(handGeo(sx), skinM, a, 0, -.7, 0);
+  });
+  blob(0, 0, .95, .75, g, .015); // contact shadow (sinks under the floor when seated)
   const face = buildHead(Object.assign({ skin }, look));
   const head = face.head; head.position.y = 2.02; g.add(head);
   const tex = tagTex({ label: name, color: tagColor });
@@ -346,30 +492,142 @@ function standPose(ch) { ["legL", "legR", "armL", "armR"].forEach(k => ch[k].rot
 const wood = M("#8a5a35"), dark = M("#2e2a28"), metal = M("#9aa0a6", { metalness: .3, roughness: .5 });
 const screenMat = new THREE.MeshStandardMaterial({ color: "#000", emissive: "#3a7bd5", emissiveIntensity: .8 });
 
-function desk(x, z, { flip = false, screen = screenMat, chair = true } = {}) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); if (flip) g.rotation.y = Math.PI; scene.add(g);
-  box(2.2, .08, 1.1, wood, 0, .76, 0, g);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(.07, .74, .07, dark, sx * 1.0, .37, sz * .47, g);
-  box(.08, .32, .08, dark, 0, .96, -.3, g);
-  box(1.0, .62, .06, dark, 0, 1.38, -.33, g);
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(.9, .52), screen); scr.position.set(0, 1.38, -.296); g.add(scr);
-  box(.62, .03, .2, M("#e8e8e8"), 0, .815, .05, g);
-  cyl(.06, .05, .12, M("#fff"), .75, .86, .1, g);
-  if (chair) {
-    box(.62, .08, .62, mats.accent, 0, .5, .95, g);
-    box(.62, .72, .08, mats.accent, 0, .88, 1.26, g);
-    cyl(.04, .04, .45, dark, 0, .25, .95, g);
+const BULB = new THREE.MeshBasicMaterial({ color: "#fff3c4" });
+const SCREEN_GEO = new THREE.PlaneGeometry(.9, .52);
+const cable = (pts, r = .012) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(p[0], p[1], p[2]))), 20, r, 5);
+const NOLINE = { line: 0 };
+
+/* office chair: soft seat + back, gas lift, 5-star base on casters. Local origin = seat centre on the floor, the sitter faces -z */
+const chairPF = prefab(K => {
+  K(mats.accent).add(RBOXG(.64, .1, .6, .05), 0, .5, 0).add(RBOXG(.58, .6, .09, .05), 0, .98, .31);
+  const dk = K(dark);
+  dk.add(BOXG(.07, .42, .05), 0, .7, .34).add(BOXG(.3, .04, .3), 0, .435, 0, 0, 0, 0, { line: .015 })
+    .add(CYLG(.035, .035, .32, 10), 0, .28, 0).add(CYLG(.07, .07, .06, 12), 0, .1, 0);
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * Math.PI * 2;
+    dk.add(BOXG(.05, .045, .3), Math.sin(a) * .17, .09, Math.cos(a) * .17, 0, a, 0, { line: .015 });
+    K(INK).add(SPHG(.035, 8), Math.sin(a) * .31, .035, Math.cos(a) * .31, 0, 0, 0, NOLINE);
   }
+});
+
+/* desk: drawer pedestal, legs + modesty panel, monitor with bezel/stand/cable, keyboard with key rows,
+ * mouse on a pad, mug, pen cup and an anglepoise lamp. Front (+z) is where the chair goes. */
+const deskPF = prefab(K => {
+  K(wood).add(RBOXG(2.2, .08, 1.1, .03), 0, .76, 0);
+  const cab = K(PM("#e4d8c2"));
+  cab.add(RBOXG(.52, .7, .98, .03), -.76, .37, -.02);
+  [.6, .38, .16].forEach(y => {
+    cab.add(RBOXG(.46, .19, .03, .012), -.76, y, .48, 0, 0, 0, { line: .015 });
+    K(metal).add(BOXG(.16, .03, .03), -.76, y + .04, .505, 0, 0, 0, { line: .012 });
+  });
+  const dk = K(dark);
+  [-.47, .47].forEach(z => dk.add(BOXG(.07, .74, .07), 1.0, .37, z));
+  dk.add(BOXG(1.45, .4, .03), .22, .52, -.5, 0, 0, 0, { line: .02 });
+  dk.add(RBOXG(1.0, .62, .06, .025), 0, 1.38, -.33)              // bezel
+    .add(RBOXG(.56, .36, .1, .04), 0, 1.36, -.4)                   // back hump
+    .add(BOXG(.08, .36, .05), 0, 1.0, -.43)                         // neck
+    .add(RBOXG(.38, .025, .24, .01), 0, .812, -.4, 0, 0, 0, { line: .015 }) // foot
+    .add(cable([[.06, 1.2, -.46], [.12, .95, -.5], [.18, .8, -.61], [.24, .4, -.63], [.3, .015, -.6]]), 0, 0, 0, 0, 0, 0, NOLINE)
+    .add(cable([[.5, .815, .02], [.47, .812, -.12], [.25, .812, -.25], [.12, .812, -.3]], .007), 0, 0, 0, 0, 0, 0, NOLINE)
+    .add(CYLG(.11, .13, .04, 14), -.85, .82, -.3);                  // lamp base
+  K(GLOW("#49d16a")).add(SPHG(.012, 6), -.44, 1.1, -.297, 0, 0, 0, NOLINE); // power LED
+  K(PM("#fff27a")).add(BOXG(.11, .11, .006), .52, 1.58, -.296, 0, 0, .25, { line: .008 }).add(BOXG(.1, .1, .006), .53, 1.46, -.296, 0, 0, -.15, { line: .008 });
+  // keyboard + mouse
+  K(PM("#ececec")).add(RBOXG(.62, .03, .2, .01), 0, .815, .05, 0, 0, 0, { line: .015 })
+    .add(SPHG(.045, 10), .5, .83, .08, 0, 0, 0, { line: .015, sy: .55, sz: 1.35 });
+  const keys = K(PM("#55565e"));
+  for (let r = 0; r < 3; r++) for (let i = 0; i < 11; i++) keys.add(BOXG(.042, .014, .034), -.25 + i * .05, .836, -.005 + r * .045, 0, 0, 0, NOLINE);
+  keys.add(BOXG(.24, .014, .03), 0, .836, .13, 0, 0, 0, NOLINE);
+  K(PM("#33415c")).add(BOXG(.28, .008, .24), .5, .804, .08, 0, 0, 0, { line: .01 });
+  // mug of coffee, pen cup
+  K(PM("#ffffff")).add(CYLG(.06, .05, .12, 14), .75, .86, .1).add(TORG(.035, .012), .81, .86, .1, 0, 0, 0, { line: .01 });
+  K(PM("#5a3420")).add(CYLG(.052, .052, .01, 14), .75, .917, .1, 0, 0, 0, NOLINE);
+  K(metal).add(CYLG(.045, .04, .12, 10), -.5, .86, -.32, 0, 0, 0, { line: .015 });
+  K(PM("#ffd23f")).add(BOXG(.016, .18, .016), -.51, .94, -.32, 0, 0, .15, { line: .01 }).add(BOXG(.016, .18, .016), -.48, .94, -.33, .1, 0, -.2, { line: .01 });
+  // anglepoise lamp: two arm segments, elbow joint, shade, warm bulb
+  K(metal).add(BOXG(.03, .354, .03), -.85, 1.01, -.35, -.286, 0, 0, { line: .015 })
+    .add(BOXG(.03, .289, .03), -.85, 1.215, -.26, 1.326, 0, 0, { line: .015 })
+    .add(SPHG(.03, 8), -.85, 1.18, -.4, 0, 0, 0, { line: .015 });
+  K(mats.accent2).add(CYLG(.05, .13, .15, 14), -.85, 1.2, -.1, -.35, 0, 0);
+  K(BULB).add(SPHG(.035, 8), -.85, 1.13, -.07, 0, 0, 0, NOLINE);
+});
+
+function desk(x, z, { flip = false, screen = screenMat, chair = true } = {}) {
+  const g = deskPF(scene, x, 0, z, flip ? Math.PI : 0);
+  const scr = new THREE.Mesh(SCREEN_GEO, screen); scr.position.set(0, 1.38, -.296); g.add(scr);
+  blob(0, -.05, 2.6, 1.5, g);
+  if (chair) { chairPF(g, 0, 0, .95); blob(0, .95, .95, .95, g); }
   collide(x, z, 2.3, 1.2);
   return g;
 }
 
-function plant(x, z) {
-  cyl(.28, .22, .5, M("#c56a3c"), x, .25, z);
-  const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(.55, 0), M("#3f9b4f", { flatShading: true }));
-  leaves.position.set(x, .95, z); leaves.castShadow = true; scene.add(leaves); outline(leaves, .04);
-  collide(x, z, .6, .6);
+/* cubicle partitions for a desk at the origin: a back panel and one side panel (east), fabric with a trim cap */
+const cubiclePF = prefab(K => {
+  K(PM("#7f93a8")).add(RBOXG(2.5, 1.15, .06, .025), 0, .66, -.7).add(RBOXG(.06, 1.15, 1.35, .025), 1.27, .66, -.02);
+  const trim = K(PM("#e9e3d6"));
+  trim.add(RBOXG(2.58, .05, .1, .02), 0, 1.26, -.7).add(RBOXG(.1, .05, 1.43, .02), 1.27, 1.26, -.02);
+  [-1.2, 1.2].forEach(x => trim.add(BOXG(.06, .085, .3), x, .04, -.7, 0, 0, 0, { line: .015 }));
+  trim.add(BOXG(.3, .085, .06), 1.27, .04, .6, 0, 0, 0, { line: .015 });
+  K(PM("#fffaf0")).add(BOXG(.22, .28, .01), -.95, .98, -.665, 0, 0, .06, { line: .01 }).add(BOXG(.2, .14, .01), .85, 1.0, -.665, 0, 0, -.08, { line: .01 });
+  K(PM("#ff8fb1")).add(BOXG(.12, .12, .01), 1.235, 1.0, .2, 0, Math.PI / 2, .1, { line: .008 });
+});
+function cubicle(x, z) {
+  cubiclePF(scene, x, 0, z);
+  collide(x, z - .7, 2.6, .12); collide(x + 1.27, z - .02, .12, 1.45);
 }
+
+/* plants: pot with rim and soil, then a bush, a tall fiddle-leaf tree or a cactus */
+const potKit = K => {
+  K(PM("#c56a3c")).add(CYLG(.28, .21, .46, 16), 0, .23, 0).add(CYLG(.31, .31, .08, 16), 0, .47, 0);
+  K(PM("#4a3020")).add(CYLG(.27, .27, .02, 16), 0, .505, 0, 0, 0, 0, NOLINE);
+};
+const PLANTS = {
+  bush: prefab(K => {
+    potKit(K);
+    K(PMF("#3f9b4f")).add(ICOG(.48), 0, .98, 0, .3, .5, 0, { line: .04 }).add(ICOG(.34), .26, 1.25, .1, .7, 0, .2, { line: .035 });
+    K(PMF("#2f7d3f")).add(ICOG(.32), -.24, 1.2, -.12, .2, 1, 0, { line: .035 }).add(ICOG(.26), .02, 1.45, -.05, .5, .3, .1, { line: .03 });
+  }),
+  tall: prefab(K => {
+    potKit(K);
+    K(PM("#6b4a2e")).add(CYLG(.035, .05, 1.2, 8), 0, 1.05, 0, 0, 0, 0, { line: .015 }).add(CYLG(.02, .03, .45, 6), .12, 1.5, 0, 0, 0, -.6, { line: .012 });
+    K(PMF("#3f9b4f")).add(ICOG(.32), 0, 1.78, 0, .4, 0, 0, { line: .035, sy: .8 }).add(ICOG(.26), -.22, 2.02, -.05, 0, .6, .3, { line: .03 })
+      .add(ICOG(.2), .08, 2.22, .1, .2, 0, 0, { line: .03 });
+    K(PMF("#58b25f")).add(ICOG(.27), .3, 1.55, .08, 0, .4, 0, { line: .03, sy: .8 }).add(ICOG(.2), -.25, 1.45, .12, .3, 0, 0, { line: .03 });
+  }),
+  cactus: prefab(K => {
+    potKit(K);
+    K(PM("#4f9a5a")).add(CYLG(.15, .17, .75, 12), 0, .88, 0).add(SPHG(.15, 12), 0, 1.255, 0)
+      .add(CYLG(.07, .07, .24, 10), .2, .95, 0, 0, 0, Math.PI / 2).add(CYLG(.07, .07, .3, 10), .3, 1.1, 0).add(SPHG(.07, 10), .3, 1.25, 0)
+      .add(CYLG(.065, .065, .2, 10), -.18, .8, 0, 0, 0, Math.PI / 2).add(CYLG(.065, .065, .22, 10), -.26, .91, 0).add(SPHG(.065, 10), -.26, 1.02, 0);
+    K(PM("#ff6fa3")).add(SPHG(.06, 8), 0, 1.42, 0, 0, 0, 0, { line: .015 }).add(SPHG(.04, 8), .3, 1.33, 0, 0, 0, 0, { line: .012 });
+  }),
+};
+function plant(x, z, kind = "bush", { y = 0, scale = 1, solid = true } = {}) {
+  const g = PLANTS[kind](scene, x, y, z, rand(0, 6.28)); g.scale.setScalar(scale);
+  if (solid) { blob(x, z, .9, .9); collide(x, z, .6, .6); }
+  return g;
+}
+
+// one per-frame hook for the little animations below (clock hands, printer paper, scanner glow)
+const POLISH = {};
+function polishTick(dt, now) {
+  const s = Date.now() / 1000 - TZ_SECS, TAU = Math.PI * 2;
+  if (POLISH.clock) {
+    POLISH.clock.s.rotation.z = -Math.floor(s % 60) / 60 * TAU;
+    POLISH.clock.m.rotation.z = -((s / 60) % 60) / 60 * TAU;
+    POLISH.clock.h.rotation.z = -((s / 3600) % 12) / 12 * TAU;
+  }
+  if (POLISH.paper) {
+    const pp = POLISH.paper; pp.visible = P.printing;
+    if (pp.visible) { const k = (now % 650) / 650; pp.position.z = PRINTER.z + .42 + k * .32; pp.position.y = 1.0 - k * .025; }
+  }
+  if (POLISH.glow) {
+    const em = scanSlot.material.emissive, gm = POLISH.glow.material;
+    gm.color.copy(em); gm.opacity = Math.min(.6, .1 + scanSlot.material.emissiveIntensity * .3);
+  }
+}
+const TZ_SECS = new Date().getTimezoneOffset() * 60;
+setTimeout(() => window.FW && window.FW.onUpdate(polishTick)); // FW exists once this script has finished
 
 function signPlane(text, sub, w, h, bg, fg = "#fff") {
   const tex = canvasTex(1024, Math.round(1024 * h / w), (g, cw, ch) => {
@@ -396,6 +654,18 @@ const nameplate = signPlane("YOU", null, .7, .2, "#2b1d14"); nameplate.position.
 
 /* --- coworkers --- */
 desk(-3, 2); desk(-3, -3);
+cubicle(-3, 2); cubicle(-3, -3);
+{ // rug under the coworker pod (flat, walkable; ends 0.8 m short of the boss's x = -5.5 lane)
+  const rugTex = canvasTex(256, 512, (g, w, h) => {
+    g.fillStyle = "#a9483a"; g.fillRect(0, 0, w, h);
+    g.strokeStyle = "#e8c27a"; g.lineWidth = 10; g.strokeRect(14, 14, w - 28, h - 28);
+    g.strokeStyle = "#5a2a24"; g.lineWidth = 4; g.strokeRect(30, 30, w - 60, h - 60);
+    g.fillStyle = "#c9654f";
+    for (let j = 0; j < 7; j++) { const y = 70 + j * 62; g.beginPath(); g.moveTo(w / 2, y - 24); g.lineTo(w / 2 + 40, y); g.lineTo(w / 2, y + 24); g.lineTo(w / 2 - 40, y); g.closePath(); g.fill(); }
+  });
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 8), M("#ffffff", { map: rugTex }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(-3, .008, -.3); rug.receiveShadow = true; scene.add(rug);
+}
 const kevin = makeChar({ shirt: "#7a5cff", look: { hair: "bowl", hairColor: "#c98a3a", glasses: true, teeth: true, mouth: "grin", brows: "raised" }, name: "KEVIN", tagColor: "#555" });
 kevin.g.position.set(-3, 0, 2.95); kevin.g.rotation.y = Math.PI; seatPose(kevin, true);
 const dana = makeChar({ shirt: "#3fae6a", skin: "#a8714a", look: { hair: "bun", hairColor: "#1e1410", lids: true, mouth: "flat", brows: "flat" }, name: "DANA", tagColor: "#555" });
@@ -403,9 +673,39 @@ dana.g.position.set(-3, 0, -2.05); dana.g.rotation.y = Math.PI; seatPose(dana, t
 
 /* --- printer --- */
 const PRINTER = { x: -8, z: -7.6 };
-box(1.4, .9, .9, M("#e9e6df"), PRINTER.x, .45, PRINTER.z);
-box(1.4, .25, .9, M("#cfcac0"), PRINTER.x, 1.02, PRINTER.z);
-box(1.0, .05, .5, mats.accent2, PRINTER.x, 1.17, PRINTER.z - .05);
+{
+  const pg = new THREE.Group(); pg.position.set(PRINTER.x, 0, PRINTER.z); scene.add(pg);
+  const K = kits();
+  K(PM("#e9e6df")).add(RBOXG(1.4, .9, .9, .06), 0, .45, 0);
+  K(PM("#cfcac0")).add(RBOXG(1.42, .25, .92, .05), 0, 1.02, 0);
+  K(mats.accent2).add(RBOXG(1.0, .05, .5, .02), 0, 1.17, -.05, 0, 0, 0, { line: .02 });
+  const dk = K(dark);
+  [.3, .6].forEach(y => dk.add(BOXG(1.3, .016, .012), 0, y, .452, 0, 0, 0, NOLINE));       // paper drawer seams
+  [.47, .19].forEach(y => dk.add(RBOXG(.34, .045, .04, .015), 0, y, .46, 0, 0, 0, { line: .012 }));
+  K(INK).add(BOXG(1.0, .045, .012), 0, 1.0, .463, 0, 0, 0, NOLINE);                          // output slot
+  const card = K(PM("#c9a46a"));                                                              // paper reams on the floor
+  card.add(BOXG(.5, .32, .36), 1.12, .16, -.08).add(BOXG(.5, .32, .36), 1.1, .48, -.1, 0, .14, 0);
+  K(PM("#f4f1ea")).add(BOXG(.3, .1, .005), 1.12, .18, .1, 0, 0, 0, { line: .008 });
+  K.place(pg);
+  // paper input tray on the back, tilted up
+  const feed = new THREE.Group(); feed.position.set(0, 1.3, -.42); feed.rotation.x = .5; pg.add(feed);
+  const F = kits();
+  F(dark).add(BOXG(.9, .02, .42)).add(BOXG(.02, .12, .42), -.45, .05, 0, 0, 0, 0, { line: .012 }).add(BOXG(.02, .12, .42), .45, .05, 0, 0, 0, 0, { line: .012 });
+  F(PM("#fffaf0")).add(BOXG(.8, .07, .36), 0, .045, .01, 0, 0, 0, { line: .015 });
+  F.place(feed);
+  // control panel: little LCD and three buttons
+  const panel = new THREE.Group(); panel.position.set(.42, 1.18, .3); panel.rotation.x = .3; pg.add(panel);
+  const C = kits();
+  C(PM("#3a3a40")).add(RBOXG(.42, .06, .22, .02));
+  C(GLOW("#9fe8c8")).add(BOXG(.16, .01, .08), -.08, .032, -.02, 0, 0, 0, NOLINE);
+  [["#e0352b", .06], ["#ffd23f", .12], ["#49d16a", .18]].forEach(([c, x]) => C(PM(c)).add(CYLG(.022, .022, .02, 10), x - .03, .035, .02, 0, 0, 0, { line: .01 }));
+  C.place(panel);
+  blob(0, 0, 1.8, 1.3, pg); blob(1.12, -.08, .8, .6, pg);
+  collide(PRINTER.x + 1.12, PRINTER.z - .09, .6, .45);
+  // a sheet sliding out while it prints (animated in polishTick)
+  POLISH.paper = new THREE.Mesh(BOXG(.42, .006, .3), PM("#fffaf0"));
+  POLISH.paper.position.set(PRINTER.x, 1.0, PRINTER.z + .45); POLISH.paper.visible = false; scene.add(POLISH.paper);
+}
 const tray = box(.7, .04, .4, dark, PRINTER.x, .95, PRINTER.z + .55);
 const printerLight = new THREE.Mesh(new THREE.SphereGeometry(.06, 12, 12), new THREE.MeshStandardMaterial({ color: "#222", emissive: "#49d16a", emissiveIntensity: .3 }));
 printerLight.position.set(PRINTER.x + .55, 1.05, PRINTER.z + .46); scene.add(printerLight);
@@ -419,12 +719,41 @@ envelope.visible = false;
 /* --- inspector booth --- */
 const BOOTH = { x: 8, z: -5.6 };
 const boothDesk = new THREE.Group(); boothDesk.position.set(BOOTH.x, 0, BOOTH.z); scene.add(boothDesk);
-box(3.2, 1.05, .8, mats.accent, 0, .52, .6, boothDesk);         // counter
-box(3.3, .08, .95, wood, 0, 1.08, .6, boothDesk);
+{ // counter: soft body, cream front panels, kick plate, trim, bell, "take a number" dispenser
+  const K = kits();
+  K(mats.accent).add(RBOXG(3.2, 1.05, .8, .04), 0, .52, .6);
+  K(wood).add(RBOXG(3.3, .08, .95, .03), 0, 1.08, .6);
+  const cream = K(PM("#f7ecd6"));
+  [-1.05, 0, 1.05].forEach(x => cream.add(RBOXG(.88, .6, .03, .015), x, .55, 1.012, 0, 0, 0, { line: .015 }));
+  K(dark).add(BOXG(3.22, .1, .05), 0, .05, 1.0, 0, 0, 0, { line: .015 })
+    .add(CYLG(.08, .09, .025, 14), .2, 1.133, .88, 0, 0, 0, { line: .012 })
+    .add(CYLG(.012, .012, .04, 8), .2, 1.22, .88, 0, 0, 0, { line: .01 }).add(SPHG(.02, 8), .2, 1.245, .88, 0, 0, 0, { line: .01 })
+    .add(CYLG(.012, .012, .16, 6), -1.38, 1.45, .82, 0, 0, 0, { line: .01 });
+  K(mats.accent2).add(BOXG(3.24, .05, .04), 0, .98, 1.01, 0, 0, 0, { line: .015 });
+  K(GOLD_M).add(DOMEG(.07), .2, 1.145, .88, 0, 0, 0, { line: .012 });
+  K(PM("#e0352b")).add(RBOXG(.2, .26, .16, .05), -1.38, 1.25, .82);
+  K(PM("#fffaf0")).add(BOXG(.08, .004, .12), -1.38, 1.2, .93, .5, 0, 0, { line: .008 });
+  K.place(boothDesk);
+  const num = signPlane("TAKE A NUMBER", null, .62, .14, "#2b1d14"); num.position.set(-1.38, 1.6, .82); boothDesk.add(num);
+  blob(BOOTH.x, BOOTH.z + .6, 3.7, 1.4);
+}
 collide(BOOTH.x, BOOTH.z + .6, 3.4, 1.0);
-const scanner = box(.9, .45, .6, M("#3a3a40"), .8, 1.35, .5, boothDesk);
+const scanner = place(kit().add(RBOXG(.9, .45, .6, .05)).bake(), PM("#3a3a40"), boothDesk, .8, 1.35, .5);
 const scanSlot = new THREE.Mesh(new THREE.PlaneGeometry(.6, .06), new THREE.MeshStandardMaterial({ color: "#000", emissive: "#7cff9a", emissiveIntensity: .2 }));
 scanSlot.position.set(.8, 1.45, .805); boothDesk.add(scanSlot);
+{ // scanner details: lid, accent bezel round the slot, vents, feet, and a glow that follows the slot colour
+  const K = kits();
+  K(PM("#5a5a64")).add(RBOXG(.94, .07, .64, .03), .8, 1.6, .5);
+  K(mats.accent).add(BOXG(.7, .025, .02), .8, 1.495, .81, 0, 0, 0, { line: .01 }).add(BOXG(.7, .025, .02), .8, 1.405, .81, 0, 0, 0, { line: .01 })
+    .add(BOXG(.025, .115, .02), .4625, 1.45, .81, 0, 0, 0, { line: .01 }).add(BOXG(.025, .115, .02), 1.1375, 1.45, .81, 0, 0, 0, { line: .01 });
+  const ink = K(INK);
+  [1.27, 1.22, 1.17].forEach(y => ink.add(BOXG(.5, .014, .01), .8, y, .803, 0, 0, 0, NOLINE));
+  [-.38, .38].forEach(dx => ink.add(BOXG(.1, .02, .5), .8 + dx, 1.125, .5, 0, 0, 0, NOLINE));
+  K(GLOW("#ff5a4a")).add(SPHG(.018, 6), 1.12, 1.54, .8, 0, 0, 0, NOLINE);
+  K.place(boothDesk);
+  POLISH.glow = new THREE.Mesh(new THREE.PlaneGeometry(.78, .22), new THREE.MeshBasicMaterial({ color: "#7cff9a", transparent: true, opacity: .15, blending: THREE.AdditiveBlending, depthWrite: false }));
+  POLISH.glow.position.set(.8, 1.45, .816); boothDesk.add(POLISH.glow);
+}
 const inTray = box(.6, .08, .45, M("#c9c3b6"), -.7, 1.16, .75, boothDesk);
 const inLabel = signPlane("IN", null, .4, .16, "#e0352b"); inLabel.position.set(-.7, 1.28, .99); boothDesk.add(inLabel);
 const boothSign = signPlane("ACCOUNTS PAYABLE", "INSPECTOR ON DUTY", 4.2, 1.0, "#1f8a8a");
@@ -434,7 +763,7 @@ const glassMat = new THREE.MeshStandardMaterial({ color: "#bfe8ff", transparent:
 [-1.75, 1.75].forEach(dx => { const gl = box(.06, 1.6, 1.6, glassMat, BOOTH.x + dx, 1.4, BOOTH.z + .1); gl.castShadow = false; collide(BOOTH.x + dx, BOOTH.z + .1, .1, 1.6); });
 const inspector = makeChar({ shirt: "#f4f4f4", pants: "#555", tie: "#1f8a8a", look: { hair: "messy", hairColor: "#8a5a35", lids: true, mouth: "o", nose: "big" }, name: "GUS · v1", tagColor: "#1f8a8a" });
 inspector.g.position.set(BOOTH.x, 0, BOOTH.z - .3); seatPose(inspector, false);
-box(.62, .08, .62, dark, BOOTH.x, .5, BOOTH.z - .3);
+chairPF(scene, BOOTH.x, 0, BOOTH.z - .3, Math.PI); blob(BOOTH.x, BOOTH.z - .3, .95, .95); // faces the counter
 const IN_TRAY = new THREE.Vector3(BOOTH.x - .7, 0, BOOTH.z + 1.6);
 
 /* --- corkboard on the north wall: grows with every trick --- */
@@ -459,10 +788,17 @@ const corkTex = canvasTex(1024, 640, (g, w, h) => {
 });
 const cork = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.5), new THREE.MeshStandardMaterial({ map: corkTex, roughness: 1 }));
 cork.position.set(3, 1.9, -RD / 2 + .17); scene.add(cork);
+{ // chunky wooden frame round the corkboard
+  const K = kits(), f = K(wood), z = -RD / 2 + .19;
+  f.add(RBOXG(4.26, .13, .07, .025), 3, 1.9 + 1.31, z).add(RBOXG(4.26, .13, .07, .025), 3, 1.9 - 1.31, z)
+    .add(RBOXG(.13, 2.5, .07, .025), 3 - 2.065, 1.9, z).add(RBOXG(.13, 2.5, .07, .025), 3 + 2.065, 1.9, z);
+  K.place();
+}
 
 /* --- clerk --- */
 const CLERK_DESK = { x: 8, z: 4 };
 desk(CLERK_DESK.x, CLERK_DESK.z, { flip: true });
+plant(CLERK_DESK.x - .72, CLERK_DESK.z + .32, "bush", { y: .8, scale: .3, solid: false }); // desk succulent
 const clerk = makeChar({ shirt: "#f4a63a", skin: "#e0a77a", look: { hair: "curly", hairColor: "#b8342a", earrings: true, mouth: "grin", brows: "raised" }, name: "BRENDA · CLERK", tagColor: "#a4581c" });
 clerk.g.position.set(CLERK_DESK.x, 0, CLERK_DESK.z - .95); seatPose(clerk, false);
 const lunchSign = signPlane("ON LUNCH", null, .8, .25, "#e0352b"); lunchSign.position.set(CLERK_DESK.x + .7, .95, CLERK_DESK.z + .56); scene.add(lunchSign);
@@ -480,18 +816,126 @@ const cone = new THREE.Mesh(new THREE.CircleGeometry(CONE_R / 1.12, 28, -Math.PI
 cone.rotation.x = -Math.PI / 2; cone.position.y = .04; boss.g.add(cone);
 
 /* --- props --- */
-plant(-12.2, 8.2); plant(12.2, 8.2); plant(12.2, -8.2); plant(-1, -8.2);
-cyl(.3, .3, 1.0, M("#e8e8e8"), -12.3, .5, -8.2); const jug = cyl(.26, .26, .5, M("#7cc6ff", { transparent: true, opacity: .7 }), -12.3, 1.25, -8.2); jug.castShadow = false; collide(-12.3, -8.2, .7, .7);
+plant(-12.2, 8.2, "tall"); plant(12.2, 8.2, "bush"); plant(12.2, -8.2, "bush"); plant(-1, -8.2, "cactus"); plant(12.3, -2.6, "tall");
+{ // water cooler: soft body, drip tray, hot/cold taps, cup tube
+  const K = kits(), x = -12.3, z = -8.2;
+  K(PM("#e8e8e8")).add(RBOXG(.5, 1.0, .5, .05), x, .5, z);
+  K(dark).add(RBOXG(.3, .03, .14, .01), x, .62, z + .27, 0, 0, 0, { line: .012 });
+  K(PM("#e0352b")).add(BOXG(.05, .06, .06), x - .08, .8, z + .27, 0, 0, 0, { line: .012 });
+  K(PM("#2f6fd6")).add(BOXG(.05, .06, .06), x + .08, .8, z + .27, 0, 0, 0, { line: .012 });
+  K(PM("#cfd6dc")).add(CYLG(.04, .035, .24, 10), x + .3, .72, z + .1, 0, 0, 0, { line: .012 });
+  K.place(); blob(x, z, .85, .85);
+}
+const jug = cyl(.26, .26, .5, M("#7cc6ff", { transparent: true, opacity: .7 }), -12.3, 1.25, -8.2); jug.castShadow = false; collide(-12.3, -8.2, .7, .7);
 const exitSign = signPlane("EXIT", null, 1, .35, "#1d9a4b"); exitSign.position.set(0, 2.6, RD / 2 - .17); exitSign.rotation.y = Math.PI; scene.add(exitSign);
 
+/* --- windows with half-drawn blinds on the north wall (all geometry sits in front of the wall face) --- */
+const WALL_N = -RD / 2 + .15; // inner face of the north wall
+const skyTex = canvasTex(512, 384, (g, w, h) => {
+  const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, "#7cc6ff"); sky.addColorStop(1, "#d8f0ff");
+  g.fillStyle = sky; g.fillRect(0, 0, w, h);
+  g.fillStyle = "#fff6c8"; g.beginPath(); g.arc(400, 90, 34, 0, 7); g.fill();
+  g.fillStyle = "#ffffff"; [[90, 70, 46], [140, 60, 36], [300, 120, 30], [336, 112, 24]].forEach(([x, y, r]) => { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); });
+  const bld = [[0, 150, 70], [70, 210, 60], [130, 120, 80], [210, 190, 50], [260, 100, 70], [330, 170, 60], [390, 135, 70], [460, 200, 52]];
+  bld.forEach(([x, top, bw], i) => {
+    g.fillStyle = i % 2 ? "#8aa0b8" : "#9db3c9"; g.fillRect(x, top, bw, h - top);
+    g.fillStyle = "#e9f4ff"; for (let y = top + 14; y < h - 10; y += 26) for (let wx = x + 10; wx < x + bw - 12; wx += 18) g.fillRect(wx, y, 8, 12);
+  });
+});
+const windowPF = prefab(K => {
+  const W = 2.0, H = 1.5, y = 1.85, z = WALL_N, fr = K(PM("#f7f3ea"));
+  fr.add(BOXG(W + .16, .08, .08), 0, y + H / 2 + .04, z + .04).add(BOXG(W + .16, .08, .08), 0, y - H / 2 - .04, z + .04)
+    .add(BOXG(.08, H, .08), -W / 2 - .04, y, z + .04).add(BOXG(.08, H, .08), W / 2 + .04, y, z + .04)
+    .add(BOXG(.05, H, .05), 0, y, z + .03, 0, 0, 0, { line: .015 })
+    .add(RBOXG(W + .3, .06, .2, .02), 0, y - H / 2 - .1, z + .1);                     // sill
+  const bl = K(PM("#efe4cc"));
+  bl.add(RBOXG(W + .1, .08, .1, .02), 0, y + H / 2 - .02, z + .11);                   // headrail
+  for (let i = 0; i < 12; i++) bl.add(BOXG(W - .04, .012, .075), 0, y + H / 2 - .1 - i * .065, z + .1, .45, 0, 0, { line: .008 });
+  bl.add(BOXG(W, .03, .06), 0, y + H / 2 - .1 - 12 * .065, z + .1, 0, 0, 0, { line: .012 }); // bottom bar
+  K(dark).add(BOXG(.01, .9, .01), W / 2 - .12, y + .25, z + .16, 0, 0, 0, NOLINE).add(SPHG(.025, 6), W / 2 - .12, y - .2, z + .16, 0, 0, 0, { line: .01 });
+});
+const skyGeo = new THREE.PlaneGeometry(2.0, 1.5), skyMat = new THREE.MeshBasicMaterial({ map: skyTex });
+[-10.6, -4.5, 10.9].forEach(x => {
+  windowPF(scene, x, 0, 0, 0, false);
+  const sky = new THREE.Mesh(skyGeo, skyMat); sky.position.set(x, 1.85, WALL_N + .005); scene.add(sky);
+});
+
+/* --- wall clock showing the real time (hands turned in polishTick) --- */
+{
+  const cg = new THREE.Group(); cg.position.set(-1.4, 2.45, WALL_N); scene.add(cg);
+  const K = kits();
+  K(dark).add(CYLG(.36, .36, .06, 28), 0, 0, .03, Math.PI / 2, 0, 0);
+  K(PM("#fffaf0")).add(CYLG(.32, .32, .02, 28), 0, 0, .065, Math.PI / 2, 0, 0, NOLINE);
+  const ticks = K(INK);
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; ticks.add(BOXG(.02, i % 3 ? .04 : .07, .01), Math.sin(a) * .27, Math.cos(a) * .27, .078, 0, 0, -a, NOLINE); }
+  K(PM("#e0352b")).add(SPHG(.025, 8), 0, 0, .1, 0, 0, 0, { line: .01 });
+  K.place(cg, false);
+  const hand = (w, len, mat, z) => { const h = new THREE.Group(); h.position.z = z; cg.add(h); const m = new THREE.Mesh(BOXG(w, len, .01), mat); m.position.y = len / 2 - .03; h.add(m); return h; };
+  POLISH.clock = { h: hand(.035, .19, INK, .083), m: hand(.025, .27, INK, .088), s: hand(.01, .29, PM("#e0352b"), .093) };
+}
+
+/* --- motivational posters --- */
+const posterTexs = [];
+function poster(lines, sub, bg, fg, art, x, z, ry) {
+  const w = 1.1, h = 1.5;
+  const tex = canvasTex(512, 698, (g, cw, ch) => {
+    g.fillStyle = bg; g.fillRect(0, 0, cw, ch);
+    g.strokeStyle = "#fff"; g.lineWidth = 12; g.strokeRect(24, 24, cw - 48, ch - 48);
+    art(g, cw, ch);
+    g.fillStyle = fg; g.textAlign = "center"; g.textBaseline = "middle";
+    lines.forEach((t, i) => {
+      let fs = 110; g.font = `${fs}px Bungee, Impact, sans-serif`;
+      while (g.measureText(t).width > cw - 90 && fs > 20) { fs -= 4; g.font = `${fs}px Bungee, Impact, sans-serif`; }
+      g.fillText(t, cw / 2, ch * .66 + i * 86 - (lines.length - 1) * 30);
+    });
+    g.fillStyle = "#fff"; g.font = "bold 24px 'Space Mono', monospace"; g.fillText(sub, cw / 2, ch * .9);
+  });
+  posterTexs.push(tex);
+  const grp = new THREE.Group(); grp.position.set(x, 1.85, z); grp.rotation.y = ry; scene.add(grp);
+  place(kit().add(BOXG(w + .08, h + .08, .03), 0, 0, -.015, 0, 0, 0, { line: .015 }).bake(), dark, grp, 0, 0, 0, 0, false);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), M("#ffffff", { map: tex })); m.position.z = .002; grp.add(m);
+}
+poster(["SYNERGY"], "TOGETHER WE INVOICE", "#2f6fd6", "#ffd23f", (g, w) => {
+  g.globalAlpha = .9; g.fillStyle = "#ffd23f"; g.beginPath(); g.arc(w / 2 - 60, 220, 110, 0, 7); g.fill();
+  g.fillStyle = "#ff8fb1"; g.beginPath(); g.arc(w / 2 + 60, 220, 110, 0, 7); g.fill(); g.globalAlpha = 1;
+}, -RW / 2 + .17, 1.5, Math.PI / 2);
+poster(["TRUST THE", "PROCESS"], "DON'T ASK QUESTIONS", "#1d9a4b", "#ffffff", (g, w) => {
+  g.strokeStyle = "#fff"; g.fillStyle = "#fff"; g.lineWidth = 8; g.font = "bold 34px 'Space Mono', monospace"; g.textAlign = "center"; g.textBaseline = "middle";
+  [["IDEA", 110], ["???", 220], ["$$$", 330]].forEach(([t, y], i) => {
+    g.strokeRect(w / 2 - 80, y - 36, 160, 72); g.fillText(t, w / 2, y);
+    if (i < 2) { g.beginPath(); g.moveTo(w / 2, y + 36); g.lineTo(w / 2, y + 74); g.stroke(); }
+  });
+}, RW / 2 - .17, -5.2, -Math.PI / 2);
+poster(["HANG IN", "THERE"], "IT'S ALMOST FRIDAY", "#f4a63a", "#2b1d14", (g, w) => {
+  g.strokeStyle = "#6b4a2e"; g.lineWidth = 16; g.beginPath(); g.moveTo(40, 90); g.lineTo(w - 40, 110); g.stroke();
+  g.fillStyle = "#555"; g.strokeStyle = "#555"; g.lineWidth = 14;
+  [-30, 30].forEach(dx => { g.beginPath(); g.moveTo(w / 2 + dx, 100); g.lineTo(w / 2 + dx * .6, 180); g.stroke(); });
+  g.beginPath(); g.arc(w / 2, 250, 70, 0, 7); g.fill();
+  g.beginPath(); g.moveTo(w / 2 - 60, 210); g.lineTo(w / 2 - 50, 150); g.lineTo(w / 2 - 15, 190); g.fill();
+  g.beginPath(); g.moveTo(w / 2 + 60, 210); g.lineTo(w / 2 + 50, 150); g.lineTo(w / 2 + 15, 190); g.fill();
+  g.fillStyle = "#fff"; [-25, 25].forEach(dx => { g.beginPath(); g.arc(w / 2 + dx, 245, 16, 0, 7); g.fill(); });
+  g.fillStyle = "#111"; [-25, 25].forEach(dx => { g.beginPath(); g.arc(w / 2 + dx + 3, 248, 7, 0, 7); g.fill(); });
+}, 4.5, RD / 2 - .17, Math.PI);
+if (document.fonts) document.fonts.ready.then(() => posterTexs.forEach(t => redraw(t)));
+
+/* --- floor cable cover from the coworker pod to the wall, then a raceway up to the ceiling --- */
+{
+  const K = kits();
+  K(PM("#e8c13a")).add(RBOXG(.2, .03, 5.1, .012), -2.4, .015, -6.3, 0, 0, 0, { line: .012 });
+  K(PM("#f2efe8")).add(BOXG(.1, 3.2, .05), -2.4, 1.6, WALL_N + .025, 0, 0, 0, { line: .015 });
+  K.place(scene, false);
+}
+
 /* --- hanging lamps: warm pools of light --- */
+const lampPF = prefab(K => {
+  K(dark).add(CYLG(.13, .13, .03, 14), 0, 3.185, 0).add(CYLG(.012, .012, .14, 6), 0, 3.11, 0, 0, 0, 0, { line: .01 })
+    .add(CYLG(.05, .05, .05, 12), 0, 3.06, 0, 0, 0, 0, { line: .012 });
+  K(mats.accent2).add(CYLG(.1, .36, .28, 20), 0, 2.95, 0).add(TORG(.355, .022), 0, 2.815, 0, Math.PI / 2, 0, 0, { line: .012 }); // shade + rolled rim
+  K(BULB).add(SPHG(.11, 10), 0, 2.82, 0, 0, 0, 0, NOLINE);
+});
 [[-8, 1], [-3, -.5], [8, -4.5], [8, 3.5], [2, 6]].forEach(([x, z]) => {
-  cyl(.01, .01, .8, dark, x, 3.8, z);
-  const shade = cyl(.1, .36, .28, mats.accent2, x, 3.3, z);
-  shade.castShadow = false;
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 10), new THREE.MeshBasicMaterial({ color: "#fff3c4" }));
-  bulb.position.set(x, 3.14, z); scene.add(bulb);
-  const l = new THREE.PointLight("#fff1dc", .25, 6, 2); l.position.set(x, 3.0, z); scene.add(l);
+  lampPF(scene, x, 0, z, 0, false);
+  const l = new THREE.PointLight("#fff1dc", .25, 6, 2); l.position.set(x, 2.75, z); scene.add(l);
 });
 
 /* --- the inspector visibly evolves with each detector version (design doc §9) --- */
@@ -576,10 +1020,15 @@ const tvTex = canvasTex(1024, 576, (g, w, h) => {
   });
 });
 {
-  const frame = box(.12, 1.9, 3.3, dark, RW / 2 - .22, 2.1, 0);
+  const K = kits(), tx = RW / 2 - .22;
+  K(dark).add(RBOXG(.12, 1.9, 3.3, .05), tx, 2.1, 0)                         // soft bezel
+    .add(RBOXG(.14, .14, 2.2, .05), tx, 1.0, 0)                              // soundbar
+    .add(BOXG(.05, .3, .05), tx + .02, 1.1, 0, 0, 0, 0, { line: .012 });      // soundbar bracket
+  K(PM("#55565e")).add(BOXG(.012, .035, .3), tx - .065, 1.19, 0, 0, 0, 0, NOLINE); // badge on the chin
+  K(GLOW("#ff5a4a")).add(SPHG(.018, 6), tx - .065, 1.19, 1.45, 0, 0, 0, NOLINE);   // standby LED
+  K.place(scene, false);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.1, 1.74), new THREE.MeshBasicMaterial({ map: tvTex }));
   screen.rotation.y = -Math.PI / 2; screen.position.set(RW / 2 - .3, 2.1, 0); scene.add(screen);
-  frame.castShadow = false;
 }
 
 // canvases drawn at startup used fallback fonts: redraw them once Bungee / Space Mono are loaded
