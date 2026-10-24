@@ -323,23 +323,32 @@ const S = {
 
 /* ======================= Sound (tiny WebAudio synth) ======================= */
 
-let actx = null;
+let actx = null, sfxOut = null;
+// the office's sound settings (audio.js: M / [ / ]) live in localStorage, shared with this page
+function soundSettings() {
+  try { const s = JSON.parse(localStorage.getItem("forged.audio.v1") || "null"); if (s) return { muted: !!s.muted, vol: +s.vol || 0 }; } catch (e) {}
+  return { muted: false, vol: .7 };
+}
 function sfx(kind) {
+  const snd = soundSettings();
+  if (snd.muted) return;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (!sfxOut) { sfxOut = actx.createGain(); sfxOut.connect(actx.destination); }
+    sfxOut.gain.value = Math.min(1, snd.vol / .7); // .7 is the default volume, which plays at full level
     const t = actx.currentTime;
     const tone = (f, d, type = "square", v = .08, f2 = null, at = 0) => {
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = type; o.frequency.setValueAtTime(f, t + at);
       if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + at + d);
       g.gain.setValueAtTime(v, t + at); g.gain.exponentialRampToValueAtTime(.0001, t + at + d);
-      o.connect(g).connect(actx.destination); o.start(t + at); o.stop(t + at + d);
+      o.connect(g).connect(sfxOut); o.start(t + at); o.stop(t + at + d);
     };
     const noise = (d, v = .2, at = 0) => {
       const b = actx.createBuffer(1, actx.sampleRate * d, actx.sampleRate), ch = b.getChannelData(0);
       for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / ch.length);
       const s = actx.createBufferSource(), g = actx.createGain(); s.buffer = b; g.gain.value = v;
-      s.connect(g).connect(actx.destination); s.start(t + at);
+      s.connect(g).connect(sfxOut); s.start(t + at);
     };
     ({
       click: () => tone(660, .06, "square", .04),
@@ -1772,6 +1781,14 @@ if (!EMBED) ForgedMenu.init({
 
 /* ======================= Keyboard & mouse ======================= */
 
+// mute / volume keys work while seated too: the office's audio.js owns the setting
+document.addEventListener("keydown", e => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = document.activeElement;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+  const action = ["mute", "volumeDown", "volumeUp"].find(a => ForgedKeys.is(a, e.code));
+  if (action) post("sound-key", { action });
+});
 document.addEventListener("keydown", e => {
   const K = ForgedKeys, code = e.code;
   const el = document.activeElement;

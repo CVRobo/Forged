@@ -526,16 +526,23 @@ const isKey = (action, code, fallback) => K ? K.is(action, code) : code === fall
 addEventListener("keydown", e => {
   if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
   if ((K && K.isOpen && K.isOpen()) || (window.ForgedMenu && ForgedMenu.isOpen())) return; // rebinding / menu owns the keys
-  const up = isKey("volumeUp", e.code, "BracketRight"), down = isKey("volumeDown", e.code, "BracketLeft");
-  if (isKey("mute", e.code, "KeyM") && !e.repeat) {
+  if (isKey("mute", e.code, "KeyM") && !e.repeat) soundKey("mute");
+  else if (isKey("volumeUp", e.code, "BracketRight")) soundKey("volumeUp");
+  else if (isKey("volumeDown", e.code, "BracketLeft")) soundKey("volumeDown");
+});
+// the computer screen forwards the same keys while you're seated
+FW.onMessage(m => { if (m.type === "sound-key") soundKey(m.action); });
+function soundKey(action) {
+  if (action === "mute") {
     S.muted = !S.muted; save(); applyVolume();
     FW.wtoast(S.muted ? `🔇 Sound off (${K ? K.label("mute") : "M"})` : `🔊 Sound on · ${Math.round(S.vol * 100)}%`);
-  } else if (up || down) {
-    S.vol = clamp(Math.round((S.vol + (up ? .1 : -.1)) * 10) / 10, 0, 1);
+    if (S.muted && window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) {}
+  } else if (action === "volumeUp" || action === "volumeDown") {
+    S.vol = clamp(Math.round((S.vol + (action === "volumeUp" ? .1 : -.1)) * 10) / 10, 0, 1);
     S.muted = false; save(); applyVolume();
     FW.wtoast(`🔊 Volume ${Math.round(S.vol * 100)}%`);
   }
-});
+}
 
 // let voice.js (and anyone else) read the player's sound settings
 FW.sound = {

@@ -30,6 +30,9 @@ const store = {
 
 // tiny synth for the phone and the alarm (only called on ring pulses, never per frame)
 function tone(f, d, type = "square", v = .05, at = 0) {
+  const snd = FW.sound;
+  if (snd && snd.muted) return;
+  if (snd) v *= Math.min(1, snd.volume / .7);
   const a = FW.audio(); if (!a) return;
   try {
     if (a.state === "suspended") a.resume();
