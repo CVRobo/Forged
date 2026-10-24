@@ -55,6 +55,7 @@ function offline(err) {
 const O = window.ForgedOrders;
 const price = n => "$" + n.toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const brand = s => s.replace(/\b\w/g, c => c.toUpperCase()); // "american express" → "American Express"
 
 const LEVELS = {
   1: {
@@ -127,10 +128,10 @@ const INSPECTOR_STAGES = [
 
 /* which blank of the plan to circle in the forensic replay, per tell */
 const TELL_REGION = {
-  email_risky: "who", email_mismatch: "who", yahoo: "who", new_card: "who", foreign_card: "who", ip_far: "who", proxy: "who",
-  emulator: "who", new_device: "who", device_reuse: "who", device_mobile: "who",
-  far_ship: "where", new_address: "where", gift_card: "what", amount_unusual: "what",
-  amount_jump: "trick", velocity: "trick", night: "when", friday: "when",
+  email_risky: "you", email_mismatch: "you", yahoo: "you", name_mismatch: "you", odd_domain: "you", new_device: "device", device_reuse: "device",
+  emulator: "device", device_mobile: "device", ip_far: "where", proxy: "where", far_ship: "ship", new_address: "ship",
+  gift_card: "cart", amount_unusual: "cart", copycat: "cart", amount_jump: "when", velocity: "when", night: "when", friday: "when",
+  new_card: "card", foreign_card: "card",
 };
 const TELL_LABELS = O.TELL_LABELS;
 
@@ -225,7 +226,8 @@ const S = {
   hist: null, learned: {}, session: null, // what Gus remembers this run, and how often he learned each tell from you
   xp: 0, rankUp: null, // the player's rank (saved), and a rank reached this round
   // per round
-  scheme: null, holder: null, inv: null, plan: {}, hands: {}, active: null, redrawn: false, persuasion: 0,
+  memory: [], // signatures of the tricks that fooled Gus (he only learns from your wins)
+  scheme: null, holder: null, wallet: [], inv: null, input: null, step: null, sugg: {}, persuasion: 0,
   memo: [], submitted: false, bossTimer: null, bossWindow: false, rows: null,
   roundId: null, // from POST /round/start; null when offline
   patches: 0, shame: [], // retrains this run caused, and what each one learned
@@ -357,6 +359,7 @@ function startRun(level) {
   Object.assign(S, { level, round: 0, money: 0, heat: 0, version: 1, perks: [], unlocks: [], dossier: false,
     shredUsed: false, history: [], cards: [], caughtCount: 0, streak: 0, patches: 0, shame: [],
     hist: O.newHistory(), learned: {}, session: "s" + Date.now().toString(36), holder: null, xp: loadXp(), rankUp: null });
+  Object.assign(S, loadBrain(level)); // Gus keeps what he learned from your past wins
   stage.dataset.level = level;
   $("#desk-mess").innerHTML = "";
   const L = LEVELS[level];
@@ -375,8 +378,10 @@ function nextRound() {
   S.round++;
   S.heat = Math.round(S.heat * 0.6);
   const prev = S.holder; // a new stolen card every round
-  Object.assign(S, { scheme: null, inv: null, plan: {}, hands: {}, active: null, redrawn: false, persuasion: 0, submitted: false,
-    printed: false, delivered: false, lastResult: null, rows: null, holder: pick(O.HOLDERS.filter(h => h !== prev)) });
+  // the stolen cards on your desk this round (a Mastermind picks one; everyone else gets the first)
+  const wallet = shuffle(O.HOLDERS.filter(h => !prev || h.name !== prev.name)).slice(0, 3).map(h => ({ ...h, card: pick(O.CARDS) }));
+  Object.assign(S, { scheme: null, inv: null, input: null, step: null, sugg: {}, persuasion: 0, submitted: false,
+    printed: false, delivered: false, lastResult: null, rows: null, holder: wallet[0], wallet });
   $("#tb-round").textContent = S.round;
   $("#invoice").innerHTML = ""; $("#invoice").className = "paper plan";
   $("#strip").innerHTML = "";
@@ -442,36 +447,44 @@ function renderCaseFile() {
       <div><div class="victim-name">${h.name}</div><div class="victim-city">📍 ${h.city}</div></div>
     </div>
     <ul class="victim-facts">
-      <li>💳 Their card is on your desk.</li>
+      <li>💳 Their ${brand(h.card.brand)} ${h.card.type} ••••${h.card.last4} is on your desk.</li>
       ${r.n >= 2 ? `<li>📱 Always shops from ${phone}.</li><li>📧 ${h.email}</li>` : ""}
       ${r.n >= 3 ? `<li>🛒 People here spend about ${price(O.SHOPS[S.level].typical)}.</li>` : ""}
     </ul>`;
 }
 function hideSchemeTip() { $("#scheme-tip").classList.remove("show"); }
 
-/* ======================= The plan =======================
- * One sentence with blanks. The glowing blank's hand of cards is dealt into
- * the dock; picking a card fills it and moves on. The orders Gus scores (and
- * the data rows) are built from the plan behind the scenes. */
+/* ======================= The checkout =======================
+ * A fake web-shop checkout, one question per screen. The player types anything
+ * (suggestions help when stuck); orders.js reads the text into the row's fields.
+ * Ranks add questions. Gus's "gut feeling" face reacts as you type. */
 
-const SLOT_WORDS = { who: "I'll pose as", what: "and buy", when: "at", where: "then send it to", trick: "with the trick" };
-const SLOT_ICO = { who: "🎭", what: "🛒", when: "⏰", where: "📦", trick: "🃏" };
-const SLOT_ASK = { who: "Who do you pretend to be?", what: "What do you buy?", when: "When?", where: "Where does it go?", trick: "Any trick?" };
+const STEPS = [
+  { id: "card", rank: 5, title: "Card", ask: "Which stolen card do you use?" },
+  { id: "cart", rank: 1, title: "Cart", ask: "What are you buying?",
+    fields: [{ k: "item", ph: "Anything: an espresso machine, a PS5, a $200 gift card…" }, { k: "price", ph: "$ price (optional)", small: true }] },
+  { id: "you", rank: 2, title: "You", ask: "Who are you pretending to be?",
+    fields: [{ k: "name", ph: "Name on the order" }, { k: "email", ph: "Email address" }] },
+  { id: "device", rank: 3, title: "Device", ask: "What are you shopping on?", fields: [{ k: "device", ph: "e.g. iPhone, Samsung Galaxy, Windows laptop…" }] },
+  { id: "where", rank: 3, title: "Location", ask: "Where are you shopping from?", fields: [{ k: "where", ph: "Home, a city, a VPN in a city, Tor…" }] },
+  { id: "ship", rank: 1, title: "Delivery", ask: "Where does it go?", fields: [{ k: "ship", ph: "A city or an address" }] },
+  { id: "when", rank: 4, title: "Timing", ask: "When do you order, and how many times?",
+    fields: [{ k: "when", ph: "Now, 3 AM, tomorrow at lunch…" }, { k: "repeat", ph: "How many orders (1-5)", small: true }, { k: "gap", ph: "Days between them", small: true }] },
+  { id: "review", rank: 1, title: "Review", ask: "Ready to place the order?" },
+];
+const steps = () => STEPS.filter(s => s.rank <= rank().n);
+const stepIndex = () => Math.max(0, steps().findIndex(s => s.id === S.step));
 const factsOf = o => O.facts(S.level, S.holder, o, { perks: S.perks });
 const campaignTotal = () => S.inv ? S.inv.orders.reduce((a, o) => a + factsOf(o).amount, 0) : 0;
-const planReady = () => !!S.plan && rank().slots.every(sl => S.plan[sl]);
-
-function cardFor(slot, id) {
-  if (slot === "what") { const i = O.itemOf(O.SHOPS[S.level], { sku: id }); return { id, ico: i.ico, name: i.name, line: price(i.price) }; }
-  return O.find({ who: O.PERSONAS, when: O.WHENS, where: O.WHERES, trick: O.TRICKS }[slot], id);
-}
+const planReady = () => !!(S.input && S.input.item && S.input.item.trim()) && (!S.inv || S.inv.orders.some(o => factsOf(o).ship.toYou));
 
 function startPlanning() {
-  const L = LEVELS[S.level], r = rank();
+  const L = LEVELS[S.level], r = rank(), h = S.holder, first = h.name.split(" ")[0].toLowerCase(), last = h.name.split(" ")[1].toLowerCase();
+  // answers to the questions a rank doesn't ask yet: a plain look-alike shopper at home
+  S.input = { item: "", price: "", name: "", email: `${first}.${last}${10 + h.addr1 % 80}@gmail.com`, device: "", where: "", ship: "", when: "", repeat: "", gap: "" };
   S.inv = { orders: [], cur: 0, coverEmail: "" };
-  dealAll();
-  S.active = r.slots[0];
-  // fewer windows for new players: the support chat and the memo arrive with the ranks
+  S.step = steps()[0].id;
+  S.sugg = {}; S.touched = new Set();
   $("#win-clerk").classList.toggle("win-off", !r.windows.includes("clerk"));
   $("#win-memo").classList.toggle("win-off", !r.windows.includes("memo"));
   $("#win-case").style.top = r.windows.includes("memo") ? "352px" : "76px"; // the victim moves up while there's no memo
@@ -485,119 +498,174 @@ function startPlanning() {
   else if (!tutorialDone() && S.round === 1 && !EMBED) setTimeout(() => startTutorial(0), 350);
 }
 
-function dealAll() {
-  rank().slots.forEach(sl => { if (sl !== "where") S.hands[sl] = O.dealHand(sl, { level: S.level, plan: S.plan, unlocks: S.unlocks }); });
+/* suggestions for when you're stuck: a few, reshuffled each round */
+function suggestions(k) {
+  if (S.sugg[k]) return S.sugg[k];
+  const h = S.holder, shop = O.SHOPS[S.level], city = h.city.split(",")[0], first = h.name.split(" ")[0].toLowerCase(), last = h.name.split(" ")[1].toLowerCase();
+  const near = O.CITIES.filter(c => !c.foreign && c.name !== city && O.findCity(h.city) && Math.abs(c.lat - O.findCity(h.city).lat) + Math.abs(c.lon - O.findCity(h.city).lon) < 2).map(c => c.name);
+  const pool = {
+    item: shop.catalog.filter(i => i.cd !== "S").map(i => i.name).concat(["PS5", "iPhone 15", "$200 Steam gift card", "AirPods", "Gaming laptop"]),
+    name: [h.name, `${h.name.split(" ")[0][0]}. ${h.name.split(" ")[1]}`, "Alex Smith", "Jordan Lee"],
+    email: [`${first}.${last}${h.addr1 % 90}@gmail.com`, h.email, `${first}${last[0]}@protonmail.com`, `deals4u_${h.addr1}@yahoo.com`, `${last}.family@outlook.com`],
+    device: ["iPhone 12", "Samsung Galaxy S9", "Windows laptop", "MacBook Air", "Android emulator"],
+    where: ["Home", `VPN in ${city}`, "Free VPN", "Tor", `${near[0] || city}`, "London"],
+    ship: [`Cousin's garage in ${near[0] || city}`, `PO box in ${city}`, "Freight forwarder in Miami", "Warehouse in Rotterdam", "Their home"],
+    when: ["Right now", "3 AM", "Tomorrow at lunch", "Next week"],
+    repeat: ["1", "2", "3"], gap: ["0", "1", "7"],
+  }[k] || [];
+  if (k === "ship" && S.inv.orders.length && !factsOf(S.inv.orders[0]).ship.physical) {
+    return [`${first}.${last}.gifts@gmail.com`, `cash4codes@protonmail.com`, h.email];
+  }
+  S.sugg[k] = shuffle(pool).slice(0, k === "repeat" || k === "gap" ? 3 : 3);
+  return S.sugg[k];
 }
 
-/* the orders, the scheme name and the screen, after any change to the plan */
-function rebuild() {
-  S.inv.orders = S.plan.what ? O.buildCampaign(S.level, S.plan) : [];
+/* the orders, Gus's gut feeling and the screen, after any change */
+function rebuild(full = true) {
+  S.inv.orders = S.input.item.trim() ? O.buildFromInput(S.level, S.holder, S.input) : [];
   S.inv.cur = 0;
-  const who = cardFor("who", S.plan.who || "me"), trick = S.plan.trick && S.plan.trick !== "none" ? cardFor("trick", S.plan.trick) : null;
-  S.scheme = (S.plan.who || "me") + "+" + (S.plan.trick || "none") + (S.plan.custom ? "+custom" : "");
-  SCHEMES[S.scheme] = { name: who.name + (trick ? " · " + trick.name : "") + (S.plan.custom ? " (custom)" : ""), icon: trick ? trick.ico : who.ico, pay: 1 };
-  renderPlan(); renderHand(); updateHud();
+  const f = S.inv.orders.length ? factsOf(S.inv.orders[0]) : null;
+  S.scheme = "typed-r" + S.round; // the row's scheme_id; the name is for the corkboard and the collection
+  SCHEMES[S.scheme] = { icon: f ? f.item.ico : "📦", name: f ? `${f.item.name} → ${f.ship.city || (f.ship.physical ? f.ship.label : "an inbox")}`.slice(0, 48) : "Your order", pay: 1 };
+  if (full) renderPlan(); else renderMood();
+  renderHand(); updateHud();
 }
 
-function nextEmpty(from) {
-  const sl = rank().slots, i = sl.indexOf(from);
-  return [...sl.slice(i + 1), ...sl.slice(0, i + 1)].find(s => !S.plan[s]) || null;
+/* Gus's gut feeling: the same rules as the verdict, without the luck */
+function gutFeeling() {
+  if (!S.inv.orders.length) return null;
+  const rows = previewRows();
+  const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion,
+    learned: S.learned, memory: S.memory, leniency: leniency(), preview: true });
+  return Math.max(...r.results.map(x => x.suspicion ?? 0));
+}
+const MOODS = [[22, "😊", "Looks normal"], [32, "🙂", "Fine, I guess"], [42, "🤨", "Hmm…"], [1e9, "😠", "No way"]];
+function renderMood() {
+  const el = $("#gut");
+  if (!el) return;
+  const s = gutFeeling(), m = s == null ? ["", "😶", "Waiting…"] : MOODS.find(x => s < x[0]);
+  el.innerHTML = `<span class="gut-face">${m[1]}</span><span class="gut-txt"><small>Gus's gut feeling</small>${m[2]}</span>`;
 }
 
-function playCard(i) {
-  const sl = S.active, card = sl && (S.hands[sl] || [])[i];
-  if (!card || S.submitted) return;
-  S.plan[sl] = card.id;
-  if (sl === "what") { // WHERE depends on what you buy: physical goods need an address, codes an inbox
-    S.hands.where = O.dealHand("where", { level: S.level, plan: S.plan });
-    if (S.plan.where && !S.hands.where.some(c => c.id === S.plan.where)) delete S.plan.where;
-  }
-  if (sl === "who") delete S.plan.custom;
-  sfx("pick");
-  S.active = nextEmpty(sl);
-  rebuild();
-  if (planReady()) {
-    guideCheck("plan-ready");
-    showTip("first-plan", EMBED ? "✉️ Plan ready! Drag the envelope onto PRINT." : "✉️ Plan ready! Drag the envelope into the outbox.");
-  }
-}
-
-function selectSlot(sl) {
-  if (S.submitted || !rank().slots.includes(sl)) return;
-  if (sl === "where" && !S.plan.what) { sfx("bad"); toast("Pick what to buy first"); sl = "what"; }
-  S.active = sl; sfx("click");
+function goStep(id) {
+  if (S.submitted) return;
+  S.step = id; sfx("click");
   renderPlan(); renderHand();
+  setTimeout(() => $("#invoice .co-input")?.focus(), 30);
+}
+function nextStep(dir = 1) {
+  const st = steps(), i = stepIndex();
+  if (dir > 0 && S.step === "cart" && !S.input.item.trim()) { sfx("bad"); toast("Type what you're buying (or click a suggestion)"); return; }
+  goStep(st[clamp(i + dir, 0, st.length - 1)].id);
+  if (S.step === "review") guideCheck("plan-ready");
 }
 
-/* Mastermind: swap one part of the disguise at a time (click to cycle) */
-function tweak(id) {
-  if (S.submitted || !S.plan.who) return;
-  const t = O.TWEAKS.find(x => x.id === id);
-  const kit = { ...O.find(O.PERSONAS, S.plan.who).kit, ...(S.plan.custom || {}) };
-  const opts = t.options.filter(op => !op.unlock || S.unlocks.includes(op.unlock) || (op.unlock === "residential" && S.unlocks.includes("neighbor")) || (op.unlock === "cloner" && S.unlocks.includes("clone")));
-  const next = opts[(opts.findIndex(op => op.id === kit[id]) + 1) % opts.length];
-  S.plan.custom = { ...(S.plan.custom || {}), [id]: next.id };
-  sfx("pen"); rebuild();
+// a step is done once you've typed (or picked) something in it
+function stepDone(id) {
+  const st = STEPS.find(s => s.id === id);
+  return id === "card" ? true : !!(st && st.fields && st.fields.some(fd => S.touched.has(fd.k)));
 }
 
 function renderPlan() {
-  const P = $("#invoice"), r = rank();
+  const P = $("#invoice");
   if (!S.inv) { P.innerHTML = ""; return; }
-  const results = S.lastResult && S.lastResult.results;
-  const kit = S.plan.who ? { ...O.find(O.PERSONAS, S.plan.who).kit, ...(S.plan.custom || {}) } : null;
-  const tweaks = r.custom ? `<div class="pl-tweaks ${kit ? "" : "off"}">${O.TWEAKS.map(t => {
-    const op = kit && t.options.find(o => o.id === kit[t.id]);
-    return `<button class="pl-tweak" data-tweak="${t.id}" ${kit && !S.submitted ? "" : "disabled"} title="Click to swap">${t.ico} ${op ? op.label : t.name}</button>`;
-  }).join("")}</div>` : "";
-  const rows = r.slots.map(sl => {
-    const id = S.plan[sl], c = id && cardFor(sl, id);
-    return `<div class="pl-row region ${S.active === sl ? "active" : ""} ${c ? "filled" : ""}" data-region="${sl}">
-      <span class="pl-words">${SLOT_WORDS[sl]}</span>
-      <button class="pl-slot" data-slot="${sl}" ${S.submitted ? "disabled" : ""}>
-        <span class="pl-ico">${c ? c.ico : SLOT_ICO[sl]}</span><span class="pl-name">${c ? c.name : "…"}</span></button>
-    </div>${sl === "who" ? tweaks : ""}`;
+  const st = steps().find(s => s.id === S.step) || steps()[0], i = stepIndex(), shop = O.SHOPS[S.level];
+  const f = S.inv.orders.length ? factsOf(S.inv.orders[0]) : null;
+  const dots = steps().map((s, k) => `<button class="co-dot ${s.id === S.step ? "cur" : ""} ${k < i || stepDone(s.id) ? "done" : ""}" data-step="${s.id}" ${S.submitted ? "disabled" : ""}>${k + 1}<small>${s.title}</small></button>`).join("");
+  let body;
+  if (st.id === "review") body = reviewHtml(f);
+  else if (st.id === "card") body = `<div class="co-cards">${S.wallet.map((h, k) => `<button class="co-card ${h === S.holder ? "cur" : ""}" data-wallet="${k}">
+      <b>💳 ${brand(h.card.brand)} ${h.card.type} ••••${h.card.last4}</b><span>${h.name} · ${h.city}</span><small>${h.card.sub}</small></button>`).join("")}</div>`;
+  else body = st.fields.map(fd => {
+    const ask = fd.k === "ship" && f && !f.item.kind.startsWith("phys") ? "Which email gets the code?" : null;
+    return `<label class="co-field ${fd.small ? "small" : ""}">
+      ${ask ? `<span class="co-sub">${ask}</span>` : ""}
+      <input class="co-input" data-k="${fd.k}" value="${(S.input[fd.k] || "").replace(/"/g, "&quot;")}" placeholder="${fd.ph}" maxlength="60" spellcheck="false" autocomplete="off" ${S.submitted ? "disabled" : ""}>
+      <span class="co-sugg">${suggestions(fd.k).map(x => `<button class="co-chip" data-k="${fd.k}" data-v="${x.replace(/"/g, "&quot;")}" tabindex="-1">${x}</button>`).join("")}</span>
+    </label>`;
   }).join("");
-  const n = S.inv.orders.length;
-  const loot = S.inv.orders.reduce((a, o) => { const f = factsOf(o); return a + (f.ship.toYou ? f.amount : 0); }, 0);
-  const res = results ? `<span class="pl-results">${S.inv.orders.map((o, i) => `<i class="${results[i] && results[i].declined ? "bad" : "ok"}">${factsOf(o).item.ico}${results[i] && results[i].declined ? "✗" : "✓"}</i>`).join("")}</span>`
-    : n > 1 ? `<span class="pl-orders">${n} orders</span>` : "";
   P.innerHTML = `
-    <div class="pl-head"><div class="pl-title">THE PLAN</div><div class="pl-sub">${O.SHOPS[S.level].domain}<br>${S.holder.name}'s card</div></div>
-    <div class="pl-rows">${rows}</div>
-    <div class="pl-foot">${res}<span class="pl-loot">Loot <b>${price(loot)}</b></span></div>
+    <div class="co-bar"><span class="co-lock">🔒</span><span class="co-url">${shop.domain}/checkout</span><span id="gut" class="gut"></span></div>
+    <div class="co-dots">${dots}</div>
+    <div class="co-ask">${st.ask}</div>
+    <div class="co-body">${body}</div>
+    <div class="co-nav">
+      ${i > 0 && !S.submitted ? `<button class="btn btn-ghost btn-small" id="co-back">← Back</button>` : "<span></span>"}
+      ${f ? `<span class="co-total">${f.item.ico} ${price(campaignTotal())}${S.inv.orders.length > 1 ? ` · ${S.inv.orders.length} orders` : ""}</span>` : ""}
+      ${st.id !== "review" ? `<button class="btn btn-small" id="co-next">Next →</button>` : `<span class="co-hint">${S.submitted ? "" : planReady() ? "✉️ Drag the envelope to send it" : "Nothing reaches you yet: change the delivery"}</span>`}
+    </div>
     ${S.lastResult ? `<div class="t-verdict ${S.lastResult.caught ? "bad" : "ok"}">${S.lastResult.caught ? "CAUGHT" : "GOT AWAY"}</div>` : ""}`;
-  // forensic replay: the blanks that gave you away
+  renderMood();
+  // forensic replay: the review lines that gave you away
   if (S.lastResult && S.lastResult.caught) S.lastResult.tells.slice(0, 2).forEach(t => t[2] && P.querySelector(`[data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
   P.classList.toggle("forensic", !!(S.lastResult && S.lastResult.caught));
-  $$(".pl-slot", P).forEach(b => b.onclick = () => selectSlot(b.dataset.slot));
-  $$(".pl-tweak", P).forEach(b => b.onclick = () => tweak(b.dataset.tweak));
-  updateDebug();
+  $$(".co-dot", P).forEach(b => b.onclick = () => goStep(b.dataset.step));
+  $$(".co-input", P).forEach(inp => {
+    inp.oninput = () => { S.input[inp.dataset.k] = inp.value; S.touched.add(inp.dataset.k); clearTimeout(S.typeT); S.typeT = setTimeout(() => rebuild(false), 160); };
+    inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); rebuild(false); nextStep(1); } };
+  });
+  $$(".co-chip", P).forEach(b => b.onclick = () => { S.input[b.dataset.k] = b.dataset.v; S.touched.add(b.dataset.k); sfx("pen"); rebuild(); });
+  $$(".co-card", P).forEach(b => b.onclick = () => { S.holder = S.wallet[+b.dataset.wallet]; S.sugg = {}; sfx("snip"); renderCaseFile(); rebuild(); });
+  $$(".co-line", P).forEach(b => b.onclick = () => !S.submitted && goStep(b.dataset.region));
+  const back = $("#co-back"), next = $("#co-next");
+  if (back) back.onclick = () => nextStep(-1);
+  if (next) next.onclick = () => nextStep(1);
 }
 
-/* the hand: the cards for the glowing blank, in the dock */
+/* the order summary, like a real checkout's last page */
+function reviewHtml(f) {
+  if (!f) return `<p class="co-empty">Nothing in the cart yet.</p>`;
+  const I = S.input, n = S.inv.orders.length;
+  const line = (id, ico, label, val) => steps().some(s => s.id === id) || id === "card"
+    ? `<button class="co-line region" data-region="${id}" ${S.submitted ? "disabled" : ""}><span>${ico} ${label}</span><b>${val}</b></button>` : "";
+  return `<div class="co-review">
+    ${line("cart", f.item.ico, "Item", `${f.item.name} · ${price(f.amount)}`)}
+    ${line("card", "💳", "Paid with", `${brand(f.card.brand)} ••••${f.card.last4} (${S.holder.name})`)}
+    ${line("you", "👤", "Buyer", `${I.name || S.holder.name} · ${f.emailAddr}`)}
+    ${line("device", "📱", "Device", f.dev.label)}
+    ${line("where", "🌐", "Shopping from", f.proxy.label)}
+    ${line("ship", "📦", f.ship.physical ? "Ship to" : "Code sent to", f.ship.id === "billing" ? "Their home (they get it!)" : f.ship.label)}
+    ${line("when", "⏰", "When", `${f.clock.label}${n > 1 ? ` · ${n} orders, ${I.gap || 0} day(s) apart` : ""}`)}
+  </div>`;
+}
+
+/* the dock: where you are in the checkout */
 function renderHand() {
-  const sl = S.active, cards = sl && !S.submitted ? (S.hands[sl] || []) : [];
-  $("#hand-ask").textContent = sl && !S.submitted ? SLOT_ASK[sl] : "YOUR HAND";
-  $("#tools").innerHTML = cards.length ? cards.map((c, i) => `
-    <button class="hcard ${S.plan[sl] === c.id ? "chosen" : ""}" data-i="${i}">
-      <span class="key">${i + 1}</span><span class="hc-ico">${c.ico}</span><span class="hc-name">${c.name}</span><span class="hc-line">${c.line}</span></button>`).join("") +
-    (S.perks.includes("redraw") && !S.redrawn && sl !== "where" ? `<button class="hcard redraw" id="btn-redraw" title="Lucky Draw: once per round">🔄<span class="hc-name">Redraw</span></button>` : "")
-    : `<div class="hand-done">${S.submitted ? "Sent! Fingers crossed." : planReady() ? "✓ Plan ready! Drag the envelope →" : "Click a blank in the plan"}</div>`;
-  $$(".hcard[data-i]").forEach(b => b.onclick = () => playCard(+b.dataset.i));
-  const rd = $("#btn-redraw");
-  if (rd) rd.onclick = () => { S.redrawn = true; S.hands[sl] = O.dealHand(sl, { level: S.level, plan: S.plan, unlocks: S.unlocks }); sfx("whoosh"); renderHand(); };
+  const st = steps(), i = stepIndex();
+  $("#hand-ask").textContent = S.submitted ? "SENT" : `STEP ${i + 1} OF ${st.length}`;
+  $("#tools").innerHTML = S.submitted ? `<div class="hand-done">Sent! Fingers crossed.</div>`
+    : st.map((s, k) => `<button class="co-step ${s.id === S.step ? "cur" : ""} ${stepDone(s.id) ? "done" : ""}" data-step="${s.id}"><span class="key">${k + 1}</span>${s.title}</button>`).join("");
+  $$(".co-step").forEach(b => b.onclick = () => goStep(b.dataset.step));
   $("#envelope").classList.toggle("ready", planReady());
 }
 const renderTools = renderHand;
+function playCard(i) { const s = steps()[i]; if (s) goStep(s.id); }
+function selectSlot(id) { goStep(id); }
 
-/* the risk of the cards you picked shows up as heat when you send the plan */
+/* heat when you send: risky choices are noticed around the office too */
 function planHeat() {
-  return ["who", "when", "where", "trick"].reduce((a, sl) => { const c = S.plan[sl] && cardFor(sl, S.plan[sl]); return a + (c && c.heat || 0); }, 0);
+  const f = S.inv.orders.length ? factsOf(S.inv.orders[0]) : null;
+  if (!f) return 0;
+  return 2 + (f.proxy.id23 ? 3 : 0) + (f.ship.abroad ? 4 : 0) + (f.dev.emulator ? 3 : 0) + (S.inv.orders.length - 1) * 2;
 }
 
 function dropTool() { hidePopover(); }
 function hint(text) { $("#tool-hint").textContent = text; $("#tool-hint").classList.toggle("show", !!text); }
 function hidePopover() { $("#popover").classList.remove("show"); }
+
+/* ======================= Gus's brain (saved) =======================
+ * He only learns from your wins: each trick that fooled him raises his version,
+ * weighs its warning signs more, and is remembered so close copies get caught.
+ * Saved per shop, so his difficulty follows how good the player has become. */
+const BRAIN_KEY = lvl => "forged.gus." + lvl;
+function loadBrain(level) {
+  try { const b = JSON.parse(localStorage.getItem(BRAIN_KEY(level)) || "null"); if (b) return b; } catch (e) {}
+  return { version: 1, learned: {}, memory: [] };
+}
+function saveBrain() {
+  try { localStorage.setItem(BRAIN_KEY(S.level), JSON.stringify({ version: S.version, learned: S.learned, memory: S.memory.slice(-40) })); } catch (e) {}
+}
+const leniency = () => [0, 18, 10, 4, 0, 0][rank().n]; // a Rookie's first plans should mostly work
 
 /* ======================= Heat / HUD ======================= */
 
@@ -825,8 +893,8 @@ function previewRows() {
 // MOCK verdict: the scripted Gus in orders.js
 function mockJudge() {
   const rows = previewRows();
-  const leniency = [0, 18, 10, 4, 0, 0][rank().n]; // a Rookie's first plans should mostly work
-  const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion, learned: S.learned, leniency });
+  const r = O.judgeOrders({ ...campaignCtx(), rows, memo: S.memo, version: S.version, heat: S.heat, persuasion: S.persuasion,
+    learned: S.learned, memory: S.memory, leniency: leniency() });
   const payout = Math.round(r.payout * (S.perks.includes("night") ? 2 : 1));
   return { ...r, rows, payout, line: null, newVersion: null, source: "mock" };
 }
@@ -941,37 +1009,46 @@ $("#btn-after-inspect").onclick = () => { sfx("click"); overlay("inspect", false
 
 function showCorkboard() {
   const r = S.lastResult, L = LEVELS[S.level];
-  const shredded = r.caught && S.perks.includes("shred") && !S.shredUsed;
-  if (shredded) S.shredUsed = true;
-  // Gus weighs the tell that caught you more from now on (scripted Gus; the real model retrains)
-  if (r.caught && !shredded && r.tells.length) S.learned[r.tells[0][0]] = (S.learned[r.tells[0][0]] || 0) + 1;
   const oldV = S.version;
   S.prevVersion = oldV;
-  if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
-  else if (!shredded) S.version++;
+  // Gus only learns when you beat him (Paper Shredder: he forgets one win)
+  const forgotten = !r.caught && S.perks.includes("shred") && !S.shredUsed;
+  if (forgotten) S.shredUsed = true;
+  S.studied = [];
+  if (!r.caught && !forgotten) {
+    if (r.newVersion != null) S.version = r.newVersion; // the server decides when it's live
+    else S.version++;
+    (r.results || []).forEach((x, i) => {
+      if (x.declined || !S.rows[i]) return;
+      S.memory.push(O.signature(S.rows[i])); // he'll recognize this trick
+      x.tells.slice(0, 2).forEach(t => { S.learned[t[0]] = (S.learned[t[0]] || 0) + 1; if (!S.studied.includes(t[0])) S.studied.push(t[0]); });
+    });
+    saveBrain();
+  }
   renderInspector(); updateHud();
   if (S.version > oldV) {
     S.patches++;
-    showTip("first-version-bump", "🧠 The inspector leveled up — he learned from your trick!", "version-bump");
-    if (r.tells.length) S.shame.push({ player: playerName(), version: S.version, trick: SCHEMES[S.scheme].name,
-      learned: tellLabel(r.tells[0][0]), amount: campaignTotal(), round: S.round });
+    showTip("first-version-bump", "🧠 You fooled Gus, so he studied your trick. Next time, try something new!", "version-bump");
+    S.shame.push({ player: playerName(), version: S.version, trick: (SCHEMES[S.scheme] || {}).name || "a trick",
+      learned: S.studied.length ? tellLabel(S.studied[0]) : "your style", amount: campaignTotal(), round: S.round });
   }
-  const top = r.tells.slice(0, 3);
+  const sc = SCHEMES[S.scheme] || { icon: "📦", name: "Your order" };
+  const top = (r.caught ? r.tells : S.studied.map(t => [t])).slice(0, 3);
   const pos = [[120, 60], [80, 330], [430, 300]];
   $("#cork-pins").innerHTML = `
     <div class="cork-card main" style="left:380px;top:40px;transform:rotate(-3deg)">
-      <b>${SCHEMES[S.scheme].icon} ${SCHEMES[S.scheme].name}</b>
+      <b>${sc.icon} ${sc.name}</b>
       ${S.inv.orders.length} order${S.inv.orders.length > 1 ? "s" : ""} on ${S.holder.name}'s card<br>${money(r.payout)} to you
       <div class="cc-stamp ${r.caught ? "" : "paid"}">${r.caught ? "CAUGHT" : "GOT AWAY"}</div>
     </div>` +
-    (top.length ? top : [["heat", 0, null]]).map((t, i) => `
+    (top.length ? top : [["heat"]]).map((t, i) => `
     <div class="cork-card" style="left:${pos[i][0]}px;top:${pos[i][1]}px;transform:rotate(${rand(-5, 5)}deg)">
-      <b>Clue #${i + 1}</b>${tellLabel(t[0])}</div>`).join("");
+      <b>${r.caught ? "Clue" : "Studying"} #${i + 1}</b>${tellLabel(t[0])}</div>`).join("");
   const cx = 510, cy = 130;
   $("#cork-string").innerHTML = (top.length ? top : [0]).map((_, i) =>
     `<path d="M${cx},${cy} Q${(cx + pos[i][0] + 100) / 2},${(cy + pos[i][1]) / 2 + 60} ${pos[i][0] + 105},${pos[i][1] + 10}"/>`).join("");
   $("#cork-portrait").innerHTML = faceSVG(LOOKS.inspector, stageIndex(S.version));
-  $("#cork-line").textContent = shredded ? "Wait… where did that file go?" : r.caught ? "Gotcha. Never again." : "You fooled me once. Never again.";
+  $("#cork-line").textContent = forgotten ? "Wait… where did that file go?" : r.caught ? "Gotcha. I already knew that one." : "You fooled me. I'm studying this.";
   $("#ver-old").textContent = "v" + oldV; $("#ver-new").textContent = "v" + S.version;
   overlay("cork");
   sfx("stamp");
@@ -983,12 +1060,12 @@ $("#btn-after-cork").onclick = () => { sfx("click"); overlay("cork", false); sho
 
 function showBetween() {
   const r = S.lastResult;
-  const learned = r.tells.slice(0, 2).map(t => tellLabel(t[0])).filter(Boolean);
-  const n = 40 + S.round * 17 + Math.floor(rand(0, 30));
-  $("#patch-title").textContent = `Inspector v${S.version}`;
-  const items = learned.length
-    ? learned.map(l => `<li>Gus now watches for: <b>${l}</b></li>`)
-    : [`<li>No new tricks learned. <b>Clean job.</b></li>`];
+  $("#patch-title").textContent = `Gus v${S.version}`;
+  const items = r.caught
+    ? [`<li>Gus caught you, so <b>he didn't learn anything new</b>. Change something and try again.</li>`]
+    : (S.studied || []).length
+      ? [...S.studied.slice(0, 2).map(t => `<li>Gus studied your win. He now watches for: <b>${tellLabel(t)}</b></li>`), `<li>He'll recognize <b>this exact trick</b> next time.</li>`]
+      : [`<li>Gus studied your win. He'll recognize <b>this exact trick</b> next time.</li>`];
   const st = stageFor(S.version);
   if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b></li>`);
   if (S.streak >= 2) { items.push(`<li>🔥 Streak ×${S.streak}: keep changing your plan.</li>`); showTip("first-streak", "🔥 Streak! Keep changing your plan to keep it.", "streak-bonus"); }
@@ -1090,7 +1167,7 @@ const GUIDE = { on: false, step: 0, waitingFor3D: null };
 
 // no "sit down" step: a run only starts once you're at the computer
 const GUIDE_STEPS = [
-  { id: "scheme",    instr: "Fill in the plan: click a card at the bottom.",
+  { id: "scheme",    instr: "Fill in the checkout: type anything, Enter for the next step.",
     spotlight: ["#invoice"] },
   { id: "submit",    instr: EMBED ? "Drag the envelope onto PRINT." : "Drag the envelope into the OUTBOX.",
     spotlight: ["#envelope"] },
@@ -1226,11 +1303,11 @@ const TUT_KEY = "forged-tutorial-done-v2"; // v2: the plan cards replaced the in
 function lockSchemes() {}
 // Steps with `until` are hands-on: the player does the thing, the card turns green and moves on.
 const TUTORIAL = [
-  { at: ["#invoice", "#tools"], side: "right", title: "Make a plan",
-    until: () => planReady(),
-    text: () => `Fill in the blanks. <b>Click a card</b> at the bottom (or press ${kb("tool1")}–${kb("tool3")}) to fill the glowing one.` },
+  { at: ["#invoice"], side: "right", title: "Fake a checkout",
+    until: () => S.step === "review",
+    text: () => `One question at a time. <b>Type anything</b>, or click a suggestion, then press <b>Enter</b>. Watch <b>Gus's gut feeling</b> at the top: 😊 means he's not worried.` },
   { at: ["#win-inspector"], side: "left", title: "Fool Gus",
-    text: () => `Gus is the shop's fraud robot. Get past him and you get paid. <b>He learns from every catch</b>, so keep changing your plan.` },
+    text: () => `Gus is the shop's fraud robot. Get past him and you get paid. <b>Every time you fool him, he studies your trick</b>, so the next win needs a new idea.` },
   { at: ["#envelope"], side: "left", title: EMBED ? "Print it" : "Send it", last: true,
     until: () => S.printed || S.submitted, can: () => planReady(),
     text: () => EMBED ? `Drag the envelope onto <b>PRINT</b>, then carry the slip to Gus.` : `Drag the envelope into the <b>OUTBOX</b>.` },
@@ -1442,7 +1519,7 @@ function record() {
   if (!S.inv) return { note: "make a plan first" };
   return {
     mode: "online", level: S.level, scheme: S.scheme, campaign_id: S.session + "-r" + S.round,
-    plan: { ...S.plan }, rank: rank().n, orders: S.inv.orders.map(o => ({ ...o })),
+    input: { ...S.input }, rank: rank().n, orders: S.inv.orders.map(o => ({ ...o })),
     cover_note: S.inv.coverEmail || "", persuasion: Math.round(S.persuasion), // Smooth Talker raises this
     after_hours: S.perks.includes("night"), // Night Shift: pays double
     detector_version: S.version, heat: Math.round(S.heat),
@@ -1566,15 +1643,14 @@ document.addEventListener("mousedown", e => {
   else if (K.is("hide", code) && S.bossWindow) { e.preventDefault(); hideInvoice(); }
 });
 
-// mouse wheel moves between the blanks of the plan
+// mouse wheel moves between the checkout steps
 let wheelAt = 0;
 $("#screen-desk").addEventListener("wheel", e => {
   if (S.paused || (tut.on && !TUTORIAL[tut.i].until) || $(".overlay.show") || !S.inv || S.submitted) return;
   if (e.target.closest(".win-body, #debug-panel, #popover")) return; // let windows scroll
   e.preventDefault();
-  const now = performance.now(); if (now - wheelAt < 140) return; wheelAt = now; // trackpads send bursts
-  const sl = rank().slots, i = sl.indexOf(S.active), dir = e.deltaY > 0 ? 1 : -1;
-  selectSlot(sl[i < 0 ? 0 : (i + dir + sl.length) % sl.length]);
+  const now = performance.now(); if (now - wheelAt < 180) return; wheelAt = now; // trackpads send bursts
+  nextStep(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
 document.addEventListener("pointerdown", e => {

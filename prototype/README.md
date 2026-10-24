@@ -13,25 +13,27 @@ Then open http://localhost:8765. `serve.py` is a plain static server with browse
 | File | What it is |
 | --- | --- |
 | `index.html`, `world.js`, `world.css` | The 3D office (Three.js r128 from a CDN): your character, desks, printer, inspector booth, clerk, boss, corkboard |
-| `os.html`, `game.js`, `style.css` | The computer screen: FORGED OS with the plan, the hand of cards, the victim, memo, support chat, verdicts and shop. It also runs on its own if you open `os.html` directly |
-| `orders.js` | The online-order content (shops, stolen cards, plan cards, ranks), the IEEE-CIS row builder and the scripted Gus. Loaded before `game.js` |
+| `os.html`, `game.js`, `style.css` | The computer screen: FORGED OS with the typed checkout, the victim, memo, support chat, verdicts and shop. It also runs on its own if you open `os.html` directly |
+| `orders.js` | The online-order content (shops, stolen cards, ranks), the parsers that read the typed checkout, the IEEE-CIS row builder and the scripted Gus. Loaded before `game.js` |
 
 ## How a round plays
 
 1. Walk to your desk and press **E** to sit. The camera moves in and the computer takes over the screen.
-2. Fill in **the plan**, a sentence with blanks ("I'll pose as … and buy … at … then send it to … with the trick …"), by clicking cards from your hand of 3 (or keys `1`–`3`). Drag the envelope onto the outbox to **print** the order slip. You stand up automatically.
+2. Fill in **the checkout**, one question per screen: what you buy, who you pretend to be, what you shop on, where you shop from, where it goes, when and how many times. Type anything (suggestions help); **Enter** goes to the next step. **Gus's gut feeling** (a face in the address bar) reacts as you type. Drag the envelope onto the outbox to **print** the order slip. You stand up automatically.
 3. Grab the slip at the **printer** (E), carry it across the office, and drop it in Gus's **IN tray** (E).
-4. Gus approves the plan or catches it, and says why in plain words ("who shops at 3 AM?"). Your trick gets pinned to the **corkboard** on the wall.
+4. Gus approves the order or catches it, and says why in plain words ("who shops at 3 AM?"). Your trick gets pinned to the **corkboard** on the wall.
+
+**Gus only learns from your wins.** When he catches you, nothing changes. When you fool him, his version goes up, he weighs the warning signs that were in your order a bit more, and he remembers the order so a close copy gets caught. His brain is saved per shop (`localStorage` `forged.gus.<level>`), so difficulty follows how good the player has become. A player who tries a few ideas per round (watching the gut feeling) wins about 70 % over 20 rounds; repeating one trick or sloppy orders lose.
 
 **Ranks** (saved in the browser) unlock one blank at a time, so new players start with two choices:
 
 | Rank | Plan | Also unlocks |
 | --- | --- | --- |
-| ⭐ Rookie | what, where | |
-| ⭐⭐ Hustler | + who (the disguise) | support chat |
-| ⭐⭐⭐ Schemer | + when | leaked memo |
-| ⭐⭐⭐⭐ Operator | + trick (plans with several orders) | |
-| ⭐⭐⭐⭐⭐ Mastermind | + tweak the disguise piece by piece (card, email, device, VPN) | |
+| ⭐ Rookie | what you buy, where it goes | |
+| ⭐⭐ Hustler | + name and email | support chat |
+| ⭐⭐⭐ Schemer | + device, where you shop from | leaked memo |
+| ⭐⭐⭐⭐ Operator | + when, how many orders, days apart | |
+| ⭐⭐⭐⭐⭐ Mastermind | + which stolen card to use | |
 
 A round gives 1 XP when caught and 2 when you get away with it (ranks at 2, 4, 7 and 11 XP). Gus goes easier on Rookies and Hustlers. Add `?rank=1`…`?rank=5` to either page's URL to try a rank.
 5. Sit back down to see the corkboard scene, patch notes and the shop on your computer.
@@ -47,7 +49,7 @@ A round gives 1 XP when caught and 2 when you get away with it (ranks at 2, 4, 7
 - **Why I caught you:** when you drop the envelope, the camera cuts to the counter. Gus holds up your order slip and scans it, circles the rows that gave you away (card, buyer, ship to, device / IP, cart, timing), and slams the stamp down: confetti on APPROVED, a red flash on DECLINED.
 - When the boss's suspicion builds, you hear a heartbeat and the screen edges turn red.
 
-Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Controls**): `WASD` move · `Left Ctrl` sprint (`Left Shift` on Windows/Linux, where Ctrl+W closes the tab) · mouse look (click to capture it) · mouse wheel zoom · `E` or right-click interact · `F5`/`V` first ⇄ third person · hold `Tab` leaderboard · `Esc` Game Menu (pauses the office). On the computer: `1`–`3` or click play a card · mouse wheel moves between the blanks · `T` write to support · `Space` hide the screen · `Left Shift` stand up. Bindings live in `keys.js`; the menu is `menu.js`/`menu.css`.
+Controls (Minecraft-style defaults, all rebindable in **Esc → Options → Controls**): `WASD` move · `Left Ctrl` sprint (`Left Shift` on Windows/Linux, where Ctrl+W closes the tab) · mouse look (click to capture it) · mouse wheel zoom · `E` or right-click interact · `F5`/`V` first ⇄ third person · hold `Tab` leaderboard · `Esc` Game Menu (pauses the office). On the computer: type, `Enter` next step · `1`–`7` or the mouse wheel jump between steps · `T` write to support · `Space` hide the screen · `Left Shift` stand up. Bindings live in `keys.js`; the menu is `menu.js`/`menu.css`.
 
 ## How the two halves talk
 

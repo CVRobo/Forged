@@ -226,6 +226,7 @@ function newHistory() { return { orders: [], day: 0, txn: 0 }; }
 
 /* resolve an order into plain facts: what each box really is */
 function facts(level, holder, o, opts = {}) {
+  if (o.in) return factsFromInput(level, holder, o.in, o.k, opts); // typed checkout
   const shop = SHOPS[level], card = find(CARDS, o.card), email = find(EMAILS, o.email);
   const proxy = find(PROXIES, o.proxy), ship = find(SHIPS, o.ship), clock = find(CLOCKS, o.clock), item = itemOf(shop, o);
   let dev = { ...find(DEVICES, o.device) };
@@ -273,7 +274,7 @@ function toRows(ctx) {
     day += f.clock.waitDays;
     minute = f.clock.hour != null ? f.clock.hour * 60 + Math.floor(rand(0, 50)) : minute + (step ? Math.floor(rand(1, 4)) : 0);
     const t = day * 1440 + minute; // minutes since the run started
-    const cardKey = holder.name + "|" + o.card, emailKey = f.email.hijacked ? holder.email : f.emailAddr;
+    const cardKey = holder.name + "|" + f.card.id, emailKey = f.email.hijacked ? holder.email : f.emailAddr;
     const onCard = past.filter(p => p.cardKey === cardKey), onEmail = past.filter(p => p.emailKey === emailKey);
     const onDevice = past.filter(p => p.deviceKey === f.deviceKey), onAddr = f.addressKey ? past.filter(p => p.addressKey === f.addressKey) : [];
     const uniq = (rows, k, extra) => new Set([...rows.map(r => r[k]), extra].filter(v => v != null)).size;
@@ -293,7 +294,7 @@ function toRows(ctx) {
       addr1: f.card.foreign ? null : holder.addr1, addr2: f.card.foreign ? 60 : 87,
       dist1: f.ship.dist1 == null ? null : f.ship.dist1, dist2: f.proxy.dist2,
       // R_emaildomain: who receives a digital item. Your burner is the buyer email you control (a hijacked inbox would alert the victim)
-      P_emaildomain: f.emailDomain, R_emaildomain: f.ship.id === "burner_email" ? (f.email.hijacked ? "protonmail.com" : f.emailDomain) : f.ship.id === "holder_email" ? holder.email.split("@")[1] : null,
+      P_emaildomain: f.emailDomain, R_emaildomain: f.ship.rDomain || (f.ship.id === "burner_email" ? (f.email.hijacked ? "protonmail.com" : f.emailDomain) : f.ship.id === "holder_email" ? holder.email.split("@")[1] : null),
       C1: f.card.pastOrders + onCard.length + 1,
       C2: uniq(onCard, "addressKey", f.addressKey) || 1, C3: 0,
       C4: uniq(onCard, "deviceKey", f.deviceKey) + (f.card.pastOrders ? 1 : 0), C5: 0,
@@ -308,8 +309,8 @@ function toRows(ctx) {
       D10: devFirst != null ? daysSince(devFirst) : deviceIsUsual ? f.email.accountDays : 0,
       D11: holderAddr || !f.card.foreign ? d1 : null, D12: null, D13: null, D14: null,
       D15: holderAddr ? d1 : addrFirst != null ? daysSince(addrFirst) : 0,
-      M1: "T", M2: f.email.matchesHolder ? "T" : "F", M3: hijacked ? "T" : "F",
-      M4: f.card.foreign ? "M2" : f.proxy.dist2 > 500 ? "M1" : "M0",
+      M1: f.nameMatches === false ? "F" : "T", M2: f.email.matchesHolder ? "T" : "F", M3: hijacked ? "T" : "F",
+      M4: f.card.foreign ? "M2" : f.proxy.foreign || f.proxy.dist2 > 500 ? "M1" : "M0",
       M5: holderAddr || !f.ship.physical ? "F" : "T", M6: holderAddr ? "T" : "F", M7: null, M8: null, M9: null,
       id_01: hijacked ? -5 : 0, id_02: Math.floor(rand(1000, 600000)), id_05: 0, id_06: 0, id_11: 100,
       id_12: onDevice.length || deviceIsUsual || f.perks.includes("cookies") ? "Found" : "NotFound",
@@ -332,7 +333,7 @@ function remember(hist, ctx, rows) {
   rows.forEach((row, i) => {
     const o = ctx.orders[i], f = facts(ctx.level, ctx.holder, o);
     const t = (row.TransactionDT - 86400 * 200) / 60;
-    hist.orders.push({ t, cardKey: ctx.holder.name + "|" + o.card, emailKey: f.email.hijacked ? ctx.holder.email : f.emailAddr,
+    hist.orders.push({ t, cardKey: ctx.holder.name + "|" + f.card.id, emailKey: f.email.hijacked ? ctx.holder.email : f.emailAddr,
       deviceKey: f.deviceKey, addressKey: f.addressKey, amount: f.amount });
   });
   const last = rows[rows.length - 1];
@@ -359,6 +360,9 @@ const TELL_LABELS = {
   gift_card: "a suspiciously big gift card",
   amount_unusual: "way more than people spend here",
   amount_jump: "$1 tests, then a big buy",
+  name_mismatch: "the name isn't the one on the card",
+  odd_domain: "an email from a weird website",
+  copycat: "the same trick that fooled me before",
   velocity: "too many orders, too fast",
   night: "who shops at 3 AM?",
   heat: "you've been getting sloppy",
@@ -369,7 +373,7 @@ const TELL_LABELS = {
 const TELL_BOX = {
   email_risky: "buyer", email_mismatch: "buyer", yahoo: "buyer", new_card: "card", foreign_card: "card", velocity: "card",
   ip_far: "device", proxy: "device", emulator: "device", new_device: "device", device_reuse: "device", device_mobile: "device",
-  far_ship: "ship", new_address: "ship", gift_card: "cart", amount_unusual: "cart", amount_jump: "cart", night: "cart", friday: "cart",
+  far_ship: "ship", new_address: "ship", name_mismatch: "buyer", odd_domain: "buyer", gift_card: "cart", amount_unusual: "cart", amount_jump: "cart", night: "cart", friday: "cart",
 };
 
 const MEMOS = {
@@ -395,9 +399,10 @@ const MEMOS = {
  * ctx: { level, holder, orders, rows, memo, version, heat, persuasion, perks, learned, waitRisk } */
 function judgeOrders(ctx) {
   const { level, holder, orders, rows, memo, version, heat, persuasion, perks, learned } = ctx;
+  const memory = ctx.memory || [], jitter = ctx.preview ? () => 0 : rand;
   const shop = SHOPS[level];
   const watched = memo.filter(m => m.real).map(m => m.tell);
-  const skill = .55 + .12 * (version - 1);
+  const skill = Math.min(1.05, .55 + .06 * (version - 1)); // capped: a new idea can always win
   let reported = false, stopped = false;
   const results = orders.map((o, i) => {
     const f = facts(level, holder, o, { perks }), row = rows[i], prev = rows[i - 1];
@@ -405,19 +410,21 @@ function judgeOrders(ctx) {
     const add = (name, w) => { if (w > .5) t.push([name, w, TELL_BOX[name] || null]); };
     if (stopped) return { declined: true, reason: "card_blocked", tells: [], score: 1 };
     // the card can get reported while you wait (Patience perk: never)
-    if (i > 0 && f.clock.waitDays && !perks.includes("patience") && Math.random() < .04 * f.clock.waitDays) {
+    if (!ctx.preview && i > 0 && f.clock.waitDays && !perks.includes("patience") && Math.random() < .04 * f.clock.waitDays) {
       reported = stopped = true;
-      return { declined: true, reason: "card_reported", tells: [], score: 1 }; // bad luck, not Gus: nothing to learn
+      return { declined: true, reason: "card_reported", tells: [], score: 1 }; // bad luck, not Gus
     }
     if (f.email.risky) add("email_risky", 18);
     if (!f.email.matchesHolder) add("email_mismatch", 8);
+    if (f.nameMatches === false) add("name_mismatch", 12);
+    if (f.oddDomain) add("odd_domain", 9);
     if (f.card.ageDays === 0 && row.C1 <= 3) add("new_card", clamp(4 + f.amount / 60, 4, 18));
     if (f.card.foreign) add("foreign_card", 10 + (f.item.cd === "C" ? 8 : 0));
     if (row.dist2 > 300) add("ip_far", row.id_23 ? 8 : 16);
     if (row.id_23) add("proxy", row.id_23 === "IP_PROXY:ANONYMOUS" ? 14 : 8);
     if (f.dev.emulator) add("emulator", 16);
     if (f.email.hijacked && row.id_16 === "NotFound") add("new_device", perks.includes("cookies") ? 7 : 14);
-    if (row.C11 > 1) add("device_reuse", 9 * (row.C11 - 1));
+    if (row.C11 > 1) add("device_reuse", Math.min(22, 9 * (row.C11 - 1)));
     if (f.ship.abroad) add("far_ship", 18); else if (row.dist1 > 5) add("far_ship", 5);
     if (f.ship.id === "mule" && f.card.pastOrders) add("new_address", 9);
     if (f.item.cd === "C" && f.amount >= 100) add("gift_card", 5 + f.amount / 50);
@@ -427,17 +434,20 @@ function judgeOrders(ctx) {
     const hour = Math.floor((row.TransactionDT % 86400) / 3600);
     if (hour < 6) add("night", 6);
     if (heat > 40) add("heat", (heat - 40) * .5);
+    // Gus remembers the tricks that fooled him: a close copy of one is a red flag
+    const sig = signature(row), seen = memory.reduce((m, x) => Math.max(m, similarity(sig, x)), 0);
+    if (seen >= .78) add("copycat", 80 * (seen - .72) + (seen === 1 ? 10 : 0)); // only real copies: most fields the same
     t.forEach(x => {
       if (watched.includes(x[0])) x[1] *= 1.5;
-      if (learned[x[0]]) x[1] *= 1 + .3 * learned[x[0]]; // Gus learned this trick from you before
+      if (learned[x[0]]) x[1] *= Math.min(1.8, 1 + .15 * learned[x[0]]); // Gus studied this from one of your wins
     });
     const tells = t.sort((a, b) => b[1] - a[1]);
     // leniency: Gus goes easy on new players (game.js passes more at low ranks)
-    let suspicion = tells.reduce((a, x) => a + x[1], 0) * skill - persuasion * .18 + rand(-10, 10) - (ctx.leniency || 0);
+    let suspicion = tells.reduce((a, x) => a + x[1], 0) * skill - persuasion * .18 + jitter(-10, 10) - (ctx.leniency || 0);
     if (f.amount < 5) suspicion -= 12; // nobody reviews a $1 charge
     const caught = suspicion > 38;
     if (caught) stopped = true; // a flagged order blocks the card for the rest of the campaign
-    return { declined: caught, reason: caught ? "flagged" : null, tells, score: clamp(.5 + (suspicion - 38) / 60, .01, .99) };
+    return { declined: caught, reason: caught ? "flagged" : null, tells, suspicion, score: clamp(.5 + (suspicion - 38) / 60, .01, .99) };
   });
   const caught = results.some(r => r.declined);
   const payout = orders.reduce((a, o, i) => {
@@ -455,11 +465,11 @@ function judgeOrders(ctx) {
  * disguise piece by piece, which is where the most creative data comes from. */
 
 const RANKS = [
-  { n: 1, title: "Rookie", xp: 0, slots: ["what", "where"], windows: [], unlocks: "Pick what to buy and where it goes" },
-  { n: 2, title: "Hustler", xp: 2, slots: ["who", "what", "where"], windows: ["clerk"], unlocks: "WHO cards: choose your disguise" },
-  { n: 3, title: "Schemer", xp: 4, slots: ["who", "what", "when", "where"], windows: ["clerk", "memo"], unlocks: "WHEN cards and the leaked memo" },
-  { n: 4, title: "Operator", xp: 7, slots: ["who", "what", "when", "where", "trick"], windows: ["clerk", "memo"], unlocks: "TRICK cards: plans with several orders" },
-  { n: 5, title: "Mastermind", xp: 11, slots: ["who", "what", "when", "where", "trick"], windows: ["clerk", "memo"], custom: true, unlocks: "Tweak your disguise piece by piece" },
+  { n: 1, title: "Rookie", xp: 0, slots: ["what", "where"], windows: [], unlocks: "Choose what to buy and where it goes" },
+  { n: 2, title: "Hustler", xp: 2, slots: ["who", "what", "where"], windows: ["clerk"], unlocks: "Choose the name and email you shop under, and the support chat" },
+  { n: 3, title: "Schemer", xp: 4, slots: ["who", "what", "when", "where"], windows: ["clerk", "memo"], unlocks: "Choose your device and where you shop from, and the leaked memo" },
+  { n: 4, title: "Operator", xp: 7, slots: ["who", "what", "when", "where", "trick"], windows: ["clerk", "memo"], unlocks: "Choose when, and repeat the order" },
+  { n: 5, title: "Mastermind", xp: 11, slots: ["who", "what", "when", "where", "trick"], windows: ["clerk", "memo"], custom: true, unlocks: "Choose which stolen card to use" },
 ];
 const rankFor = xp => [...RANKS].reverse().find(r => xp >= r.xp);
 
@@ -556,10 +566,184 @@ function buildCampaign(level, plan) {
   }
 }
 
+/* ======================= Typed checkout =======================
+ * The player types what they want, like on a real checkout page. These parsers
+ * turn the text into the facts a row needs, using the dataset's vocabulary
+ * (email domains, device strings, product codes, distances). No AI: keywords. */
+
+const norm = s => String(s || "").toLowerCase().trim();
+const num = s => { const m = String(s || "").replace(/,/g, "").match(/\d+(\.\d+)?/); return m ? +m[0] : null; };
+
+// cities players are likely to type, with coordinates for dist1 / dist2 (miles)
+const CITIES = [
+  ["Columbus", 39.96, -83.0], ["Phoenix", 33.45, -112.07], ["Atlanta", 33.75, -84.39], ["Tampa", 27.95, -82.46], ["Dallas", 32.78, -96.8],
+  ["Chicago", 41.88, -87.63], ["New York", 40.71, -74.0, ["nyc", "brooklyn", "manhattan"]], ["Los Angeles", 34.05, -118.24, ["la", "hollywood"]],
+  ["Miami", 25.76, -80.19], ["Seattle", 47.61, -122.33], ["Denver", 39.74, -104.99], ["Boston", 42.36, -71.06], ["Houston", 29.76, -95.37],
+  ["San Francisco", 37.77, -122.42, ["sf", "bay area", "oakland"]], ["Las Vegas", 36.17, -115.14, ["vegas"]], ["Detroit", 42.33, -83.05],
+  ["Orlando", 28.54, -81.38], ["Austin", 30.27, -97.74], ["Cleveland", 41.5, -81.69], ["Cincinnati", 39.1, -84.51], ["Mesa", 33.42, -111.83],
+  ["Scottsdale", 33.49, -111.93], ["Tempe", 33.43, -111.94], ["Fort Worth", 32.76, -97.33], ["St. Petersburg", 27.77, -82.64, ["st petersburg", "st pete"]],
+  ["Clearwater", 27.97, -82.8], ["Marietta", 33.95, -84.55], ["Dublin", 40.1, -83.11], ["Plano", 33.02, -96.7], ["Berkeley", 37.87, -122.27],
+  ["Philadelphia", 39.95, -75.17, ["philly"]], ["Portland", 45.52, -122.68], ["Nashville", 36.16, -86.78], ["New Orleans", 29.95, -90.07],
+  ["Toronto", 43.65, -79.38, [], true], ["Mexico City", 19.43, -99.13, [], true], ["London", 51.5, -0.13, [], true], ["Paris", 48.86, 2.35, [], true],
+  ["Rotterdam", 51.92, 4.48, [], true], ["Lagos", 6.52, 3.38, [], true], ["Moscow", 55.76, 37.62, [], true], ["Bucharest", 44.43, 26.1, [], true],
+  ["Manila", 14.6, 120.98, [], true], ["Dubai", 25.2, 55.27, [], true], ["Hong Kong", 22.32, 114.17, [], true], ["Berlin", 52.52, 13.4, [], true],
+].map(([name, lat, lon, alias = [], foreign = false]) => ({ name, lat, lon, foreign, keys: [name.toLowerCase(), ...alias] }));
+const PLAYER_HOME = "Chicago"; // where you really are, if you don't hide it
+
+function findCity(text) {
+  const t = " " + norm(text).replace(/[^a-z. ]/g, " ") + " ";
+  return CITIES.find(c => c.keys.some(k => t.includes(" " + k + " ") || (k.length > 4 && t.includes(k))));
+}
+function miles(a, b) {
+  if (!a || !b) return null;
+  const R = 3959, rad = d => d * Math.PI / 180, dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+const holderCity = holder => findCity(holder.city);
+
+/* what you're buying: a catalog item, or anything you type with a price */
+const ITEM_ICONS = [[/gift|voucher|code|credit|steam|itunes|robux|card/, "🎁"], [/phone|iphone|galaxy|pixel/, "📱"], [/laptop|macbook|computer|pc\b/, "💻"],
+  [/tv|television|monitor/, "📺"], [/console|ps5|playstation|xbox|switch/, "🎮"], [/watch|rolex|jewel|ring|necklace/, "💍"], [/shoe|sneaker|jordan/, "👟"],
+  [/espresso|coffee/, "☕"], [/mixer|blender|kitchen/, "🥣"], [/ticket|flight|hotel/, "🎫"], [/subscription|membership|plan|monthly/, "🔁"],
+  [/visit|service|repair|lesson|consult/, "🩺"], [/donat/, "💝"], [/headphone|airpod|speaker/, "🎧"], [/bike|scooter/, "🛵"], [/camera/, "📷"]];
+// rough street prices for things players type, when they don't give a price
+const PRICE_GUESS = [[/ps5|playstation|xbox/, 499], [/switch/, 299], [/iphone|galaxy s|pixel/, 899], [/macbook|gaming laptop/, 1299], [/laptop|computer|pc\b/, 799],
+  [/airpod|headphone|earbud/, 179], [/tv|television/, 649], [/rolex/, 8500], [/watch/, 349], [/sneaker|jordan|shoe/, 189], [/camera/, 749],
+  [/ipad|tablet/, 449], [/bike|scooter/, 599], [/chair/, 249], [/blender/, 89], [/speaker/, 129], [/ring|necklace|jewel/, 1200]];
+function parseItem(shop, text, priceText) {
+  const t = norm(text);
+  const hit = t && shop.catalog.find(i => norm(i.name) === t || norm(i.name).split(/[ ,]+/).filter(w => w.length > 3 && !/card|gift/.test(w)).some(w => t.includes(w))
+    || (/gift/.test(t) && /gift/.test(norm(i.name)) && num(t) === i.price));
+  const typedPrice = num(priceText) ?? (/gift|voucher|credit/.test(t) ? num(t) : null);
+  const cd = hit ? hit.cd
+    : /gift|voucher|code|credit|steam|itunes|robux|e-?card/.test(t) ? "C"
+    : /subscription|membership|monthly|plan\b/.test(t) ? "R"
+    : /visit|service|repair|lesson|consult|booking|ticket|flight|hotel/.test(t) ? "H"
+    : /donat/.test(t) ? "S" : "W";
+  const guess = (PRICE_GUESS.find(([re]) => re.test(t)) || [, 120])[1];
+  const price = Math.max(.5, Math.min(25000, typedPrice ?? (hit ? hit.price : guess)));
+  return { name: hit && typedPrice == null ? hit.name : (text || "").trim().slice(0, 40) || "Mystery box", price, cd,
+    kind: cd === "W" ? "physical" : "digital", ico: hit ? hit.ico : (ITEM_ICONS.find(([re]) => re.test(t)) || [, "📦"])[1], sku: hit ? hit.sku : null };
+}
+
+/* who you pretend to be: the name on the order and the email */
+const ANON_DOMAINS = ["protonmail.com", "proton.me", "anonymous.com", "mail.com", "guerrillamail.com", "tempmail.com", "yopmail.com", "tutanota.com", "10minutemail.com"];
+const COMMON_DOMAINS = ["gmail.com", "yahoo.com", "hotmail.com", "aol.com", "anonymous.com", "comcast.net", "icloud.com", "outlook.com", "msn.com",
+  "att.net", "live.com", "sbcglobal.net", "verizon.net", "ymail.com", "bellsouth.net", "me.com", "cox.net", "optonline.net", "charter.net", "protonmail.com", "mail.com"];
+function parseEmail(nameText, emailText, holder) {
+  const e = norm(emailText).replace(/\s+/g, "");
+  const domain = (e.includes("@") ? e.split("@").pop() : "") || "gmail.com";
+  const local = e.split("@")[0] || "";
+  const hName = norm(holder.name).split(" ");
+  const typedName = norm(nameText);
+  const hijacked = e === norm(holder.email);
+  return {
+    domain, address: e.includes("@") ? e : (local || "shopper") + "@" + domain,
+    hijacked, risky: ANON_DOMAINS.includes(domain), odd: !COMMON_DOMAINS.includes(domain),
+    matchesHolder: hijacked || hName.some(p => p.length > 2 && local.includes(p)),
+    nameMatches: !typedName || hName.every(p => typedName.includes(p)) || (typedName.includes(hName[1]) && typedName[0] === hName[0][0]),
+    accountDays: hijacked ? 730 : 0, pastOrders: hijacked ? 23 : 0,
+  };
+}
+
+/* what you shop on: free text to the dataset's DeviceInfo / id_30 / id_31 / id_33 strings */
+const DEVICE_RULES = [
+  [/emulat|bot|script|headless|virtual|vm\b|bluestacks/, { type: "mobile", info: "rv:57.0", os: "Linux", browser: "chrome generic", screen: "800x600", depth: 24, emulator: true, label: "Phone emulator" }],
+  [/iphone|ipad|ios|apple phone/, { type: "mobile", info: "iOS Device", os: "iOS 11.2.1", browser: "mobile safari 11.0", screen: "2436x1125", depth: 32, label: "iPhone" }],
+  [/samsung|galaxy/, { type: "mobile", info: "SAMSUNG SM-G930V Build/NRD90M", os: "Android 7.0", browser: "samsung browser 6.2", screen: "1440x2560", depth: 32, label: "Samsung Galaxy" }],
+  [/pixel|android|motorola|moto|lg\b|huawei|xiaomi|oneplus|phone/, { type: "mobile", info: "Moto G (4) Build/NPJ25.93-14.7", os: "Android 7.0", browser: "chrome 63.0 for android", screen: "1080x1920", depth: 32, label: "Android phone" }],
+  [/mac|apple|imac/, { type: "desktop", info: "MacOS", os: "Mac OS X 10_12_6", browser: "safari 11.0", screen: "2560x1600", depth: 24, label: "Mac" }],
+  [/linux|ubuntu/, { type: "desktop", info: "Linux", os: "Linux", browser: "firefox 57.0", screen: "1920x1080", depth: 24, label: "Linux PC" }],
+  [/tablet|kindle|fire/, { type: "mobile", info: "KFFOWI Build/LVY48F", os: "Android 5.1.1", browser: "chrome 63.0 for android", screen: "1024x600", depth: 32, label: "Tablet" }],
+];
+const DEFAULT_DEVICE = { type: "desktop", info: "Windows", os: "Windows 10", browser: "chrome 63.0", screen: "1920x1080", depth: 24, label: "Windows laptop" };
+function parseDevice(text) {
+  const t = norm(text);
+  const d = (DEVICE_RULES.find(([re]) => re.test(t)) || [, DEFAULT_DEVICE])[1];
+  return { ...d, key: d.label + "|" + t.replace(/[^a-z0-9]/g, "").slice(0, 24) };
+}
+
+/* where you shop from: your home, a city (pretend to be there), or a VPN / Tor */
+function parseWhere(text, holder) {
+  const t = norm(text), hc = holderCity(holder);
+  const city = findCity(t) || (/near|next door|neighbo|same (city|town)|their (city|town)|residential/.test(t) ? hc : null);
+  const at = city || findCity(PLAYER_HOME);
+  const d = miles(at, hc) ?? 812;
+  const near = /next door|neighbo|residential/.test(t);
+  if (/\btor\b|onion/.test(t)) return { id23: "IP_PROXY:ANONYMOUS", dist2: 4120, foreign: true, label: "Tor" };
+  if (/vpn|proxy/.test(t)) return { id23: city ? "IP_PROXY:HIDDEN" : "IP_PROXY:ANONYMOUS", dist2: city ? Math.max(2, d) : 1460, foreign: !!(city && city.foreign), label: city ? "VPN in " + city.name : "VPN" };
+  return { id23: null, dist2: near ? 3 : Math.max(1, d), foreign: at.foreign, label: city ? city.name : PLAYER_HOME + " (your home)" };
+}
+
+/* where the loot goes. Physical: an address (their home, a city, abroad). Digital: an email */
+function parseShip(text, item, holder, email) {
+  const t = norm(text), hc = holderCity(holder);
+  if (item.kind === "digital") {
+    const to = t.includes("@") ? t.replace(/\s+/g, "") : (/their|victim|holder/.test(t) ? norm(holder.email) : email.address);
+    const theirs = to === norm(holder.email);
+    return { id: theirs ? "holder_email" : "burner_email", dist1: null, toYou: !theirs || email.hijacked, physical: false, rDomain: to.split("@").pop(), label: to };
+  }
+  if (!t || /their (home|house|address)|billing|victim|same address/.test(t) || (holder.street && t.includes(norm(holder.street)))) {
+    return { id: "billing", dist1: 0, toYou: false, physical: true, label: "Their home, " + holder.city };
+  }
+  const city = findCity(t) || (/garage|cousin|friend|mule|locker|po box|next door|neighbo/.test(t) ? hc : null);
+  if (city && city.foreign) return { id: "reshipper", dist1: null, toYou: true, physical: true, abroad: true, label: String(text).trim() };
+  const d = city ? miles(city, hc) : 25;
+  return { id: "mule", dist1: Math.max(2, city === hc ? 4 + (t.length % 9) : d), toYou: true, physical: true, label: String(text).trim(), city: city ? city.name : null };
+}
+
+/* when: "3am", "15:00", "lunch", "tomorrow", "next week"; repeats a few days apart */
+function parseWhen(text) {
+  const t = norm(text);
+  let waitDays = /next week|in a week/.test(t) ? 7 : /tomorrow/.test(t) ? 1 : (num(t.match(/(\d+)\s*days?/)?.[0]) || 0);
+  let hour = null;
+  const m = t.match(/(\d{1,2})(?::(\d\d))?\s*(am|pm)?/);
+  if (m && !/days?/.test(t.slice(m.index, m.index + m[0].length + 5))) { hour = +m[1] % 24; if (m[3] === "pm" && hour < 12) hour += 12; if (m[3] === "am" && hour === 12) hour = 0; }
+  else if (/midnight/.test(t)) hour = 0; else if (/night|late/.test(t)) hour = 3; else if (/morning|breakfast/.test(t)) hour = 8;
+  else if (/lunch|noon/.test(t)) hour = 12; else if (/afternoon/.test(t)) hour = 15; else if (/evening|dinner/.test(t)) hour = 19;
+  return { waitDays, hour, label: String(text || "").trim() || "right now" };
+}
+
+/* the checkout answers → the orders Gus scores. `repeat` orders, `gap` days apart */
+function buildFromInput(level, holder, input) {
+  const n = Math.max(1, Math.min(5, Math.round(num(input.repeat) || 1)));
+  return Array.from({ length: n }, (_, k) => ({ in: input, k }));
+}
+function factsFromInput(level, holder, input, k, opts = {}) {
+  const shop = SHOPS[level];
+  const item = parseItem(shop, input.item, input.price);
+  const em = parseEmail(input.name, input.email, holder);
+  const card = holder.card;
+  const where = parseWhere(input.where, holder);
+  const ship = parseShip(input.ship, item, holder, em);
+  const when = parseWhen(input.when);
+  const gap = Math.max(0, Math.min(30, num(input.gap) ?? 0));
+  const dev = parseDevice(input.device);
+  const usual = HOLDER_DEVICES[holder.phone];
+  return {
+    shop, card, item, dev, usual, amount: item.price, perks: opts.perks || [],
+    email: { ...em, sub: "" }, emailDomain: em.domain, emailAddr: em.address,
+    proxy: { id23: where.id23, dist2: where.dist2, label: where.label, foreign: where.foreign },
+    ship, clock: { waitDays: k === 0 ? when.waitDays : gap, hour: k === 0 ? when.hour : (gap ? when.hour : null), label: k === 0 ? when.label : gap ? `${gap} day${gap > 1 ? "s" : ""} later` : "right after" },
+    deviceKey: dev.key, addressKey: ship.id === "billing" ? "billing-" + holder.addr1 : ship.physical ? "addr-" + norm(ship.label).replace(/[^a-z0-9]/g, "").slice(0, 30) : null,
+    nameMatches: em.nameMatches, oddDomain: em.odd && !em.risky,
+  };
+}
+
+/* what Gus remembers about a trick that fooled him: a few coarse fields of its row */
+function signature(row) {
+  const b = (v, steps) => v == null ? "na" : steps.findIndex(s => v <= s);
+  return [row.P_emaildomain, row.DeviceInfo, row.ProductCD, b(row.TransactionAmt, [5, 20, 50, 100, 200, 400, 700, 1000, 1e9]), b(row.dist1, [0, 5, 15, 40, 100, 500, 1e9]),
+    b(row.dist2, [5, 20, 100, 500, 1500, 1e9]), row.id_23 || "none", Math.floor(((row.TransactionDT % 86400) / 3600) / 4), row.M2, row.R_emaildomain || "none", row.card4];
+}
+const similarity = (a, b) => a.reduce((n, v, i) => n + (v === b[i] ? 1 : 0), 0) / a.length;
+
 window.ForgedOrders = {
   SHOPS, HOLDERS, TOOLS, SCHEMES, CARDS, EMAILS, PROXIES, DEVICES, SHIPS, CLOCKS, HOLDER_DEVICES,
   TELL_LABELS, TELL_BOX, MEMOS, COLUMNS,
   find, optionFor, itemOf, shipOptions, fixShip, facts, newHistory, toRows, remember, judgeOrders,
   RANKS, rankFor, PERSONAS, WHENS, WHERES, TRICKS, TWEAKS, dealHand, buildCampaign,
+  CITIES, PLAYER_HOME, findCity, parseItem, parseEmail, parseDevice, parseWhere, parseShip, parseWhen, buildFromInput, signature, similarity,
 };
 })();

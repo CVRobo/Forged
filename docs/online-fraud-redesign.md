@@ -120,7 +120,17 @@ Playtest feedback on v0.2: too complicated, too much text, and the data collecti
 - **Hidden data:** no rows, columns or CSV for players. Gus explains himself in plain words. The data panel and CSV need `?debug` in the URL.
 - **Data note for B:** a row's `scheme_id` is now `<who>+<trick>` (plus `+custom` when a Mastermind tweaked the disguise), and `record()` sends the `plan` and the player's `rank`. Low ranks produce less varied rows (the defaults fill the missing blanks), so B may want to weight rows by rank.
 
-## 9. Open questions
+## 9. v0.4: typed checkout, Gus learns only from wins (built, replaces the plan cards)
+
+Playtest feedback on v0.3: losing made Gus stronger, so a losing player could never catch up, and picking cards felt too narrow.
+
+- **Typed checkout:** one question per screen, like a real checkout: item (and price), name and email, device, where you shop from, delivery, timing and repeats. Players type anything; suggestion chips help. Keyword parsers in `orders.js` turn the text into the dataset's vocabulary: any email domain becomes `P_emaildomain` (anonymous providers and unusual domains are flagged), device text becomes `DeviceInfo`/`id_30`/`id_31`/`id_33` strings, a city becomes `dist1`/`dist2` in miles from the victim (a 50-city table), "VPN"/"Tor" become `id_23`, item text becomes `ProductCD` and a price, and typing the victim's real email is an account takeover (`M3`, account history in `C13`/`D4`). No AI: an LLM could replace the parsers later.
+- **Learning only from wins:** a catch changes nothing. A win raises Gus's version (skill grows slowly and is capped), weighs the warning signs that were present in the winning order up to 1.8×, and stores the order's fingerprint (11 coarse row fields); a later order matching 9+ of them gets a "copycat" tell. Saved per shop across runs.
+- **Gus's gut feeling:** the same rules without the dice, shown as a face while typing. It makes the game winnable by experimenting, and the experimenting is exactly the evasion data we want.
+- **Balance (simulated, 300 careers of 20 rounds):** win rate starts near 100 % and drifts down as Gus studies wins. Overall: 50 % sending the first idea, 71 % trying 3 ideas per round, 86 % trying 8. One trick repeated is caught from round 2; sloppy orders (Tor, emulator, ProtonMail, shipping abroad) almost always lose.
+- **Data note for B:** `record()` now sends the typed `input` and the player's `rank`; rows have `scheme_id` `typed-r<round>`. Free text means the long tail of email domains and devices will be wider than the dataset's; values outside the dataset's vocabulary still go into the row as typed.
+
+## 10. Open questions
 
 1. Do we keep invoice fraud as a first level for the demo, or replace it completely?
 2. Is the IEEE-CIS CSV already in the team's environment, and where? The value lists in section 5 need it.
