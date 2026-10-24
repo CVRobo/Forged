@@ -170,7 +170,7 @@ def test_dropping_memory_costs_recall_on_repeated_tricks_but_not_fpr():  # spec 
     detector.warm()
     v1 = store.load_detector(1)
     training.remember(training.clones(CAREFUL_PHANTOM, n=1, seed=11))  # one PAID trick is in memory
-    repeats = training.clones(CAREFUL_PHANTOM, n=60, seed=12)  # player-like sessions that keep repeating it
+    repeats = training.clones(CAREFUL_PHANTOM, n=60, seed=12, apart=True)  # player-like: each session repeats it
     on, off = "port_nocturne", "st_mercy"  # both flag at 5% FPR; only memory differs
 
     def recall(level):

@@ -20,7 +20,7 @@ import hashlib
 import sys
 from dataclasses import asdict, dataclass, field
 
-from ml import explain, memory, store, training
+from ml import explain, memory, search, store, training
 from ml.adapter import LEVEL_IDS, scheme_id, serving_case_file, to_invoice
 from ml.features import compute_features
 from ml.payloads import payload_schemes
@@ -127,6 +127,12 @@ def replay_grid() -> dict:
         recall.append(row_recall)
         n.append(row_n)
     return {"versions": ids, "batches": batches, "recall": recall, "n": n}
+
+
+def harden(seed: int = 0) -> dict:
+    """Spec 4.6, between player sessions: the search attacker's best attacks per scheme go into a
+    retrain as search_attacker rows (weight 1.5). Returns what retrain() returns, plus "search"."""
+    return search.harden(seed=seed)
 
 
 def to_row(record, version: int | None = None) -> Submission:

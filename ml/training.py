@@ -110,9 +110,19 @@ def forget_memory() -> None:
         _LIVE.clear()
 
 
-def clones(levers: Levers, n: int, seed: int, origin: str = "player_clone") -> list[Submission]:
-    """n variants of one trick (2.2), their memory features replayed after the live memory (2.3)."""
-    rows = memory.replay(clone_runs(levers, n, seed, origin), prior=live_memory())
+def clones(levers: Levers, n: int, seed: int, origin: str = "player_clone", apart: bool = False) -> list[Submission]:
+    """n variants of one trick (2.2), their memory features replayed after the live memory (2.3).
+    Each simulated session repeats the trick. By default later sessions also see the earlier ones,
+    as training data would; apart=True replays each session on its own, so a variant sees only
+    the live memory and its own session: one player repeating a trick."""
+    rows, prior = clone_runs(levers, n, seed, origin), live_memory()
+    if apart:
+        sessions: dict[str, list[Submission]] = {}
+        for r in rows:
+            sessions.setdefault(r.session_id, []).append(r)
+        rows = [r for session in sessions.values() for r in memory.replay(session, prior=prior)]
+    else:
+        rows = memory.replay(rows, prior=prior)
     return [r for r in rows if r.is_fraud][:n]
 
 
