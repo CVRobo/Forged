@@ -15,18 +15,25 @@ from server.models.schemas import InvoiceRecord
 
 logger = logging.getLogger(__name__)
 
+_MODEL = "claude-haiku-4-20250514"
+_CALL_CAP = 50  # hard cap on total Claude API calls per process
+_call_count = 0
+
 # Lazy-initialised client (no crash if key is absent)
 _client = None
 
 
 def _get_client():
-    global _client
+    global _client, _call_count
+    if _call_count >= _CALL_CAP:
+        raise RuntimeError(f"Claude API call cap reached ({_CALL_CAP})")
     if _client is None:
         if not config.ANTHROPIC_API_KEY:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
         import anthropic
 
         _client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+    _call_count += 1
     return _client
 
 
@@ -81,15 +88,15 @@ async def score_clerk_text(text: str, clerk_info: dict, level: int) -> tuple[int
             keywords=", ".join(clerk_info["keywords"]),
         )
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=256,
+            model=_MODEL,
+            max_tokens=128,
             system=system,
             messages=[{"role": "user", "content": text}],
         )
         raw = response.content[0].text
         parsed = json.loads(raw)
         score = max(0, min(100, int(parsed["score"])))
-        reply = str(parsed["reply"])[:500]
+        reply = str(parsed["reply"])[:200]
         return score, reply
     except Exception as exc:
         logger.debug("Claude clerk scoring failed (%s), using keyword fallback", exc)
@@ -122,8 +129,8 @@ async def generate_inspector_line(caught: bool, level: int, version: int) -> str
         client = _get_client()
         situation = "caught a fraudulent invoice" if caught else "let an invoice pass"
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=100,
+            model=_MODEL,
+            max_tokens=60,
             system=(
                 "You are a gruff invoice inspector (version {v}). "
                 "Write ONE short line (max 15 words) reacting to the situation. "
@@ -161,8 +168,8 @@ async def check_validity(record: InvoiceRecord, case_data: dict) -> bool:
             "scheme": record.scheme,
         })
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=50,
+            model=_MODEL,
+            max_tokens=30,
             system=(
                 "You are an invoice validity checker. Given the company context and "
                 "an invoice, reply ONLY 'valid' or 'invalid'. An invoice is invalid "
@@ -199,8 +206,8 @@ async def generate_memo_decoy(level: int, real_tells: list[str]) -> str:
     try:
         client = _get_client()
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=100,
+            model=_MODEL,
+            max_tokens=60,
             system=(
                 "You write fake fraud-detection rules for a training exercise. "
                 "Generate ONE plausible-sounding but FALSE rule (max 15 words). "
