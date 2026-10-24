@@ -43,7 +43,7 @@ JSON text frames. Client → server:
 | `t` | Fields | Effect |
 | --- | --- | --- |
 | `hello` | `name`, `look` | First message. Reply `welcome` or `full` (then close). |
-| `state` | `x`, `z`, `ry`, `sp`, `seated`, `carrying`, `started` | Where you are. Goes into the snapshots. |
+| `state` | `x`, `z`, `ry`, `sp`, `f` (flags, as in `snap`) | Where you are. Goes into the snapshots. |
 | `desk` | `n` | Take desk n if it's free. Everyone gets `players`. |
 | `name`, `look` | `name` / `look` | Profile change. Everyone gets `players`. |
 | `score` | `money`, `patches`, `round` | Standings. Everyone gets `players`. |
