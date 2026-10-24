@@ -43,7 +43,7 @@ LEGIT_TELLS = {
     "offhours": 0.10,        # sent after hours
     "urgent": 0.13,          # an urgent cover email
 }
-HAND_FIX_RATE = 0.4        # real bank changes and change orders are often corrected by hand on the paper
+HAND_FIX_RATE = 0.25        # real bank changes and change orders are often corrected by hand on the paper
 AMBIENT = {"whiteout": 0.08, "stain": 0.08, "photocopy": 0.12, "stamp": 0.20}  # tool traces on real paper
 LEGIT_TONES = {"plain": 0.55, "chatty": 0.25, "apologetic": 0.20}
 # Urgent emails always have an email, so the others get slightly fewer, keeping EMAIL_RATE overall.

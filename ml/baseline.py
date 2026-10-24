@@ -22,6 +22,7 @@ class Detector:
     model: LogisticRegression
     platt: LogisticRegression  # a sigmoid over the model's margin
     threshold: float           # FLAGGED when score >= threshold
+    reference: np.ndarray | None = None  # a typical legit invoice (standardized medians); reasons are measured from it
 
     def margins(self, rows: list[Submission]) -> np.ndarray:
         return self.model.decision_function(self.scaler.transform(matrix(rows, self.features)))
@@ -33,11 +34,22 @@ class Detector:
     def flags(self, rows: list[Submission]) -> np.ndarray:
         return self.scores(rows) >= self.threshold
 
+    def score_features(self, features: dict[str, float]) -> float:
+        """Calibrated P(fraud) for one feature dict."""
+        z = self.scaler.transform(np.array([[features[n] for n in self.features]]))
+        return float(self.platt.predict_proba(self.model.decision_function(z).reshape(-1, 1))[0, 1])
+
+    def contributions(self, features: dict[str, float]) -> dict[str, float]:
+        """Each feature's push toward FLAGGED: coefficient times how far it sits from a typical legit invoice."""
+        z = self.scaler.transform(np.array([[features[n] for n in self.features]]))[0]
+        if self.reference is not None:
+            z = z - self.reference
+        return dict(zip(self.features, (self.model.coef_[0] * z).tolist()))
+
     def reasons(self, features: dict[str, float], k: int = 3) -> list[tuple[str, float]]:
         """The k features pushing hardest toward FLAGGED, as (name, contribution)."""
-        z = self.scaler.transform(np.array([[features[n] for n in self.features]]))[0]
-        contributions = self.model.coef_[0] * z
-        return [(self.features[i], float(contributions[i])) for i in np.argsort(-contributions, kind="stable")[:k]]
+        pushes = self.contributions(features)
+        return sorted(pushes.items(), key=lambda t: -t[1])[:k]
 
 
 def fit_detector(train: list[Submission], val: list[Submission], features=BASE_FEATURES,
@@ -49,7 +61,9 @@ def fit_detector(train: list[Submission], val: list[Submission], features=BASE_F
     margins = model.decision_function(scaler.transform(matrix(val, features))).reshape(-1, 1)
     platt = LogisticRegression(C=1e6).fit(margins, labels(val))
     scores = platt.predict_proba(margins)[:, 1]
-    return Detector(tuple(features), scaler, model, platt, threshold_at_fpr(scores[labels(val) == 0], fpr_target))
+    legit = x[labels(train) == 0]
+    reference = scaler.transform(np.median(legit, axis=0, keepdims=True))[0] if len(legit) else None
+    return Detector(tuple(features), scaler, model, platt, threshold_at_fpr(scores[labels(val) == 0], fpr_target), reference)
 
 
 def threshold_at_fpr(legit_scores, fpr_target: float) -> float:
