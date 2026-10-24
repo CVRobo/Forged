@@ -42,8 +42,8 @@ function resize() {
 }
 addEventListener("resize", resize); resize();
 
-scene.add(new THREE.HemisphereLight("#fff6e0", "#6b4a2e", 0.75));
-const sun = new THREE.DirectionalLight("#fff2d8", 0.8);
+scene.add(new THREE.HemisphereLight("#fff6e0", "#8a7a6a", 0.5));
+const sun = new THREE.DirectionalLight("#ffffff", 0.55);
 sun.position.set(-8, 18, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -51,19 +51,38 @@ Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 12, bottom: -12, n
 scene.add(sun);
 
 const RW = 26, RD = 18; // room size
-const M = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...o });
+/* Cartoon look to match the 2D UI: 3-band toon shading + thick black outlines
+ * (inverted hull: a slightly bigger back-face copy of each mesh). */
+// r128 samples .rgb of the gradient, so it has to be a grey RGBA ramp
+const gradientMap = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 200, 200, 200, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+gradientMap.minFilter = gradientMap.magFilter = THREE.NearestFilter;
+gradientMap.needsUpdate = true;
+const M = (color, o = {}) => {
+  const { roughness, metalness, ...rest } = o;
+  return new THREE.MeshToonMaterial({ color, gradientMap, ...rest });
+};
 const mats = { wall: [], accent: M("#1f8a8a"), accent2: M("#f4a63a") };
 const colliders = [];
+
+const OUTLINE = new THREE.MeshBasicMaterial({ color: "#1a1210", side: THREE.BackSide });
+function outline(m, t = .028) {
+  if (m.material.transparent) return m;
+  m.geometry.computeBoundingBox();
+  const s = new THREE.Vector3(); m.geometry.boundingBox.getSize(s);
+  const o = new THREE.Mesh(m.geometry, OUTLINE);
+  o.scale.set((s.x + 2 * t) / (s.x || 1), (s.y + 2 * t) / (s.y || 1), (s.z + 2 * t) / (s.z || 1));
+  m.add(o); return m;
+}
 
 function box(w, h, d, mat, x, y, z, parent = scene) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z); m.castShadow = m.receiveShadow = true;
-  parent.add(m); return m;
+  parent.add(m); return outline(m);
 }
 function cyl(rt, rb, h, mat, x, y, z, parent = scene) {
   const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 20), mat);
   m.position.set(x, y, z); m.castShadow = m.receiveShadow = true;
-  parent.add(m); return m;
+  parent.add(m); return outline(m);
 }
 function collide(x, z, w, d) { colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 }); }
 
@@ -194,7 +213,7 @@ function desk(x, z, { flip = false, screen = screenMat, chair = true } = {}) {
 function plant(x, z) {
   cyl(.28, .22, .5, M("#c56a3c"), x, .25, z);
   const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(.55, 0), M("#3f9b4f", { flatShading: true }));
-  leaves.position.set(x, .95, z); leaves.castShadow = true; scene.add(leaves);
+  leaves.position.set(x, .95, z); leaves.castShadow = true; scene.add(leaves); outline(leaves, .04);
   collide(x, z, .6, .6);
 }
 
@@ -300,22 +319,166 @@ const bossPlate = signPlane("BOSS", null, .8, .3, "#2b1d14"); bossPlate.rotation
 const boss = makeChar({ shirt: "#1b1b1b", pants: "#111", face: "😠", name: "THE BOSS", tagColor: "#e0352b", scale: 1.12 });
 const BOSS_PATH = [[-12.2, -5], [-10.4, -5], [-10.4, 5.4], [-5.5, 5.4], [-5.5, -5.6], [-10.4, -5.6], [-12.2, -5]];
 boss.g.position.set(-12.2, 0, -5); boss.g.visible = false;
-const B = { state: "wait", t: rand(14, 22), i: 0, warned: false, chatted: false };
+const B = { state: "wait", t: rand(14, 22), i: 0, warned: false, chatted: false, sus: 0, busted: false, pauseUntil: 0 };
+// vision cone on the floor (Hitman-style): get caught in it carrying the envelope and he stops you
+const CONE_R = 4.2, CONE_HALF = .55;
+const coneMat = new THREE.MeshBasicMaterial({ color: "#ffd23f", transparent: true, opacity: .22, depthWrite: false, side: THREE.DoubleSide });
+const cone = new THREE.Mesh(new THREE.CircleGeometry(CONE_R / 1.12, 28, -Math.PI / 2 - CONE_HALF, CONE_HALF * 2), coneMat);
+cone.rotation.x = -Math.PI / 2; cone.position.y = .04; boss.g.add(cone);
 
 /* --- props --- */
 plant(-12.2, 8.2); plant(12.2, 8.2); plant(12.2, -8.2); plant(-1, -8.2);
 cyl(.3, .3, 1.0, M("#e8e8e8"), -12.3, .5, -8.2); const jug = cyl(.26, .26, .5, M("#7cc6ff", { transparent: true, opacity: .7 }), -12.3, 1.25, -8.2); jug.castShadow = false; collide(-12.3, -8.2, .7, .7);
 const exitSign = signPlane("EXIT", null, 1, .35, "#1d9a4b"); exitSign.position.set(0, 2.6, RD / 2 - .17); exitSign.rotation.y = Math.PI; scene.add(exitSign);
 
+/* --- hanging lamps: warm pools of light --- */
+[[-8, 1], [-3, -.5], [8, -4.5], [8, 3.5], [2, 6]].forEach(([x, z]) => {
+  cyl(.01, .01, .8, dark, x, 3.8, z);
+  const shade = cyl(.1, .36, .28, mats.accent2, x, 3.3, z);
+  shade.castShadow = false;
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 10), new THREE.MeshBasicMaterial({ color: "#fff3c4" }));
+  bulb.position.set(x, 3.14, z); scene.add(bulb);
+  const l = new THREE.PointLight("#fff1dc", .25, 6, 2); l.position.set(x, 3.0, z); scene.add(l);
+});
+
+/* --- the inspector visibly evolves with each detector version (design doc §9) --- */
+const STAGES = [
+  { upTo: 3, name: "Sleepy Intern", gear: "a red stapler" },
+  { upTo: 6, name: "Clerk with a Magnifier", gear: "a magnifying glass" },
+  { upTo: 9, name: "Auditor with a UV Lamp", gear: "a UV lamp" },
+  { upTo: 99, name: "Cyborg with a Monocle", gear: "a laser monocle" },
+];
+const stageOf = v => STAGES.findIndex(s => v <= s.upTo);
+const inspGear = STAGES.map(() => { const g = new THREE.Group(); g.visible = false; boothDesk.add(g); return g; });
+// 0: stapler + coffee
+box(.34, .09, .12, M("#e0352b"), -.15, 1.17, .3, inspGear[0]);
+cyl(.07, .06, .16, M("#fff"), .25, 1.2, .35, inspGear[0]);
+// 1: magnifying glass held up to the face
+{
+  const lens = new THREE.Mesh(new THREE.TorusGeometry(.17, .035, 8, 24), dark); lens.position.set(.22, 1.62, .05); inspGear[1].add(lens);
+  const glass = new THREE.Mesh(new THREE.CircleGeometry(.16, 20), new THREE.MeshBasicMaterial({ color: "#bfe8ff", transparent: true, opacity: .45 }));
+  glass.position.copy(lens.position); inspGear[1].add(glass);
+  box(.05, .32, .05, M("#8a5a35"), .3, 1.36, .05, inspGear[1]).rotation.z = .4;
+}
+// 2: UV desk lamp bathing the counter in purple
+{
+  cyl(.15, .18, .05, dark, -1.2, 1.15, .4, inspGear[2]);
+  box(.04, .55, .04, dark, -1.2, 1.42, .4, inspGear[2]);
+  const head = cyl(.05, .2, .2, M("#5a2ca0"), -1.05, 1.68, .45, inspGear[2]); head.rotation.z = -.9;
+  const uv = new THREE.PointLight("#a35cff", 1.6, 4, 2); uv.position.set(-.9, 1.5, .5); inspGear[2].add(uv);
+}
+// 3: cyborg: glowing red eye + antenna
+{
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(.08, 12, 12), new THREE.MeshBasicMaterial({ color: "#ff2b2b" }));
+  eye.position.set(.14, 1.7, .25); inspGear[3].add(eye);
+  cyl(.015, .015, .4, metal, -.12, 2.15, -.3, inspGear[3]);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 8), new THREE.MeshBasicMaterial({ color: "#ff2b2b" })); tip.position.set(-.12, 2.37, -.3); inspGear[3].add(tip);
+  const red = new THREE.PointLight("#ff3030", 1.2, 3.5, 2); red.position.set(0, 1.8, .6); inspGear[3].add(red);
+}
+let shownStage = -1;
+setTimeout(() => showStage(1, false));
+function showStage(v, announce) {
+  const s = stageOf(v);
+  if (s === shownStage) return;
+  inspGear.forEach((g, i) => g.visible = i === s);
+  if (announce && shownStage >= 0) {
+    say(inspector, `⬆ UPGRADE: ${STAGES[s].name}<br><small>now armed with ${STAGES[s].gear}</small>`, 4500, "flagged");
+    wtoast(`The inspector got smarter: ${STAGES[s].name}`, "bad"); sfx("upgrade");
+  }
+  shownStage = s;
+}
+
+/* --- "detector live" TV on the east wall: the model improving, visible in the room --- */
+const tvHistory = [];
+let tvVersion = 1;
+const tvTex = canvasTex(1024, 576, (g, w, h) => {
+  g.fillStyle = "#101418"; g.fillRect(0, 0, w, h);
+  g.fillStyle = "#7cff9a"; g.font = "44px Bungee, Impact"; g.textAlign = "left"; g.fillText("DETECTOR LIVE", 40, 70);
+  g.fillStyle = "#fff"; g.font = "bold 30px 'Space Mono'"; g.textAlign = "right"; g.fillText(`INSPECTOR v${tvVersion}`, w - 40, 66);
+  const caught = tvHistory.filter(r => r.caught).length;
+  const rate = tvHistory.length ? Math.round(caught / tvHistory.length * 100) : 0;
+  g.textAlign = "left"; g.fillStyle = "#aaa"; g.font = "24px 'Space Mono'";
+  g.fillText(tvHistory.length ? `catch rate ${rate}% over ${tvHistory.length} attempt${tvHistory.length > 1 ? "s" : ""}` : "waiting for the first invoice…", 40, 115);
+  const base = h - 70, maxH = 300, bw = 60;
+  g.strokeStyle = "#333"; g.lineWidth = 2; g.beginPath(); g.moveTo(40, base); g.lineTo(w - 40, base); g.stroke();
+  tvHistory.slice(-12).forEach((r, i) => {
+    const x = 60 + i * (bw + 15), bh = r.caught ? maxH : maxH * .45;
+    g.fillStyle = r.caught ? "#e0352b" : "#1d9a4b"; g.fillRect(x, base - bh, bw, bh);
+    g.fillStyle = "#fff"; g.font = "bold 20px 'Space Mono'"; g.textAlign = "center"; g.fillText("v" + r.version, x + bw / 2, base + 28);
+    g.fillText(r.caught ? "✗" : "$", x + bw / 2, base - bh - 10);
+  });
+});
+{
+  const frame = box(.12, 1.9, 3.3, dark, RW / 2 - .22, 2.1, 0);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.1, 1.74), new THREE.MeshBasicMaterial({ map: tvTex }));
+  screen.rotation.y = -Math.PI / 2; screen.position.set(RW / 2 - .3, 2.1, 0); scene.add(screen);
+  frame.castShadow = false;
+}
+
+/* --- objective marker: a bobbing diamond + floor ring on whatever to do next --- */
+const markerMat = new THREE.MeshBasicMaterial({ color: "#ffd23f" });
+const marker = outline(new THREE.Mesh(new THREE.OctahedronGeometry(.26, 0), markerMat), .04);
+marker.scale.y = 1.5; scene.add(marker);
+const ring = new THREE.Mesh(new THREE.RingGeometry(.65, .82, 40), new THREE.MeshBasicMaterial({ color: "#ffd23f", transparent: true, opacity: .85, side: THREE.DoubleSide, depthWrite: false }));
+ring.rotation.x = -Math.PI / 2; ring.position.y = .03; scene.add(ring);
+
+/* --- the player's desk gets messier every round (design doc §4) --- */
+let messCount = 0;
+function messUpDesk() {
+  if (messCount >= 10) return;
+  const x = MY_DESK.x + rand(-.95, .95), z = MY_DESK.z + rand(-.05, .45);
+  const kind = messCount++ % 4;
+  if (kind === 0) cyl(.06, .05, .13, M(pick(["#fff", "#e0352b", "#1f8a8a"])), x, .865, z);
+  if (kind === 1) for (let i = 0; i < 3; i++) box(.3, .02, .4, M("#fffaf0"), x, .81 + i * .022, z).rotation.y = rand(-.4, .4);
+  if (kind === 2) box(.16, .01, .16, M("#fff27a"), x, .805, z).rotation.y = rand(-.6, .6);
+  if (kind === 3) { const d = new THREE.Mesh(new THREE.TorusGeometry(.08, .04, 8, 16), M("#e89ac7")); d.rotation.x = Math.PI / 2; d.position.set(x, .83, z); scene.add(d); outline(d, .015); }
+}
+
 /* ======================= Player ======================= */
 
 const player = makeChar({ shirt: "#e0352b", face: "😏", name: "YOU", tagColor: "#e0352b" });
 player.g.position.set(-5.5, 0, 7);
 player.g.rotation.y = Math.PI;
-const carryEnv = box(.5, .03, .32, envelopeMat, 0, 1.2, .45, player.g); carryEnv.visible = false;
+// held in the right hand, upright, so it reads from the camera behind you
+const carryEnv = box(.5, .03, .32, envelopeMat, .52, 1.05, .12, player.g); carryEnv.rotation.set(Math.PI / 2, 0, .25); carryEnv.visible = false;
 
-const P = { started: false, seated: false, carrying: false, phase: "idle", yaw: .6, pitch: .55, dist: 6.5,
+const P = { frozenUntil: 0, lastStep: 0, stampAt: 0, started: false, seated: false, carrying: false, phase: "idle", yaw: .6, pitch: .55, dist: 6.5,
   keys: new Set(), envelopeReady: false, printing: false, scheme: "", shake: 0, hud: null };
+
+/* ======================= Sound (tiny WebAudio synth, same style as the computer) ======================= */
+
+let actx = null;
+function sfx(kind) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const t = actx.currentTime;
+    const tone = (f, d, type = "square", v = .06, f2 = null, at = 0) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f, t + at);
+      if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + at + d);
+      g.gain.setValueAtTime(v, t + at); g.gain.exponentialRampToValueAtTime(.0001, t + at + d);
+      o.connect(g).connect(actx.destination); o.start(t + at); o.stop(t + at + d);
+    };
+    const noise = (d, v = .2, at = 0) => {
+      const b = actx.createBuffer(1, actx.sampleRate * d, actx.sampleRate), ch = b.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / ch.length);
+      const s = actx.createBufferSource(), g = actx.createGain(); s.buffer = b; g.gain.value = v;
+      s.connect(g).connect(actx.destination); s.start(t + at);
+    };
+    ({
+      step: () => tone(rand(85, 105), .05, "sine", .05, 60),
+      print: () => { for (let i = 0; i < 6; i++) tone(220 + (i % 2) * 40, .14, "sawtooth", .02, null, i * .2); },
+      pickup: () => tone(500, .12, "triangle", .08, 900),
+      drop: () => { noise(.08, .25); tone(160, .15, "sine", .1, 90); },
+      cash: () => { tone(988, .1, "square", .06); tone(1319, .35, "square", .06, null, .1); },
+      buzz: () => tone(110, .5, "sawtooth", .1, 80),
+      huh: () => tone(300, .25, "triangle", .07, 520),
+      busted: () => { tone(880, .12, "square", .07); tone(660, .12, "square", .07, null, .13); tone(440, .3, "square", .07, null, .26); },
+      door: () => { noise(.15, .15); tone(140, .2, "sine", .08, 90, .05); },
+      upgrade: () => [0, .1, .2, .3].forEach((a, i) => tone(330 * (1 + i * .25), .15, "square", .05, null, a)),
+    })[kind]?.();
+  } catch (e) { /* audio is optional */ }
+}
 
 /* ======================= Bubbles, toasts, objective ======================= */
 
@@ -372,6 +535,8 @@ function applyHud(h) {
     if (inspector.faceEmoji !== h.emoji) setFace(inspector, h.emoji);
   }
   if (!prev || prev.level !== h.level) applyPalette(h.level, h.clerk);
+  showStage(h.version, !!prev);
+  if (tvVersion !== h.version) { tvVersion = h.version; redraw(tvTex); }
 }
 
 function applyPalette(level, clerkInfo) {
@@ -384,7 +549,7 @@ function applyPalette(level, clerkInfo) {
 }
 
 function startPrinting() {
-  P.printing = true; setPhase("printing");
+  P.printing = true; setPhase("printing"); sfx("print");
   setTimeout(() => {
     stand();
     wtoast("🖨️ Printing… go grab it", "good");
@@ -404,7 +569,30 @@ function onVerdict(m) {
   else wtoast(`PAID +${money(m.payout)}`, "good");
   scanSlot.material.emissive.set(m.caught ? "#e0352b" : "#7cff9a"); scanSlot.material.emissiveIntensity = 1.2;
   setTimeout(() => { scanSlot.material.emissive.set("#7cff9a"); scanSlot.material.emissiveIntensity = .2; }, 3000);
+  tvHistory.push({ caught: m.caught, version: tvVersion }); redraw(tvTex);
+  messUpDesk();
+  P.stampAt = performance.now();
+  setTimeout(() => sfx(m.caught ? "buzz" : "cash"), 350);
   setPhase("result");
+}
+
+/* ======================= Objective marker ======================= */
+
+function markerTarget() {
+  if (P.seated || !P.started) return null;
+  if (P.phase === "pickup") return { x: PRINTER.x, z: PRINTER.z + .95, y: 1.9 };
+  if (P.phase === "carrying") return { x: IN_TRAY.x, z: IN_TRAY.z - .4, y: 2.0 };
+  if (P.phase === "judging" || P.phase === "printing") return null;
+  return { x: CHAIR.x, z: CHAIR.z + .3, y: 2.2 };
+}
+function updateMarker(now) {
+  const t = markerTarget();
+  marker.visible = ring.visible = !!t;
+  if (!t) return;
+  marker.position.set(t.x, t.y + Math.sin(now / 250) * .15, t.z);
+  marker.rotation.y = now / 600;
+  ring.position.set(t.x, .03, t.z);
+  const k = 1 + Math.sin(now / 300) * .08; ring.scale.set(k, k, k);
 }
 
 /* ======================= Interactions ======================= */
@@ -451,11 +639,11 @@ function stand() {
   window.focus();
 }
 function grab() {
-  P.envelopeReady = false; envelope.visible = false; P.carrying = true; carryEnv.visible = true;
+  P.envelopeReady = false; envelope.visible = false; P.carrying = true; carryEnv.visible = true; sfx("pickup");
   setPhase("carrying");
 }
 function deliver() {
-  P.carrying = false; carryEnv.visible = false;
+  P.carrying = false; carryEnv.visible = false; sfx("drop");
   // envelope slides from the IN tray into the scanner
   const env = box(.5, .03, .32, envelopeMat, -.7, 1.22, .75, boothDesk);
   const t0 = performance.now();
@@ -515,8 +703,9 @@ function collidePlayer(pos) {
   }
 }
 
-function updatePlayer(dt) {
+function updatePlayer(dt, now) {
   if (P.seated) return;
+  if (now < P.frozenUntil) { animWalk(player, dt, 0); return; }
   const k = P.keys;
   const f = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
   const s = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
@@ -536,18 +725,26 @@ function updatePlayer(dt) {
     player.g.rotation.y += diff * Math.min(1, dt * 12);
   }
   animWalk(player, dt, speed);
+  const step = Math.floor(player.walkT / Math.PI);
+  if (speed > 0 && step !== P.lastStep) { P.lastStep = step; sfx("step"); }
 }
 
 function updateBoss(dt, now) {
   if (B.state === "wait") {
     B.t -= dt;
-    if (B.t <= 0) { B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = false; }
+    if (B.t <= 0) { B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door"); }
     return;
   }
   const [tx, tz] = BOSS_PATH[B.i];
   const pos = boss.g.position;
   const dx = tx - pos.x, dz = tz - pos.z, d = Math.hypot(dx, dz);
   const sp = 1.7;
+  if (now < B.pauseUntil) {
+    // stopped to interrogate you: face the player
+    boss.g.rotation.y = Math.atan2(player.g.position.x - pos.x, player.g.position.z - pos.z);
+    animWalk(boss, dt, 0);
+    return;
+  }
   if (d < .05) {
     B.i++;
     if (B.i >= BOSS_PATH.length) { B.state = "wait"; B.t = rand(16, 32); boss.g.visible = false; animWalk(boss, dt, 0); return; }
@@ -562,9 +759,27 @@ function updateBoss(dt, now) {
     B.warned = true; toOS("boss-near");
     say(boss, "Hmm? What are you working on?", 2500);
   }
-  if (!P.seated && !B.chatted && near(pos, 2.2)) {
+  // vision cone: carrying the envelope inside it builds suspicion
+  const vx = player.g.position.x - pos.x, vz = player.g.position.z - pos.z, vd = Math.hypot(vx, vz);
+  let ang = Math.atan2(vx, vz) - boss.g.rotation.y; ang = Math.atan2(Math.sin(ang), Math.cos(ang));
+  const inView = !P.seated && vd < CONE_R && Math.abs(ang) < CONE_HALF;
+  if (inView && P.carrying && !B.busted) {
+    if (B.sus === 0) { say(boss, "Hm?", 900); sfx("huh"); }
+    B.sus += dt * 1.3;
+    if (B.sus >= 1) {
+      B.busted = true; B.sus = 0;
+      B.pauseUntil = now + 2800; P.frozenUntil = now + 2800;
+      say(boss, "What's in the envelope?! …Fine. Get back to work.", 2800);
+      wtoast("Spotted by the boss with the envelope! +10 heat", "bad");
+      toOS("heat", { amount: 10 });
+      sfx("busted"); P.shake = .3;
+    }
+  } else B.sus = Math.max(0, B.sus - dt * .8);
+  coneMat.color.set(B.sus > 0 || now < B.pauseUntil ? "#e0352b" : "#ffd23f");
+  coneMat.opacity = .22 + B.sus * .3;
+  if (!P.seated && !B.chatted && !P.carrying && near(pos, 2.2)) {
     B.chatted = true;
-    say(boss, P.carrying ? "What's in the envelope?" : "Shouldn't you be at your desk?", 2200);
+    say(boss, "Shouldn't you be at your desk?", 2200);
   }
 }
 
@@ -600,7 +815,7 @@ function updateBubbles(now) {
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  updatePlayer(dt);
+  updatePlayer(dt, now);
   updateBoss(dt, now);
   // idle life: coworkers type, inspector bobs, printer blinks
   [kevin, dana].forEach((c, i) => { c.armL.rotation.x = -1.1 + Math.sin(now / 90 + i) * .12; c.armR.rotation.x = -1.1 + Math.cos(now / 80 + i) * .12; });
@@ -608,6 +823,13 @@ function loop(now) {
   if (P.seated) { player.armL.rotation.x = -1.1 + Math.sin(now / 85) * .1; player.armR.rotation.x = -1.1 + Math.cos(now / 95) * .1; }
   printerLight.material.emissiveIntensity = P.printing ? (Math.sin(now / 80) > 0 ? 1.5 : .1) : P.envelopeReady ? 1.2 : .3;
   envelope.position.y = .99 + (P.envelopeReady ? Math.abs(Math.sin(now / 300)) * .05 : 0);
+  // inspector slams his stamp on a verdict
+  const st = (now - (P.stampAt || -1e9)) / 700;
+  if (st < 1) inspector.armR.rotation.x = st < .5 ? -.3 - st * 4.8 : -2.7 + (st - .5) * 4.8;
+  else inspector.armR.rotation.x = -.3;
+  updateMarker(now);
+  // name tags ignore depth, so hide them when the camera gets right on top of someone
+  [kevin, dana, inspector, clerk, boss].forEach(c => { c.tag.visible = camera.position.distanceTo(c.g.position) > 3.2; });
   updateCamera(dt);
   updatePrompt();
   updateBubbles(now);
@@ -617,6 +839,6 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // handy in the devtools console while prototyping
-window.forged = { P, player, boss: B, sit, stand, setPhase };
+window.forged = { P, player, boss: B, sit, stand, setPhase, grab, deliver };
 
 })();

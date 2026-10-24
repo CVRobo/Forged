@@ -23,7 +23,13 @@ Then open http://localhost:8765. It needs to be served over http (not opened as 
 4. The inspector reads it and stamps PAID or FLAGGED above his head. Your trick gets pinned to the **corkboard** on the wall.
 5. Sit back down to see the corkboard scene, patch notes and the shop on your computer.
 
-**The boss** patrols out of his office. If he walks behind your chair while you're forging, the computer tells you to press **Space** to hide the invoice; miss it and you get +15 heat.
+**The boss** patrols out of his office with a vision cone on the floor. If he walks behind your chair while you're forging, the computer tells you to press **Space** to hide the invoice; miss it and you get +15 heat. If he spots you carrying the envelope inside his cone, he stops you for a few seconds and you get +10 heat.
+
+**What the office shows:**
+- A yellow diamond and floor ring always point at what to do next.
+- The inspector's gear changes with his version: stapler (v1–3), magnifying glass (v4–6), UV lamp (v7–9), cyborg eye (v10+).
+- The **DETECTOR LIVE** TV on the east wall charts every attempt and the catch rate.
+- Your desk gets messier every round.
 
 Controls: `WASD` move · `Shift` run · mouse look (click to capture it) · mouse wheel zoom · `E` interact · `Esc` stand up or free the mouse. On the computer: `1`–`6` tools · `D` detector view · `Space` hide the invoice.
 
@@ -38,6 +44,7 @@ Both pages use `postMessage`:
 | Computer → office | `print` | The envelope was dropped on the outbox; the printer starts |
 | Computer → office | `verdict` | PAID or FLAGGED, the inspector's line, payout; shown in the inspector's bubble and on the corkboard |
 | Computer → office | `stand` | `Esc` was pressed on the computer |
+| Office → computer | `heat` `{amount}` | The boss caught you with the envelope. **Not handled by `game.js` yet (C):** add it to the heat meter |
 | Office → computer | `deliver` | The envelope reached the IN tray; the computer runs the inspection |
 | Office → computer | `boss-near` | The boss is behind your chair; the computer starts the hide-the-invoice prompt |
 
