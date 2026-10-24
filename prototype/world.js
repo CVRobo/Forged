@@ -1599,6 +1599,7 @@ $("#btn-start").onclick = () => {
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) {}
   lockMouse();
   say(player, "Another day at the office…", 2500);
+  wtoast("Press Esc for the menu and the controls");
 };
 /* ======================= Game Menu (menu.js) =======================
  * Esc pauses everything: the office freezes (player, boss, camera) and the

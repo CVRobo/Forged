@@ -1,16 +1,16 @@
 /* voice.js: see PLUGINS.md. Builds on window.FW from world.js.
  *
- * Talk to the NPCs with your microphone.
- *   - Hold T: push-to-talk. The Web Speech API transcribes you live over your head.
- *   - Release T: the nearest NPC within ~4 m hears you and answers (spoken + bubble).
+ * Talk to the NPCs with your microphone, hands-free.
+ *   - Click the 🎤 "Voice chat" button (top right) once to turn it on. It stays on
+ *     (remembered) and pauses itself while you're seated, in a close-up or paused.
+ *   - Just talk when you're within ~4 m of someone: the Web Speech API transcribes
+ *     you live over your head and the nearest NPC answers (spoken + bubble).
  *   - Brenda files what you said as a cover note: FW.toOS("clerk-note", { text }).
  *   - Gus gets suspicious if you chat him up while carrying the envelope.
  *   - Shouting (mic volume) near the boss raises his suspicion: "Keep it down!"
- *   - No speech recognition or no mic permission (Firefox, file://, denied)? T opens a
- *     small text box instead that does the same thing. ALL CAPS counts as shouting.
+ *   - Needs Chrome or Edge over http (not file://); NPC voices are ignored by the mic.
  *
- * Swap in a real brain later: FW.voice.setResponder(async (npcName, text, ctx) => "reply").
- * The microphone is only requested the first time the player presses T. */
+ * Swap in a real brain later: FW.voice.setResponder(async (npcName, text, ctx) => "reply"). */
 (() => {
 "use strict";
 const FW = window.FW;
@@ -167,7 +167,7 @@ function deliver(text) {
   const who = nearestNpc(HEAR_RANGE);
   const shouted = shoutedThisTurn;
   shoutedThisTurn = false;
-  if (!who) { FW.wtoast("Nobody heard you. Get closer to someone."); return; }
+  if (!who) return;
 
   if (who === "clerk") {
     FW.toOS("clerk-note", { text });
@@ -180,74 +180,43 @@ function deliver(text) {
     r = String(r || "...");
     setTimeout(() => {
       FW.say(npcs[who], esc(r), Math.min(6000, 2200 + r.length * 45));
+      npcTalkingUntil = performance.now() + 600 + r.length * 70;
       speak(who, r);
       if (who === "inspector" && ctx.carrying) FW.sfx("huh");
     }, 550);
   });
 }
 
-/* ======================= UI: mic indicator + text fallback ======================= */
+/* ======================= UI: hands-free mic toggle ======================= */
+/* Voice chat is mic-only: turn it on once with the 🎤 button (top right) and
+ * just talk when you're near someone. No key to hold, no typing box. */
 
 const css = document.createElement("style");
 css.textContent = `
-#voice-mic { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 9; display: none; align-items: center; gap: 10px;
-  background: #fff; border: 3px solid #1b1b1b; border-radius: 22px; padding: 6px 14px; font-weight: 700; font-size: 13px; box-shadow: 3px 3px 0 #1b1b1b; pointer-events: none; }
-#voice-mic.on { display: flex; }
-#voice-mic .dot { width: 12px; height: 12px; border-radius: 50%; background: #e0352b; animation: voicePulse 1s infinite; }
-#voice-mic .meter { width: 70px; height: 8px; border: 2px solid #1b1b1b; border-radius: 4px; overflow: hidden; background: #eee; }
-#voice-mic .meter i { display: block; height: 100%; width: 100%; background: #3fae6a; transform-origin: left; transform: scaleX(0); }
-#voice-mic.loud .meter i { background: #e0352b; }
+#voice-pill { position: fixed; right: 16px; top: 16px; z-index: 6; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  background: var(--card, #fffaf0); border: 3px solid #1b1b1b; border-radius: 22px; padding: 6px 12px; font: 700 13px var(--ui, monospace);
+  box-shadow: 3px 3px 0 #1b1b1b; user-select: none; transition: opacity .3s; }
+#voice-pill:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 #1b1b1b; }
+#voice-pill .dot { width: 11px; height: 11px; border-radius: 50%; background: #aaa; }
+#voice-pill.on .dot { background: #e0352b; animation: voicePulse 1.2s infinite; }
+#voice-pill.heard .dot { background: #3fae6a; }
+#voice-pill .meter { width: 54px; height: 8px; border: 2px solid #1b1b1b; border-radius: 4px; overflow: hidden; background: #eee; display: none; }
+#voice-pill.on .meter { display: block; }
+#voice-pill .meter i { display: block; height: 100%; width: 100%; background: #3fae6a; transform-origin: left; transform: scaleX(0); }
+#voice-pill.loud .meter i { background: #e0352b; }
+#voice-pill.off-limits { opacity: .55; cursor: help; }
+body.seated #voice-pill, #start:not(.hide) ~ #voice-pill { opacity: 0; pointer-events: none; }
 @keyframes voicePulse { 50% { opacity: .3; } }
-#voice-box { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 9; display: none; gap: 6px; align-items: center;
-  background: #fff; border: 3px solid #1b1b1b; border-radius: 14px; padding: 6px 8px; box-shadow: 3px 3px 0 #1b1b1b; }
-#voice-box.on { display: flex; }
-#voice-box input { width: min(360px, 70vw); border: 2px solid #1b1b1b; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 14px; }
-#voice-box small { font-size: 11px; opacity: .7; white-space: nowrap; }
 `;
 document.head.appendChild(css);
 
 const mic = document.createElement("div");
-mic.id = "voice-mic";
-mic.innerHTML = `<span class="dot"></span><span class="lbl">Listening… release T</span><span class="meter"><i></i></span>`;
+mic.id = "voice-pill";
+mic.title = "Voice chat: talk to whoever is next to you with your microphone";
+mic.innerHTML = `<span class="dot"></span><span class="lbl">🎤 Voice chat: off</span><span class="meter"><i></i></span>`;
 document.body.appendChild(mic);
 const meterBar = mic.querySelector(".meter i");
 const micLabel = mic.querySelector(".lbl");
-
-const box = document.createElement("form");
-box.id = "voice-box";
-box.innerHTML = `<input type="text" maxlength="240" autocomplete="off" placeholder="Say something to whoever is nearby…"><small>Enter send · Esc cancel</small>`;
-document.body.appendChild(box);
-const boxInput = box.querySelector("input");
-
-const controls = document.getElementById("controls");
-if (controls) controls.insertAdjacentHTML("beforeend", " · <kbd>T</kbd> talk");
-
-// keep the world from seeing keys typed in the box (no walking, no E)
-["keydown", "keyup"].forEach(ev => boxInput.addEventListener(ev, e => {
-  e.stopPropagation();
-  if (ev === "keydown" && e.key === "Escape") { e.preventDefault(); closeBox(); }
-}));
-box.addEventListener("submit", e => {
-  e.preventDefault();
-  const text = boxInput.value;
-  // typing in ALL CAPS is the keyboard version of shouting
-  const letters = text.replace(/[^a-z]/gi, "");
-  if (letters.length >= 4 && letters === letters.toUpperCase() && bossNear()) { shoutedThisTurn = true; shushed(); }
-  closeBox();
-  deliver(text);
-});
-function openBox() {
-  if (box.classList.contains("on")) return;
-  P.keys.clear();
-  try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
-  boxInput.value = "";
-  box.classList.add("on");
-  setTimeout(() => boxInput.focus(), 0);
-}
-function closeBox() {
-  box.classList.remove("on");
-  boxInput.blur();
-}
 
 /* ======================= Microphone level (getUserMedia analyser) ======================= */
 
@@ -261,7 +230,7 @@ function startAnalyser() {
   if (!ctx) return;
   const req = ++micReq;
   navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } }).then(s => {
-    if (req !== micReq || !talking) { s.getTracks().forEach(t => t.stop()); return; } // released already
+    if (req !== micReq || !listening) { s.getTracks().forEach(t => t.stop()); return; } // turned off meanwhile
     stream = s;
     try {
       if (ctx.state === "suspended") ctx.resume();
@@ -269,7 +238,7 @@ function startAnalyser() {
       analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
       source.connect(analyser); // not connected to the speakers
     } catch (e) { stopAnalyser(); }
-  }).catch(() => { micDenied = true; });
+  }).catch(() => { micDenied = true; setEnabled(false, "Microphone blocked: allow it in the address bar to talk"); });
 }
 function stopAnalyser() {
   micReq++;
@@ -277,6 +246,7 @@ function stopAnalyser() {
   if (stream) try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   stream = source = analyser = null;
   loudFor = 0; shownLevel = -1;
+  meterBar.style.transform = "scaleX(0)";
   mic.classList.remove("loud");
 }
 
@@ -297,11 +267,15 @@ FW.onUpdate(dt => {
   if (loudFor > LOUD_HOLD && bossNear()) { shoutedThisTurn = true; shushed(); loudFor = 0; }
 });
 
-/* ======================= Speech recognition (push-to-talk) ======================= */
+/* ======================= Speech recognition (always listening while on) ======================= */
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let srBroken = !SR || location.protocol === "file:";
-let rec = null, talking = false, releasing = false, finished = true, finalText = "", interim = "", finishTimer = 0;
+const srUnsupported = !SR || location.protocol === "file:";
+let rec = null, enabled = false, listening = false, interim = "";
+let npcTalkingUntil = 0; // ignore what the speakers say (NPC voices) so they don't answer themselves
+
+function store(v) { try { localStorage.setItem("forged.voice", v ? "1" : "0"); } catch (e) {} }
+function stored() { try { return localStorage.getItem("forged.voice") === "1"; } catch (e) { return false; } }
 
 function getRec() {
   if (rec) return rec;
@@ -311,90 +285,75 @@ function getRec() {
   rec.interimResults = true;
   rec.maxAlternatives = 1;
   rec.onresult = e => {
+    const npcSpeaking = (window.speechSynthesis && speechSynthesis.speaking) || performance.now() < npcTalkingUntil;
     interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) finalText += r[0].transcript + " ";
-      else interim += r[0].transcript;
+      if (npcSpeaking) continue;
+      if (r.isFinal) {
+        const text = r[0].transcript.trim();
+        if (text && nearestNpc(HEAR_RANGE)) deliver(text);  // only talk to someone who's there
+        shoutedThisTurn = false;
+      } else interim += r[0].transcript;
     }
-    const live = (finalText + interim).trim();
-    if (live && !finished) FW.say(player, "🎙 " + esc(live) + "…", 1500);
+    // show what you're saying only when someone can hear it
+    if (interim.trim() && nearestNpc(HEAR_RANGE)) {
+      FW.say(player, "🎙 " + esc(interim.trim()) + "…", 1500);
+      mic.classList.add("heard"); clearTimeout(getRec.heardT); getRec.heardT = setTimeout(() => mic.classList.remove("heard"), 600);
+    }
   };
   rec.onerror = e => {
     const err = e && e.error;
     if (err === "no-speech" || err === "aborted") return;
-    if (err === "not-allowed" || err === "service-not-allowed" || err === "audio-capture" || err === "network" || err === "language-not-supported") {
-      srBroken = true;
-      const wasTalking = talking;
-      endTalk(true);
-      FW.wtoast(err === "network" ? "Speech service unreachable: type instead" : "Mic unavailable: press T to type instead", "bad");
-      if (wasTalking) openBox();
-    }
+    if (err === "not-allowed" || err === "service-not-allowed" || err === "audio-capture") setEnabled(false, "Microphone blocked: allow it in the address bar to talk");
+    else if (err === "network") setEnabled(false, "Voice chat needs an internet connection (browser speech service)");
+    else if (err === "language-not-supported") setEnabled(false, "Your browser language isn't supported for voice chat");
   };
-  rec.onend = () => {
-    if (talking && !releasing) { try { rec.start(); return; } catch (e) {} } // Chrome stops on long pauses
-    finish();
-  };
+  rec.onend = () => { listening = false; if (shouldListen()) startListening(); }; // Chrome stops after pauses: keep going
   return rec;
 }
-
-function beginTalk() {
-  if (talking) return;
-  clearTimeout(finishTimer);
-  talking = true; releasing = false; finished = false; finalText = ""; interim = ""; shoutedThisTurn = false;
-  try { if (FW.sound && FW.sound.ensure) FW.sound.ensure(); } catch (e) {}
-  try { getRec().start(); }
-  catch (e) {
-    if (!(e && e.name === "InvalidStateError")) { // anything but "already started"
-      talking = false; srBroken = true; openBox(); return;
-    }
-  }
-  micLabel.textContent = "Listening… release T";
-  mic.classList.add("on");
-  FW.say(player, "🎙 …", 1500);
+function shouldListen() { return enabled && P.started && !P.seated && !CINE.active && !P.paused; }
+function startListening() {
+  if (listening || srUnsupported) return;
+  try { getRec().start(); listening = true; }
+  catch (e) { if (e && e.name === "InvalidStateError") listening = true; else return; }
   startAnalyser();
 }
-function releaseTalk() {
-  if (!talking) return;
-  releasing = true; talking = false;
-  mic.classList.remove("on");
-  stopAnalyser();
-  try { rec && rec.stop(); } catch (e) {}
-  clearTimeout(finishTimer);
-  finishTimer = setTimeout(finish, 1500); // in case onend never comes
-}
-function endTalk(silent) {
-  talking = false; releasing = true;
-  mic.classList.remove("on");
-  stopAnalyser();
+function stopListening() {
+  if (!listening && !stream) return;
+  listening = false;
   try { rec && rec.abort(); } catch (e) {}
-  if (silent) { finished = true; clearTimeout(finishTimer); }
+  stopAnalyser();
 }
-function finish() {
-  if (finished) return;
-  finished = true; releasing = false;
-  clearTimeout(finishTimer);
-  deliver((finalText + " " + interim).trim());
+function setEnabled(on, why) {
+  enabled = !!on && !srUnsupported;
+  store(enabled);
+  mic.classList.toggle("on", enabled);
+  micLabel.textContent = enabled ? "🎤 Voice chat: on" : "🎤 Voice chat: off";
+  if (why) FW.wtoast(why, "bad");
+  if (!enabled) stopListening();
 }
 
-/* ======================= Keys ======================= */
-
-function canTalk() { return P.started && !P.seated && !CINE.active; }
-addEventListener("keydown", e => {
-  if (e.code !== "KeyT" || e.ctrlKey || e.metaKey || e.altKey) return;
-  const el = e.target;
-  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
-  if (e.repeat || !canTalk()) return;
-  e.preventDefault();
-  if (srBroken) openBox();
-  else beginTalk();
+if (srUnsupported) {
+  mic.classList.add("off-limits");
+  micLabel.textContent = "🎤 Voice chat: Chrome/Edge only";
+}
+mic.addEventListener("click", () => {
+  if (srUnsupported) {
+    FW.wtoast(location.protocol === "file:" ? "Voice chat needs the local server (python -m http.server), not file://" : "Voice chat needs Chrome or Edge", "bad");
+    return;
+  }
+  try { if (FW.sound && FW.sound.ensure) FW.sound.ensure(); } catch (e) {}
+  setEnabled(!enabled);
+  if (enabled) FW.wtoast("Voice chat on: walk up to someone and just talk", "good");
 });
-addEventListener("keyup", e => { if (e.code === "KeyT") releaseTalk(); });
-addEventListener("blur", () => { if (talking) releaseTalk(); });
+// it was on last time: turn it back on with the "Clock in" click (browsers need a click before using the mic)
+const startBtn = document.getElementById("btn-start");
+if (startBtn && stored() && !srUnsupported) startBtn.addEventListener("click", () => setEnabled(true));
+
+// follow the game: mic off while seated, during the booth close-up or the pause menu
 FW.onUpdate(() => {
-  // sitting down or the booth close-up cuts the mic
-  if (talking && (P.seated || CINE.active)) releaseTalk();
-  if (box.classList.contains("on") && (P.seated || CINE.active)) closeBox();
+  if (shouldListen()) startListening(); else if (listening) stopListening();
 });
 
 /* ======================= Public API ======================= */
@@ -404,7 +363,8 @@ FW.voice = {
   setResponder(fn) { responder = typeof fn === "function" ? fn : respond; }, // fn(npcName, text, ctx) -> string | Promise<string>
   say: deliver,                              // FW.voice.say("hello") as if the player spoke
   speak,                                     // speak(npcName, text) with that NPC's voice
-  get usingTextBox() { return srBroken; },
+  get enabled() { return enabled; },
+  setEnabled,
   names: NAMES,
 };
 
