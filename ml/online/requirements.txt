@@ -1,0 +1,16 @@
+# ml/online fraud model — pinned to what it was built and tested against (Python 3.10–3.14).
+# Install into ml/.venv:  ml/.venv/Scripts/python -m pip install -r ml/online/requirements.txt
+lightgbm==4.7.0
+pandas==3.1.0
+numpy==2.5.4
+scikit-learn==1.9.1
+joblib==1.6.0
+# the server that serves the model (ml.online is imported by server/services/online_data.py)
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.1
+python-dotenv==1.2.4
+# optional: the AI analyst briefing (briefing.py) — falls back to a template if absent
+anthropic>=0.40
+# tests
+pytest>=8

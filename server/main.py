@@ -42,10 +42,23 @@ def _warm_detector() -> None:
         logger.warning("ML detector unavailable, submits will use rule-based tells", exc_info=True)
 
 
+def _warm_online() -> None:
+    """Load the online fraud model so the first /preview (the checkout gut-feeling, 4 s timeout)
+    isn't a ~4 s cold load. Runs in both stub and non-stub modes, since the online routes use it
+    regardless. Harmless when no model is trained yet — the game falls back to the scripted Gus."""
+    try:
+        from ml.online import model as online_model
+
+        logger.info("Online fraud model v%d warmed", online_model.load().version)
+    except Exception:
+        logger.info("Online fraud model not available yet; the game will use the scripted Gus", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not config.USE_STUBS:
         threading.Thread(target=_warm_detector, daemon=True).start()
+    threading.Thread(target=_warm_online, daemon=True).start()
     yield
 
 

@@ -15,15 +15,21 @@ They **cannot both be merged**: they redefine the same files (`ml/online/feature
 
 ## Measured comparison
 
-Both models were trained and tested on the same data (Oct 2026). "Game orders" are identical row
-sets from the game's own simulator (honest shoppers vs attackers).
+The decisive measurement is on **game orders** — identical row sets from the game's own simulator
+(honest shoppers vs attackers), so it is a true head-to-head:
 
-| | Real fraud (device rows) | **Game orders — attacks caught** | Honest shoppers blocked |
-| --- | --- | --- | --- |
-| **`d/ml-online`** | AUC **0.92**, 65% recall @ 3.6% FPR | **92%** | 0.6% |
-| **`ML-alt`** | AUC 0.88, 58% recall @ 3.3% FPR (full pop) | **7%** | 3.2% |
+| | **Game orders — attacks caught** | Honest shoppers blocked |
+| --- | --- | --- |
+| **`d/ml-online`** | **92%** | 0.6% |
+| **`ML-alt`** | **7%** | 3.2% |
 
-The middle column is decisive. `ML-alt`'s heavy features (V-columns, UID history, target encoding)
+On real fraud both are in the same range (`d/ml-online` ~65% recall @ 3.6% FPR on the device
+segment; `ML-alt` ~58% @ 3.3% on all transactions), but those numbers are **not** directly
+comparable — they're measured on different populations and base rates, so neither AUC (0.92 vs
+0.88) is a fair head-to-head and we don't rely on it. The game-orders column is the one that
+decides, because it's the same rows through both models.
+
+The game-orders gap is decisive. `ML-alt`'s heavy features (V-columns, UID history, target encoding)
 **cannot be computed from a single game checkout**, so at serving time it is nearly blind to the
 choices players make (attacker score ≈ 0.12 vs honest ≈ 0.06 — almost no gap). `d/ml-online` shares
 its feature space with the game by design, so it separates them cleanly (0.99 vs 0.003). On real

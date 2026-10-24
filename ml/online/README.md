@@ -44,19 +44,19 @@ Then open `ml/online/report.html` (any static server, e.g. `python -m http.serve
 
 ## Setup
 
-From the repo root (Python 3.10+, Node for the simulators). Put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account).
+**A trained `v1` ships in the repo** (`models/v1.joblib`), so a fresh clone runs the real model — judging orders and powering the checkout's gut feeling — without the Kaggle download. You only need the dataset to **retrain** or rebuild from scratch.
+
+Run it (Python 3.10–3.14):
 
 ```bash
 python -m venv ml/.venv
-ml/.venv/Scripts/python -m pip install pandas numpy scikit-learn lightgbm joblib fastapi uvicorn pydantic python-dotenv redis
-ml/.venv/Scripts/python -m ml.online.train
-```
-
-Then run the server from the same environment, and the game with `?api=http://localhost:8000`:
-
-```bash
+ml/.venv/Scripts/python -m pip install -r ml/online/requirements.txt
 USE_STUBS=true ml/.venv/Scripts/python -m uvicorn server.main:app --port 8000
 ```
+
+Then serve the game and open it against the API (from `prototype/`, `python serve.py`, then `http://localhost:8765/?api=http://localhost:8000`).
+
+To **rebuild or retrain** the model, put the Kaggle files `train_transaction.csv` and `train_identity.csv` in `ml/online/data/` (git-ignored; the competition requires a Kaggle account), then `ml/.venv/Scripts/python -m ml.online.train`. Node is needed for the simulators (`simulate.js`).
 
 ## Tests
 

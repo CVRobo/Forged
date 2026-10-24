@@ -161,7 +161,7 @@
       <td>${f.closed_in ? `<span class="pill closed">fixed v${f.closed_in}</span>` : '<span class="pill open">open</span>'}</td>
     </tr>`).join("");
     $("attacks").innerHTML = `<table><thead><tr><th>Trick family</th><th class="num">Tried</th><th class="num">Got through</th><th class="num">Exposure</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="note">Top ${fams.length} of ${attacks.families.length} families by dollars that reached the player. "Fixed" means a later version catches at least 80% of that family.</div>`;
+      <div class="note">Top ${fams.length} of ${attacks.families.length} families by dollars that reached the player. "Fixed" means a later version catches at least 80% of that family. Catch rates include orders a version trained on, so read them as a descriptive view of which families exist, not held-out accuracy.</div>`;
   }
 })();
 </script>

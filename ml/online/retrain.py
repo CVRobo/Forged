@@ -28,10 +28,26 @@ from ml.online import train as T
 
 EVASION_WEIGHT = 3.0
 PLAYER_CAP = 300
-RECALL_SLACK = 0.02
+RECALL_FLOOR_DROP = 0.05  # no version may catch more than this fraction below v1's real-fraud recall
+RECALL_SLACK = 0.02       # fallback when v1's recall isn't on record
 FPR_LIMIT = M.TARGET_FPR + 0.01
 GAME_FPR_LIMIT = M.TARGET_FPR + 0.02
 MIN_HELD = 30  # held-out player orders needed to show a new version is better
+
+
+def _recall_floor(parent_recall: float) -> float:
+    """An absolute real-fraud-recall floor anchored to v1, so the floor can't ratchet down.
+
+    Each promotion makes `new` the next live version, so gating only against the immediate parent
+    let real-fraud recall drift down ~RECALL_SLACK every promotion. Anchoring to v1's recall keeps
+    a fixed floor no matter how many times the model is retrained on players.
+
+    Note: `held` player orders are split by session, not by player identity, so a returning player
+    can appear in both train and held — the player_catch check is session-level, mildly optimistic.
+    """
+    v1 = next((r for r in M.registry() if r.get("version") == 1), None)
+    base = (v1 or {}).get("test", {}).get("recall")
+    return base * (1 - RECALL_FLOOR_DROP) if base else parent_recall - RECALL_SLACK
 
 
 def _capped(df: pd.DataFrame) -> pd.DataFrame:
@@ -62,10 +78,14 @@ def retrain(players: pd.DataFrame | None = None, force: bool = False) -> dict:
     p = G.split(players)
     b = T.base()
 
-    # the blind spots: what got through (or what the live version would let through)
+    # the blind spots: the orders that actually got past Gus in the game (verdict APPROVED).
+    # Only these get the evasion up-weight — scoring against the strict real-shop line instead
+    # flagged almost every order and dragged real-fraud recall down over successive retrains.
     tr = _capped(p["train"])
-    got_through = tr["verdict"].eq("APPROVED") if "verdict" in tr else pd.Series(False, index=tr.index)
-    got_through |= pd.Series(live.scores(tr) < live.threshold, index=tr.index) if len(tr) else got_through
+    if "verdict" in tr:
+        got_through = tr["verdict"].eq("APPROVED")
+    else:  # no recorded verdict (e.g. a raw import): fall back to the live model's own call
+        got_through = pd.Series(live.scores(tr) < live.threshold, index=tr.index) if len(tr) else pd.Series([], dtype=bool)
     train = pd.concat([b["train"][k] for k in ("real", "honest", "sim")] + [tr], ignore_index=True)
     w = T.weights(b["train"], extra=len(tr))
     w[len(train) - len(tr):] = np.where(got_through.to_numpy(), EVASION_WEIGHT, 1.0)
@@ -74,10 +94,11 @@ def retrain(players: pd.DataFrame | None = None, force: bool = False) -> dict:
     new = M.Version((max(r["version"] for r in M.registry()) + 1), mdl, live.vocab, 0.0)
     T.calibrate(new, b["val"])
 
-    held = pd.concat([p["val"], p["test"]], ignore_index=True)  # player sessions neither version trained on
+    held = pd.concat([p["val"], p["test"]], ignore_index=True)  # held-out player sessions (see note on _recall_floor)
     old_m, new_m = T.evaluate(live, b["test"], held), T.evaluate(new, b["test"], held)
+    floor = _recall_floor(old_m["recall"])
     checks = {
-        "real_recall": new_m["recall"] >= old_m["recall"] - RECALL_SLACK,
+        "real_recall": new_m["recall"] >= floor,
         "real_fpr": new_m["fpr"] <= FPR_LIMIT,
         "game_fpr": new_m["game_fpr"] <= GAME_FPR_LIMIT,
         "player_catch": len(held) >= MIN_HELD and new_m.get("player_catch", 0) > old_m.get("player_catch", 0),

@@ -1,0 +1,22 @@
+[
+  {
+    "version": 1,
+    "promoted": true,
+    "created_at": 1792853924.7296262,
+    "threshold": 0.24343660438666775,
+    "trained_on": {
+      "real": 100963,
+      "honest": 7293,
+      "sim": 5435,
+      "player": 0
+    },
+    "test": {
+      "recall": 0.6475,
+      "fpr": 0.036,
+      "game_fpr": 0.0116,
+      "sim_catch": 0.9358
+    },
+    "learned": [],
+    "note": "v1: real transactions and simulated shoppers"
+  }
+]
