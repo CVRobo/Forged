@@ -993,7 +993,9 @@ addEventListener("keydown", e => {
 addEventListener("keyup", e => P.keys.delete(e.code));
 addEventListener("blur", () => P.keys.clear());
 
-canvas.addEventListener("click", () => { if (P.started && !P.seated && document.pointerLockElement !== canvas) canvas.requestPointerLock(); });
+// some browsers (and embedded previews) refuse pointer lock: that's fine, drag-to-look still works
+function lockMouse() { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+canvas.addEventListener("click", () => { if (P.started && !P.seated && document.pointerLockElement !== canvas) lockMouse(); });
 addEventListener("mousemove", e => {
   if (P.seated) return;
   if (document.pointerLockElement === canvas || e.buttons === 1) {
@@ -1022,7 +1024,7 @@ function setFirstPerson(on) {
 $("#btn-start").onclick = () => {
   $("#start").classList.add("hide"); P.started = true;
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) {}
-  canvas.requestPointerLock && canvas.requestPointerLock();
+  lockMouse();
   say(player, "Another day at the office…", 2500);
 };
 $("#btn-stand").onclick = stand;

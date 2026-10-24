@@ -33,7 +33,7 @@ body.seated #hud, body.seated #controls { opacity: 0; }
 #prompt { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 24px; font-weight: 700; z-index: 5; display: none; border: 3px solid #fff; box-shadow: 0 4px 0 rgba(0,0,0,.4); }
 #prompt.show { display: block; animation: pop .15s; }
 #prompt kbd { color: var(--ink); margin-right: 6px; }
-#controls { position: fixed; right: 16px; bottom: 16px; background: rgba(255,250,240,.9); border: 2px solid var(--ink); border-radius: 10px; padding: 6px 12px; font-size: 12px; z-index: 5; }
+#controls { position: fixed; right: 16px; bottom: 16px; max-width: calc(100vw - 260px); text-align: right; line-height: 1.9; background: rgba(255,250,240,.9); border: 2px solid var(--ink); border-radius: 10px; padding: 6px 12px; font-size: 12px; z-index: 5; }
 
 /* world speech bubbles */
 #bubbles { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
