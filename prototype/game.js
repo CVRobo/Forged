@@ -238,6 +238,75 @@ const TELL_LABELS = {
   vendor_type: "vendor category",
 };
 
+/* ======================= Dossier ======================= */
+
+const DOSSIER_ENTRIES = {
+  "heat-basics":     { icon: "🔥", title: "Heat",              text: "Every risky edit and repeated scheme raises your heat bar. Above 40 % the inspector gets a free suspicion bonus on every invoice. Heat decays 40 % between rounds, so one bad round won't ruin you — but two in a row will." },
+  "version-bump":    { icon: "🧠", title: "Inspector Learning", text: "Every time you're caught (or even succeed sloppily), the inspector is retrained. His version number goes up, and he gets better at spotting the tells that tripped you. Vary your tricks." },
+  "memo-deduction":  { icon: "📝", title: "Memo Rules",        text: "Two of the three memo rules are real — the inspector actually watches for those. The third is a decoy. Mark them as you learn which is fake so you can break the fake rule safely." },
+  "shop-intro":      { icon: "🛒", title: "The Shop",          text: "Between rounds you can buy perks (passive bonuses, max 3) and unlocks (new tools or one-shot intel). The Dossier unlock reveals which memo rule is the decoy for one round." },
+  "bank-account":    { icon: "✂️", title: "Route the Money",   text: "If the bank field still points at the real vendor, your payout is zero and the invoice won't send. Always use scissors to tape in one of your accounts." },
+  "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. If he walks behind your desk while you're forging, press Space to hide the invoice under a newspaper — or take +15 heat. In the 3D office, his vision cone can catch you carrying the envelope." },
+  "tells-explained": { icon: "🔍", title: "Detector Tells",    text: "The inspector checks specific fields: bank, domain, amount, stamps, PO, scan quality. Each tool you use creates or hides tells. Press D to see the detector's view and plan your edits." },
+  "streak-bonus":    { icon: "🔥", title: "Scheme Streaks",    text: "Using the same scheme twice in a row adds a USED warning and extra heat. But succeeding with different schemes in a row builds a streak. Streaks don't pay more — they just prove you're versatile." },
+  "copy-quality":    { icon: "🖨️", title: "Copy Quality",      text: "Running the copier flattens whiteout and tape so edits are less visible, but each copy generation lowers scan quality. Generation 2+ is detectable. The Copy Machine Whisperer perk removes the quality penalty." },
+  "persuasion":      { icon: "😎", title: "Clerk Persuasion",  text: "The clerk has a quirk (shown in the window header). Work their keywords into a short note for the best score. High persuasion lowers the inspector's suspicion, so it's worth the effort." },
+};
+
+const DOSSIER_STORAGE = "forged-dossier";
+const DOSSIER_SEEN_STORAGE = "forged-dossier-seen";
+let dossierUnlocked = (() => { try { return new Set(JSON.parse(localStorage.getItem(DOSSIER_STORAGE)) || []); } catch { return new Set(); } })();
+let dossierSeen = (() => { try { return new Set(JSON.parse(localStorage.getItem(DOSSIER_SEEN_STORAGE)) || []); } catch { return new Set(); } })();
+
+function saveDossier() { try { localStorage.setItem(DOSSIER_STORAGE, JSON.stringify([...dossierUnlocked])); } catch {} }
+function saveDossierSeen() { try { localStorage.setItem(DOSSIER_SEEN_STORAGE, JSON.stringify([...dossierSeen])); } catch {} }
+
+function unlockDossierEntry(id) {
+  if (!DOSSIER_ENTRIES[id] || dossierUnlocked.has(id)) return false;
+  dossierUnlocked.add(id); saveDossier();
+  updateDossierBadge();
+  toast(`📂 New dossier entry: ${DOSSIER_ENTRIES[id].title}`, "dossier");
+  return true;
+}
+
+function updateDossierBadge() {
+  const btn = $("#btn-dossier");
+  if (!btn) return;
+  const unseen = [...dossierUnlocked].filter(id => !dossierSeen.has(id)).length;
+  let badge = $(".dossier-badge", btn);
+  if (unseen > 0) {
+    if (!badge) { badge = document.createElement("span"); badge.className = "dossier-badge"; btn.appendChild(badge); }
+    badge.textContent = unseen;
+  } else if (badge) badge.remove();
+}
+
+function renderDossier() {
+  const panel = $("#dossier-entries");
+  if (!panel) return;
+  // mark all unlocked as seen
+  dossierUnlocked.forEach(id => dossierSeen.add(id));
+  saveDossierSeen(); updateDossierBadge();
+  const total = Object.keys(DOSSIER_ENTRIES).length;
+  const locked = total - dossierUnlocked.size;
+  panel.innerHTML = Object.entries(DOSSIER_ENTRIES).map(([id, e]) => {
+    if (dossierUnlocked.has(id)) return `<div class="dossier-entry"><span class="dossier-icon">${e.icon}</span><div><b>${e.title}</b><p>${e.text}</p></div></div>`;
+    return `<div class="dossier-entry dossier-locked"><span class="dossier-icon">❓</span><div><b>???</b><p>Play more to discover this entry.</p></div></div>`;
+  }).join("") + (locked > 0 ? `<div class="dossier-footer">${locked} more to discover</div>` : `<div class="dossier-footer">All entries unlocked!</div>`);
+}
+
+/* ======================= Progressive Tips ======================= */
+
+const TIPS_STORAGE = "forged-tips-seen";
+let tipsSeen = (() => { try { return new Set(JSON.parse(localStorage.getItem(TIPS_STORAGE)) || []); } catch { return new Set(); } })();
+function saveTips() { try { localStorage.setItem(TIPS_STORAGE, JSON.stringify([...tipsSeen])); } catch {} }
+
+function showTip(id, text, dossierEntryId) {
+  if (tipsSeen.has(id)) return;
+  tipsSeen.add(id); saveTips();
+  toast(text, "tip");
+  if (dossierEntryId) unlockDossierEntry(dossierEntryId);
+}
+
 /* ======================= State ======================= */
 
 const S = {
@@ -441,6 +510,7 @@ function renderMemo() {
     const m = S.memo[li.dataset.i];
     m.mark = m.mark === null ? "real" : m.mark === "real" ? "fake" : null;
     sfx("pen"); renderMemo();
+    showTip("first-memo-mark", "📝 One memo rule is fake — figure out which to break it safely.", "memo-deduction");
   });
 }
 
@@ -488,7 +558,8 @@ function showBriefing() {
     }
   });
   overlay("briefing");
-  if (!tutorialDone() && S.round === 1) setTimeout(() => startTutorial(0), 350);
+  if (!guidedDone() && S.round === 1 && EMBED) setTimeout(() => startGuided(), 350);
+  else if (!tutorialDone() && S.round === 1) setTimeout(() => startTutorial(0), 350);
 }
 
 /* hover tips for a scheme the player hasn't used yet */
@@ -542,6 +613,7 @@ function beginForge(schemeId) {
   updateHud();
   post("phase", { phase: "forging" });
   if (tut.on && TUTORIAL[tut.i].wait === "scheme") setTimeout(() => { tut.i++; showTutStep(); }, 350);
+  guideCheck("scheme-picked");
 }
 
 function renderInvoice() {
@@ -665,6 +737,7 @@ function spend(id, heat) {
   addHeat(heat);
   dropTool();
   updateHud();
+  guideCheck("edit");
 }
 
 document.addEventListener("pointermove", e => {
@@ -705,6 +778,8 @@ $("#invoice").addEventListener("click", e => {
     if (!field || field.dataset.field !== "bank") { toast("Cut along the bank details box"); return; }
     openPopover(e, "Tape in a new account", ATTACKER_ACCOUNTS.map(a => ({ label: a.label, sub: a.note, act: () => {
       S.inv.bank = a.id; S.altered.add("bank"); sfx("snip"); spend("scissors", 8); renderInvoice();
+      showTip("first-bank", "✂️ Money routed to your account. Always do this or payout is zero!", "bank-account");
+      guideCheck("bank-edited");
     } })));
   }
   else if (S.tool === "pen") {
@@ -766,6 +841,7 @@ function useCopier() {
     addHeat(S.perks.includes("copy") ? 2 : 5 * S.copyGen);
     renderInvoice(); renderTools(); updateHud();
     toast(`Copy generation ${S.copyGen} — scan quality ${Math.round(scanQuality() * 100)}%`);
+    if (S.copyGen === 1) showTip("first-copy", "🖨️ Copies hide edits but lower quality. Generation 2+ is detectable.", "copy-quality");
   }, 450);
 }
 const scanQuality = () => S.perks.includes("copy") ? 1 : clamp(1 - .22 * S.copyGen, 0, 1);
@@ -774,8 +850,10 @@ const scanQuality = () => S.perks.includes("copy") ? 1 : clamp(1 - .22 * S.copyG
 
 function addHeat(n) {
   if (S.perks.includes("night")) n *= 1.3;
+  const wasBelowThreshold = S.heat < 50;
   S.heat = clamp(S.heat + n, 0, 100);
   updateHud();
+  if (wasBelowThreshold && S.heat >= 50) showTip("first-heat-50", "🔥 Heat is above 50% — the inspector gets a suspicion bonus!", "heat-basics");
 }
 
 function updateHud() {
@@ -903,6 +981,8 @@ $("#chat-form").addEventListener("submit", async e => {
   $("#persuade-fill").style.width = S.persuasion + "%";
   clerkSay(res.reply);
   S.clerkReplies = (S.clerkReplies || 0) + 1;
+  showTip("first-persuade", "😎 Persuasion lowers the inspector's suspicion. Match the clerk's quirk!", "persuasion");
+  guideCheck("clerk-sent");
   updateDebug();
 });
 
@@ -958,8 +1038,10 @@ function trySubmit() {
     sfx("chunk"); toast("🖨️ Printing… grab it at the printer and drop it in the inspector's tray", "good");
     $("#envelope").classList.add("printed");
     post("print");
+    guideCheck("submitted");
     return;
   }
+  guideCheck("submitted");
   submit();
 }
 
@@ -967,11 +1049,12 @@ window.addEventListener("message", e => {
   const m = e.data;
   if (!m || m.src !== "forged-world") return;
   if (m.type === "deliver" && S.printed && !S.delivered) { S.delivered = true; submit(); }
-  if (m.type === "boss-near") bossWalk();
+  if (m.type === "boss-near") { bossWalk(); showTip("first-boss", "🕴️ The boss! Press Space to hide the invoice!", "boss-patrol"); }
   if (m.type === "heat" && Number.isFinite(+m.amount)) addHeat(+m.amount);
   if (m.type === "paused") setPaused(!!m.on);
   if (m.type === "quit") quitToTitle();
   if (m.type === "tour") replayTour();
+  if (m.type === "tutorial-3d-done") advanceGuideOn3D(m.step);
 });
 
 /* ======================= Inspection (MOCK verdict) ======================= */
@@ -1076,7 +1159,9 @@ async function submit() {
   $("#inspect-line").classList.add("show");
   if (caught) {
     sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
-    S.streak = 0; S.caughtCount++; addHeat(12);
+    S.streak = 0; S.caughtCount++;
+    if (S.caughtCount === 1) showTip("first-caught", "🔍 Caught! Press D to see what the inspector spotted.", "tells-explained");
+    addHeat(12);
   } else {
     S.money += payout; S.streak++;
     $("#cash-pop").textContent = "+" + money(payout); $("#cash-pop").classList.add("show");
@@ -1089,6 +1174,7 @@ async function submit() {
   tells.slice(0, 2).forEach(t => t[2] && $(`#invoice [data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
   $("#invoice").classList.toggle("forensic", caught);
   updateHud();
+  guideCheck("verdict-done");
 }
 
 $("#btn-after-inspect").onclick = () => { sfx("click"); overlay("inspect", false); showCorkboard(); };
@@ -1106,7 +1192,8 @@ function showCorkboard() {
   renderInspector(); updateHud();
   if (S.version > oldV) {
     S.patches++;
-    if (r.tells.length) S.shame.push({ version: S.version, trick: SCHEMES[S.scheme].name,
+    showTip("first-version-bump", "🧠 The inspector leveled up — he learned from your trick!", "version-bump");
+    if (r.tells.length) S.shame.push({ player: playerName(), version: S.version, trick: SCHEMES[S.scheme].name,
       learned: tellLabel(r.tells[0][0]), amount: S.inv.amount, round: S.round });
   }
   const top = r.tells.slice(0, 3);
@@ -1144,7 +1231,7 @@ function showBetween() {
     : [`<li>No new tricks learned. <b>Clean job.</b></li>`];
   const st = stageFor(S.version);
   if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b></li>`);
-  if (S.streak >= 2) items.push(`<li>🔥 Streak ×${S.streak} — vary your schemes to keep it.</li>`);
+  if (S.streak >= 2) { items.push(`<li>🔥 Streak ×${S.streak} — vary your schemes to keep it.</li>`); showTip("first-streak", "🔥 Streak! Different schemes in a row. Keep varying!", "streak-bonus"); }
   $("#patch-list").innerHTML = items.join("");
   loadPatchNotes(S.prevVersion, items.slice(learned.length ? learned.length : 1));
   const caught = S.history.filter(h => h.caught).length;
@@ -1158,6 +1245,7 @@ function showBetween() {
   renderShop();
   messUpDesk();
   overlay("between");
+  if (S.round === 1) showTip("first-shop", "🛒 Spend your earnings in the shop — perks and unlocks carry across rounds.", "shop-intro");
 }
 
 /* GET /patch-notes?since=v: what each new version learned. Replaces the mock
@@ -1226,7 +1314,150 @@ function quitToTitle() {
 }
 $("#btn-quit").onclick = () => { sfx("click"); quitToTitle(); };
 
-/* ======================= Guided tutorial =======================
+/* ======================= Guided first round =======================
+ * Walks the player through a full scheme → forge → clerk → submit → print →
+ * deliver → verdict loop, with spotlight hints on the desk and green arrows
+ * in the 3D world. Replaces the auto-start of the old 12-step UI tour for
+ * round 1. The old tour remains accessible via the "Tutorial" button. */
+
+const GUIDE_KEY = "forged-guided-done";
+const GUIDE = { on: false, step: 0, waitingFor3D: null };
+
+const GUIDE_STEPS = [
+  { id: "sit",       world: true,  label: "Go to your desk",      instr: "Walk to your desk and press E to sit down." },
+  { id: "scheme",    instr: "Read the memo and case file, then pick a scheme.",
+    spotlight: ["#scheme-cards"] },
+  { id: "edit-bank", instr: "Use scissors on the bank field to route money to your account.",
+    spotlight: [".tool[data-tool=scissors]"] },
+  { id: "edit-tool", instr: "Use one more tool — you need at least 2 edits to send.",
+    spotlight: ["#tools"] },
+  { id: "clerk",     instr: "Send a short note to the clerk. Match their quirk!",
+    spotlight: ["#win-clerk"], skippable: true },
+  { id: "submit",    instr: EMBED ? "Drag the envelope onto PRINT to send your invoice." : "Drag the envelope into the OUTBOX.",
+    spotlight: ["#envelope"] },
+  { id: "pickup",    world: true,  label: "Grab at printer",      instr: "Walk to the printer and press E to grab it." },
+  { id: "deliver",   world: true,  label: "Drop in IN tray",      instr: "Carry it to the inspector's IN tray and press E." },
+  { id: "verdict",   instr: "The inspector is reading your invoice..." },
+  { id: "done",      instr: "Tutorial complete! You're ready to forge on your own.", auto: true },
+];
+
+function guidedDone() { try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; } }
+
+function startGuided() {
+  GUIDE.on = true; GUIDE.step = 0; GUIDE.waitingFor3D = null;
+  post("tutorial-active", { on: true });
+  renderGuideCard();
+  advanceGuidePhase();
+}
+
+function advanceGuidePhase() {
+  const step = GUIDE_STEPS[GUIDE.step];
+  if (!step) return endGuided();
+  if (step.world) {
+    post("tutorial-phase", { phase: step.id, label: step.label || "" });
+    GUIDE.waitingFor3D = step.id;
+  }
+}
+
+function advanceGuide() {
+  if (!GUIDE.on) return;
+  GUIDE.step++;
+  if (GUIDE.step >= GUIDE_STEPS.length) return endGuided();
+  GUIDE.waitingFor3D = null;
+  renderGuideCard();
+  advanceGuidePhase();
+  // auto-advance steps that don't wait
+  const step = GUIDE_STEPS[GUIDE.step];
+  if (step.auto) setTimeout(() => endGuided(), 2000);
+}
+
+function advanceGuideOn3D(worldStep) {
+  if (!GUIDE.on) return;
+  const step = GUIDE_STEPS[GUIDE.step];
+  if (!step || !step.world) return;
+  // Map world step names to guide step ids
+  if (worldStep === "sat" && step.id === "sit") advanceGuide();
+  else if (worldStep === "grabbed" && step.id === "pickup") advanceGuide();
+  else if (worldStep === "delivered" && step.id === "deliver") advanceGuide();
+}
+
+function endGuided() {
+  GUIDE.on = false; GUIDE.waitingFor3D = null;
+  post("tutorial-active", { on: false });
+  try { localStorage.setItem(GUIDE_KEY, "1"); } catch {}
+  // Clean up the guide card
+  const card = $(".guide-card");
+  if (card) card.remove();
+  toast("Tutorial complete — good luck, forger!", "good");
+}
+
+function renderGuideCard() {
+  const step = GUIDE_STEPS[GUIDE.step];
+  if (!step) return;
+  let card = $(".guide-card");
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "guide-card";
+    stage.appendChild(card);
+  }
+  const spotlight = step.spotlight || [];
+  const skipBtn = step.skippable ? `<button class="btn btn-ghost btn-small guide-skip">Skip →</button>` : "";
+  card.innerHTML = `<div class="guide-step">GUIDED TUTORIAL · STEP ${GUIDE.step + 1}/${GUIDE_STEPS.length}</div>
+    <p class="guide-instr">${step.instr}</p>${skipBtn}`;
+  card.style.display = step.world && EMBED ? "none" : "";
+  // Position the card
+  if (spotlight.length) {
+    const r = tutRect(spotlight);
+    if (r) {
+      card.style.left = Math.min(r.x + r.w + 20, 1100) + "px";
+      card.style.top = Math.max(r.y, 80) + "px";
+    }
+  } else {
+    card.style.left = "550px"; card.style.top = "30px";
+  }
+  // Skip button
+  const skipEl = $(".guide-skip", card);
+  if (skipEl) skipEl.onclick = () => { sfx("click"); advanceGuide(); };
+}
+
+// Hook: advance guide when specific game events happen
+function guideCheck(event, data) {
+  if (!GUIDE.on) return;
+  const step = GUIDE_STEPS[GUIDE.step];
+  if (!step) return;
+  switch (step.id) {
+    case "scheme": if (event === "scheme-picked") advanceGuide(); break;
+    case "edit-bank": if (event === "bank-edited") advanceGuide(); break;
+    case "edit-tool": if (event === "edit" && S.edits >= 2) advanceGuide(); break;
+    case "clerk": if (event === "clerk-sent") advanceGuide(); break;
+    case "submit": if (event === "submitted") advanceGuide(); break;
+    case "verdict": if (event === "verdict-done") handleGuidedVerdict(); break;
+  }
+}
+
+function handleGuidedVerdict() {
+  if (!GUIDE.on) return;
+  const r = S.lastResult;
+  if (r && r.caught) {
+    // Special card for caught during tutorial
+    const card = $(".guide-card");
+    if (card) {
+      const tells = r.tells.slice(0, 2).map(t => tellLabel(t[0])).join(", ");
+      card.style.display = "";
+      card.style.left = "400px"; card.style.top = "200px";
+      card.innerHTML = `<div class="guide-step">CAUGHT!</div>
+        <p class="guide-instr">The inspector noticed: <b>${tells || "something suspicious"}</b>.<br>That's okay — every failure is a lesson.</p>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn btn-small" id="guide-continue">Continue anyway</button>
+        </div>`;
+      $("#guide-continue").onclick = () => { sfx("click"); advanceGuide(); };
+    }
+  } else {
+    advanceGuide();
+  }
+}
+
+/* ======================= Guided tutorial (12-step UI tour) =======================
  * Dims the screen, cuts a hole around one part, and points at it with an
  * arrow and a card. Runs once per browser (the first scheme pick), and any
  * time from Game Menu → Tutorial. */
@@ -1437,6 +1668,7 @@ function messUpDesk() {
 function scheduleBoss() {
   clearTimeout(S.bossTimer);
   if (EMBED) return; // in the office the boss is a real NPC on patrol
+  if (GUIDE.on) return; // skip boss during guided tutorial
   if (Math.random() < .35 && S.round > 1 || S.round === 2) {
     S.bossTimer = setTimeout(bossWalk, rand(9000, 20000));
   }
@@ -1448,8 +1680,8 @@ function tutBossDrill(delay = 1800) {
 }
 function bossWalk(practice = false) {
   if (S.paused && !practice) { S.bossTimer = setTimeout(bossWalk, 4000); return; }
-  if (!practice && (S.submitted || tut.on || !$("#screen-desk").classList.contains("active") || $(".overlay.show"))) {
-    if (tut.on && !S.submitted) S.bossTimer = setTimeout(bossWalk, 8000); // try again after the tour
+  if (!practice && (S.submitted || tut.on || GUIDE.on || !$("#screen-desk").classList.contains("active") || $(".overlay.show"))) {
+    if ((tut.on || GUIDE.on) && !S.submitted) S.bossTimer = setTimeout(bossWalk, 8000); // try again after the tour
     return;
   }
   sfx("steps");
@@ -1504,6 +1736,8 @@ function updateDebug() { if ($("#debug-panel").classList.contains("show")) $("#d
 function toggleDebug() { $("#debug-panel").classList.toggle("show"); updateDebug(); }
 const paintDebugKey = () => { $("#debug-key").textContent = ForgedKeys.label("detector"); };
 paintDebugKey(); ForgedKeys.onChange(paintDebugKey);
+if ($("#btn-debug")) $("#btn-debug").onclick = () => { sfx("click"); toggleDebug(); };
+if ($("#btn-dossier")) $("#btn-dossier").onclick = () => { sfx("click"); renderDossier(); overlay("dossier"); };
 
 /* ======================= Pause & Game Menu =======================
  * Esc opens the Game Menu (menu.js). Inside the office the office page owns the

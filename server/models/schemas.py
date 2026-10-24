@@ -37,6 +37,7 @@ class Tell(BaseModel):
     tell_type: str
     strength: float
     region: str | None = None
+    description: str | None = None
 
 
 class InvoiceRecord(BaseModel):
@@ -74,6 +75,7 @@ class RoundStartRequest(BaseModel):
 
 class RoundStartResponse(BaseModel):
     round_id: str
+    session_id: str
     memo: list[MemoRule]
     inspector_version: int
     case_file: CaseFile

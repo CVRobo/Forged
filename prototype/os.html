@@ -129,6 +129,7 @@
       <div class="dock-label">TOOLBOX<span id="edits-left">Edits 0/4</span></div>
       <div id="tools"></div>
       <div class="dock-sep"></div>
+      <button class="btn btn-ghost btn-small" id="btn-dossier" title="Your collected intel">📂 Dossier</button>
       <div id="envelope" title="Drag me into the outbox"><div class="env-flap"></div><span class="env-label">DRAG TO OUTBOX</span></div>
     </footer>
 
@@ -231,6 +232,16 @@
         <button class="btn btn-ghost" data-menu="board">🏆 Leaderboard</button>
         <button class="btn btn-big" id="btn-next-round">Next round →</button>
       </div>
+    </div>
+  </div>
+
+  <div id="overlay-dossier" class="overlay">
+    <div class="modal dossier-modal">
+      <div class="modal-kicker">DOSSIER</div>
+      <h2>Collected Intel</h2>
+      <p class="modal-sub">Tips and tricks you've discovered while forging.</p>
+      <div id="dossier-entries" class="dossier-list"></div>
+      <div class="between-foot"><button class="btn btn-big" data-close>Close</button></div>
     </div>
   </div>
 

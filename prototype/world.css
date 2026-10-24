@@ -92,6 +92,14 @@ body.seated #hud, body.seated #controls { opacity: 0; }
 body.fp::after { content: ""; position: fixed; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #fff; border: 2px solid var(--ink); z-index: 6; pointer-events: none; }
 body.fp.seated::after { display: none; }
 
+/* minimap */
+#minimap { position: fixed; right: 16px; bottom: 54px; width: 200px; height: 138px; border: 3px solid var(--ink); border-radius: 10px; box-shadow: 4px 4px 0 var(--ink); z-index: 5; background: rgba(30,20,14,.85); }
+body.seated #minimap { opacity: 0; pointer-events: none; }
+#minimap { transition: opacity .3s; }
+
+/* green tutorial arrow CSS animation */
+@keyframes tutArrowBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
 /* red edges: pulses with the boss's suspicion, flashes on FLAGGED */
 #vignette { --sus: 0; position: fixed; inset: 0; pointer-events: none; z-index: 3; box-shadow: inset 0 0 180px 60px rgba(224,53,43,.85); opacity: calc(var(--sus) * .8); }
 #vignette.flash { animation: vflash 1.1s ease-out; }
