@@ -25,8 +25,8 @@ const held = action => K.get(action).some(c => c && P.keys.has(c));
 /* ======================= Palettes (match style.css levels) ======================= */
 
 const PALETTES = {
-  1: { floor: "#e8b77a", floor2: "#dba66a", wall: "#fff1d6", accent: "#1f8a8a", accent2: "#f4a63a", bg: "#2a1d14" },
-  2: { floor: "#e3f4ee", floor2: "#cfe9e0", wall: "#f7fbff", accent: "#2f6fd6", accent2: "#14a37f", bg: "#10202a" },
+  1: { floor: "#e8b77a", floor2: "#dba66a", carpet: "#9a8470", wall: "#fff1d6", accent: "#1f8a8a", accent2: "#f4a63a", bg: "#2a1d14" },
+  2: { floor: "#e3f4ee", floor2: "#cfe9e0", carpet: "#7f93a3", wall: "#f7fbff", accent: "#2f6fd6", accent2: "#14a37f", bg: "#10202a" },
 };
 
 /* ======================= Renderer / scene ======================= */
@@ -112,10 +112,69 @@ function redraw(tex, draw = tex.cv.draw) {
 /* ======================= Room ======================= */
 
 let pal = PALETTES[1];
-const floorTex = canvasTex(256, 256, (g, w, h) => {
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { g.fillStyle = (i + j) % 2 ? pal.floor : pal.floor2; g.fillRect(i * 64, j * 64, 64, 64); }
-});
-floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(RW / 4, RD / 4);
+
+/* ---- floor finishes, drawn on canvases (no image files). A seeded random keeps
+ * every redraw identical, so a level change doesn't reshuffle the pattern. ---- */
+function seeded(seed) { return () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function flecks(g, r, x, y, w, h, n, base) {
+  for (let k = 0; k < n; k++) {
+    g.fillStyle = r() < .5 ? shade(base, -.1 - r() * .08) : shade(base, .08 + r() * .08);
+    g.globalAlpha = .35 + r() * .35;
+    g.fillRect(x + r() * w, y + r() * h, 1 + r() * 1.5, 1 + r() * 1.5);
+  }
+  g.globalAlpha = 1;
+}
+// carpet tiles: 4 × 4 squares per canvas, every other one turned so the grain alternates, soft flecks, faint seams
+const FINISH = {
+  carpet: { size: 2.4, draw: (base, seed) => (g, w) => {
+    const r = seeded(seed), n = 4, t = w / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const x = i * t, y = j * t, c = shade(base, (r() - .5) * .035);
+      g.fillStyle = c; g.fillRect(x, y, t, t);
+      g.strokeStyle = shade(c, -.06); g.globalAlpha = .5; g.lineWidth = 1;
+      for (let k = 2; k < t; k += 3) { g.beginPath(); (i + j) % 2 ? (g.moveTo(x, y + k), g.lineTo(x + t, y + k)) : (g.moveTo(x + k, y), g.lineTo(x + k, y + t)); g.stroke(); }
+      g.globalAlpha = 1;
+      flecks(g, r, x, y, t, t, 260, c);
+      g.strokeStyle = shade(base, -.14); g.globalAlpha = .55; g.strokeRect(x + .5, y + .5, t - 1, t - 1); g.globalAlpha = 1;
+    }
+  } },
+  // wood planks: staggered boards with grain and dark gaps
+  wood: { size: 4, draw: ([c1, c2], seed) => (g, w, h) => {
+    const r = seeded(seed), rowH = w / 16;
+    for (let row = 0; row < 16; row++) {
+      let x = -r() * 200;
+      while (x < w) {
+        const len = 120 + r() * 160, c = shade(r() < .5 ? c1 : c2, (r() - .5) * .06), y = row * rowH;
+        g.fillStyle = c; g.fillRect(x, y, len, rowH);
+        g.strokeStyle = shade(c, -.07); g.lineWidth = 1;
+        for (let k = 0; k < 4; k++) { const gy = y + 3 + r() * (rowH - 6); g.beginPath(); g.moveTo(x, gy); g.bezierCurveTo(x + len * .3, gy + r() * 4 - 2, x + len * .7, gy + r() * 4 - 2, x + len, gy); g.globalAlpha = .45; g.stroke(); }
+        g.globalAlpha = 1; g.fillStyle = shade(c1, -.18); g.fillRect(x, y, 2, rowH);
+        x += len;
+      }
+      g.fillStyle = shade(c1, -.2); g.fillRect(0, row * rowH, w, 1.5);
+    }
+  } },
+  // speckled vinyl tiles: one main colour, an occasional accent tile, flecks, thin grout lines
+  vinyl: { size: 3.6, draw: ([c1, c2], seed) => (g, w) => {
+    const r = seeded(seed), n = 12, t = w / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const c = shade(r() < .14 ? c2 : c1, (r() - .5) * .03), x = i * t, y = j * t;
+      g.fillStyle = c; g.fillRect(x, y, t, t);
+      flecks(g, r, x, y, t, t, 40, c);
+      g.fillStyle = shade(c1, -.12); g.fillRect(x, y, t, 1); g.fillRect(x, y, 1, t);
+    }
+  } },
+};
+function finishTex(style, colors, seed, w, d) {
+  const f = FINISH[style];
+  const tex = canvasTex(512, 512, f.draw(colors, seed));
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(w / f.size, d / f.size);
+  return tex;
+}
+
+// main office: carpet tiles in the level's colour (redrawn when the level changes)
+const floorTex = finishTex("carpet", pal.carpet, 7, RW, RD);
+floorTex.cv.draw = (g, w, h) => FINISH.carpet.draw(pal.carpet || "#9a8470", 7)(g, w, h);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), M("#fff", { map: floorTex }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
@@ -128,16 +187,37 @@ ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 3.2; scene.add(ceiling);
  * this works for any number of rooms. */
 const walls = [];
 const WALL_H = 3.2;
+const RAIL_Y = 1.0; // chair rail height
+// two-tone paint: the lower part (below the chair rail) is a shade darker. Grey values tint the wall colour.
+const WALL_TEX = canvasTex(4, 128, (g, w, h) => {
+  const cut = h - Math.round(h * RAIL_Y / WALL_H);
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, w, cut);
+  g.fillStyle = "#b8a690"; g.fillRect(0, cut, w, h - cut);
+});
+const RAIL_MAT_COLOR = "#8a5a35", BASE_MAT_COLOR = "#3a2c22";
+// set how see-through a wall is (it fades when it stands between the camera and you), trim included
+function fadeWall(w, op) { (w.mats || [w.mat]).forEach(m => { m.opacity = op; m.depthWrite = op > .5; }); }
 function wallRun(axis, fixed, from, to, doors = [], { thick = .3, color } = {}) {
   // axis "x": runs along x at z = fixed;  axis "z": runs along z at x = fixed
   const seg = (a, b, y, h, solid) => {
     const len = b - a, mid = (a + b) / 2;
-    const mat = M(color || pal.wall, { transparent: true });
-    if (!color) mats.wall.push(mat);
+    const full = solid && h >= WALL_H - .01; // lintels over doors stay one colour
+    const mat = M(color || pal.wall, { transparent: true, map: full ? WALL_TEX : null });
+    const cap = M(color || pal.wall, { transparent: true }); // the top edge seen from above: plain paint
+    if (!color) mats.wall.push(mat, cap);
     const m = axis === "x" ? box(len, h, thick, mat, mid, y, fixed) : box(thick, h, len, mat, fixed, y, mid);
+    m.material = [mat, mat, cap, cap, mat, mat]; // box faces: ±x, ±y (top/bottom), ±z
     m.castShadow = false;
     if (solid) axis === "x" ? collide(mid, fixed, len, thick) : collide(fixed, mid, thick, len);
-    walls.push({ m, mat, axis, fixed, a, b });
+    const fade = [mat, cap];
+    if (full) { // wooden chair rail and dark baseboard, on both faces of the wall
+      const rail = M(RAIL_MAT_COLOR, { transparent: true }), base = M(BASE_MAT_COLOR, { transparent: true });
+      const trim = (hgt, dep, ty, tm) => { const t = axis === "x" ? box(len, hgt, thick + dep, tm, mid, ty, fixed) : box(thick + dep, hgt, len, tm, fixed, ty, mid); t.castShadow = false; };
+      trim(.07, .07, RAIL_Y, rail);
+      trim(.16, .05, .08, base);
+      fade.push(rail, base);
+    }
+    walls.push({ m, mat, mats: fade, axis, fixed, a, b });
   };
   let start = from;
   doors.slice().sort((p, q) => p.at - q.at).forEach(d => {
@@ -167,15 +247,18 @@ wallRun("x", -RD / 2, -RW / 2, RW / 2);
 wallRun("x", RD / 2, -RW / 2, RW / 2, [DOORS.south]);
 wallRun("z", -RW / 2, -RD / 2, RD / 2, [DOORS.west]);
 wallRun("z", RW / 2, -RD / 2, RD / 2, [DOORS.east]);
-// skirting stripe
-[[RW, .32, 0, -RD / 2 + .01]].forEach(a => box(a[0], .25, a[1], mats.accent, a[2], .12, a[3]));
 
 /* A room next to the main office: checker floor, ceiling and walls. Skip the
  * side it shares with the main office (that wall already has the doorway). */
-function room({ x0, x1, z0, z1, floor = ["#d8c8a8", "#c9b894"], wallColor, skip = [], doors = {} }) {
+// floorStyle: "carpet", "wood" or "vinyl" (floor colours feed it); no style keeps the old checkerboard
+function room({ x0, x1, z0, z1, floor = ["#d8c8a8", "#c9b894"], floorStyle, wallColor, skip = [], doors = {} }) {
   const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-  const tex = canvasTex(256, 256, (g) => { for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { g.fillStyle = floor[(i + j) % 2]; g.fillRect(i * 64, j * 64, 64, 64); } });
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(w / 4, d / 4);
+  let tex;
+  if (FINISH[floorStyle]) tex = finishTex(floorStyle, floorStyle === "carpet" ? floor[0] : floor, Math.round(x0 * 31 + z0 * 17), w, d);
+  else {
+    tex = canvasTex(256, 256, (g) => { for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { g.fillStyle = floor[(i + j) % 2]; g.fillRect(i * 64, j * 64, 64, 64); } });
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(w / 4, d / 4);
+  }
   const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), M("#fff", { map: tex }));
   f.rotation.x = -Math.PI / 2; f.position.set(cx, .005, cz); f.receiveShadow = true; scene.add(f);
   const c = new THREE.Mesh(new THREE.PlaneGeometry(w, d), M("#f3ead8"));
@@ -1626,8 +1709,8 @@ ForgedMenu.init({
     if (document.pointerLockElement) document.exitPointerLock();
     $("#start").classList.remove("hide");
   },
-  canTour: () => P.seated && P.phase === "forging",
-  onTour: () => toOS("tour"),
+  canDossier: () => P.seated, // the Dossier lives on the computer
+  onDossier: () => toOS("dossier"),
   getStats: () => P.hud ? { money: P.hud.money, patches: P.hud.patches || 0, shame: P.hud.shame || [], round: P.hud.round } : null,
 });
 
@@ -1751,7 +1834,7 @@ function updateCamera(dt) {
     camera.position.lerp(CINE_CAM, Math.min(1, dt * 5));
     if (P.shake > 0) { P.shake -= dt; camera.position.x += rand(-.06, .06); camera.position.y += rand(-.05, .05); }
     camera.lookAt(CINE_LOOK);
-    walls.forEach(w => { w.mat.opacity = 1; w.mat.depthWrite = true; });
+    walls.forEach(w => fadeWall(w, 1));
     return;
   }
   if (P.seated) {
@@ -1765,7 +1848,7 @@ function updateCamera(dt) {
     if (P.shake > 0) { P.shake -= dt; camera.position.x += rand(-.05, .05); camera.position.y += rand(-.04, .04); }
     const c = Math.cos(P.pitch);
     camera.lookAt(camera.position.x - Math.sin(P.yaw) * c, camera.position.y - Math.sin(P.pitch), camera.position.z - Math.cos(P.yaw) * c);
-    walls.forEach(w => { w.mat.opacity = 1; w.mat.depthWrite = true; });
+    walls.forEach(w => fadeWall(w, 1));
     return;
   }
   const t = player.g.position;
@@ -1774,7 +1857,7 @@ function updateCamera(dt) {
   camera.position.lerp(want, Math.min(1, dt * 10));
   if (P.shake > 0) { P.shake -= dt; camera.position.x += rand(-.15, .15); camera.position.y += rand(-.1, .1); }
   camera.lookAt(t.x, 1.4, t.z);
-  walls.forEach(w => { w.mat.opacity = wallBlocks(w, camera.position, t) ? .1 : 1; w.mat.depthWrite = w.mat.opacity > .5; });
+  walls.forEach(w => fadeWall(w, wallBlocks(w, camera.position, t) ? .1 : 1));
 }
 
 function updateBubbles(now) {

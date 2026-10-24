@@ -26,7 +26,7 @@ const { M, box, cyl, collide, canvasTex } = FW;
 const safe = fn => { try { return fn(); } catch (e) { console.error("[break-room]", e); } };
 
 /* ======================= Shell ======================= */
-safe(() => FW.room({ x0: -13, x1: 0, z0: 9, z1: 17, skip: ["north"], floor: ["#efe6cc", "#b9d6c8"], wallColor: "#e9d79e" }));
+safe(() => FW.room({ floorStyle: "vinyl", x0: -13, x1: 0, z0: 9, z1: 17, skip: ["north"], floor: ["#efe6cc", "#b9d6c8"], wallColor: "#e9d79e" }));
 
 // shared materials and geometry, built once
 const mat = {

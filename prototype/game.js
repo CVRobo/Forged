@@ -250,6 +250,11 @@ const DOSSIER_ENTRIES = {
   "tells-explained": { icon: "🔍", title: "Detector Tells",    text: "The inspector checks specific fields: bank, domain, amount, stamps, PO, scan quality. Each tool you use creates or hides tells. Press D to see the detector's view and plan your edits." },
   "streak-bonus":    { icon: "🔥", title: "Scheme Streaks",    text: "Using the same scheme twice in a row adds a USED warning and extra heat. But succeeding with different schemes in a row builds a streak. Streaks don't pay more — they just prove you're versatile." },
   "copy-quality":    { icon: "🖨️", title: "Copy Quality",      text: "Running the copier flattens whiteout and tape so edits are less visible, but each copy generation lowers scan quality. Generation 2+ is detectable. The Copy Machine Whisperer perk removes the quality penalty." },
+  "schemes":         { icon: "🏦", title: "Schemes & Risk",    text: "Each scheme is a different kind of fake invoice with its own risk and payout. Vendor changed banks is the safest; Boss request pays most but is easiest to spot. Using the same scheme twice in a row raises heat." },
+  "case-file":       { icon: "🗂️", title: "The Case File",     text: "The case file shows what normal looks like at this company: known vendors, their usual amounts and bank numbers, who approves what, and house rules. The closer your invoice looks to normal, the harder it is to catch." },
+  "coffee-stains":   { icon: "☕", title: "Coffee Stains",     text: "A stain lowers the legibility of the part it lands on, which hides the tells there (like a changed bank number). But a page that's mostly coffee looks suspicious in itself, so one well-placed stain is best." },
+  "stamps":          { icon: "🔖", title: "Stamps",            text: "APPROVED calms the inspector a little, and some companies require it (St. Mercy: anything over $5,000). The wrong stamp is a tell: Sunny Diner never uses URGENT." },
+  "delivery":        { icon: "🖨️", title: "Print & Deliver",   text: "In the office, dragging the envelope onto PRINT sends it to the printer. Grab it there, carry it to the inspector's IN tray, and keep it out of the boss's vision cone or he'll stop you (+10 heat)." },
   "persuasion":      { icon: "😎", title: "Clerk Persuasion",  text: "The clerk has a quirk (shown in the window header). Work their keywords into a short note for the best score. High persuasion lowers the inspector's suspicion, so it's worth the effort." },
 };
 
@@ -567,8 +572,7 @@ function showBriefing() {
     }
   });
   overlay("briefing");
-  if (!guidedDone() && S.round === 1 && EMBED) setTimeout(() => startGuided(), 350);
-  else if (!tutorialDone() && S.round === 1) setTimeout(() => startTutorial(0), 350);
+  if (!tutorialDone() && S.round === 1) setTimeout(() => { if (tut.on) showTutStep(); else startTutorial("scheme"); }, 350);
 }
 
 /* hover tips for a scheme the player hasn't used yet */
@@ -621,8 +625,7 @@ function beginForge(schemeId) {
   scheduleBoss();
   updateHud();
   post("phase", { phase: "forging" });
-  if (tut.on && TUTORIAL[tut.i].wait === "scheme") setTimeout(() => { tut.i++; showTutStep(); }, 350);
-  guideCheck("scheme-picked");
+  if (tut.on && tutStep().wait === "scheme") setTimeout(() => tutDone(tutStep(), true), 350);
 }
 
 function renderInvoice() {
@@ -746,7 +749,6 @@ function spend(id, heat) {
   addHeat(heat);
   dropTool();
   updateHud();
-  guideCheck("edit");
 }
 
 document.addEventListener("pointermove", e => {
@@ -788,7 +790,6 @@ $("#invoice").addEventListener("click", e => {
     openPopover(e, "Tape in a new account", ATTACKER_ACCOUNTS.map(a => ({ label: a.label, sub: a.note, act: () => {
       S.inv.bank = a.id; S.altered.add("bank"); sfx("snip"); spend("scissors", 8); renderInvoice();
       showTip("first-bank", "✂️ Money routed to your account. Always do this or payout is zero!", "bank-account");
-      guideCheck("bank-edited");
     } })));
   }
   else if (S.tool === "pen") {
@@ -991,7 +992,6 @@ $("#chat-form").addEventListener("submit", async e => {
   clerkSay(res.reply);
   S.clerkReplies = (S.clerkReplies || 0) + 1;
   showTip("first-persuade", "😎 Persuasion lowers the inspector's suspicion. Match the clerk's quirk!", "persuasion");
-  guideCheck("clerk-sent");
   updateDebug();
 });
 
@@ -1047,10 +1047,8 @@ function trySubmit() {
     sfx("chunk"); toast("🖨️ Printing… grab it at the printer and drop it in the inspector's tray", "good");
     $("#envelope").classList.add("printed");
     post("print");
-    guideCheck("submitted");
     return;
   }
-  guideCheck("submitted");
   submit();
 }
 
@@ -1062,8 +1060,8 @@ window.addEventListener("message", e => {
   if (m.type === "heat" && Number.isFinite(+m.amount)) addHeat(+m.amount);
   if (m.type === "paused") setPaused(!!m.on);
   if (m.type === "quit") quitToTitle();
-  if (m.type === "tour") replayTour();
-  if (m.type === "tutorial-3d-done") advanceGuideOn3D(m.step);
+  if (m.type === "dossier") openDossier();
+  if (m.type === "tutorial-3d-done") tutWorldEvent(m.step);
 });
 
 /* ======================= Inspection (MOCK verdict) ======================= */
@@ -1183,7 +1181,6 @@ async function submit() {
   tells.slice(0, 2).forEach(t => t[2] && $(`#invoice [data-region="${t[2]}"]`)?.setAttribute("data-tell", t[0]));
   $("#invoice").classList.toggle("forensic", caught);
   updateHud();
-  guideCheck("verdict-done");
 }
 
 $("#btn-after-inspect").onclick = () => { sfx("click"); overlay("inspect", false); showCorkboard(); };
@@ -1323,156 +1320,16 @@ function quitToTitle() {
 }
 $("#btn-quit").onclick = () => { sfx("click"); quitToTitle(); };
 
-/* ======================= Guided first round =======================
- * Walks the player through a full scheme → forge → clerk → submit → print →
- * deliver → verdict loop, with spotlight hints on the desk and green arrows
- * in the 3D world. Replaces the auto-start of the old 12-step UI tour for
- * round 1. The old tour remains accessible via the "Tutorial" button. */
-
-const GUIDE_KEY = "forged-guided-done";
-const GUIDE = { on: false, step: 0, waitingFor3D: null };
-
-const GUIDE_STEPS = [
-  { id: "sit",       world: true,  label: "Go to your desk",      instr: "Walk to your desk and press E to sit down." },
-  { id: "scheme",    instr: "Read the memo and case file, then pick a scheme.",
-    spotlight: ["#scheme-cards"] },
-  { id: "edit-bank", instr: "Use scissors on the bank field to route money to your account.",
-    spotlight: [".tool[data-tool=scissors]"] },
-  { id: "edit-tool", instr: "Use one more tool — you need at least 2 edits to send.",
-    spotlight: ["#tools"] },
-  { id: "clerk",     instr: "Send a short note to the clerk. Match their quirk!",
-    spotlight: ["#win-clerk"], skippable: true },
-  { id: "submit",    instr: EMBED ? "Drag the envelope onto PRINT to send your invoice." : "Drag the envelope into the OUTBOX.",
-    spotlight: ["#envelope"] },
-  { id: "pickup",    world: true,  label: "Grab at printer",      instr: "Walk to the printer and press E to grab it." },
-  { id: "deliver",   world: true,  label: "Drop in IN tray",      instr: "Carry it to the inspector's IN tray and press E." },
-  { id: "verdict",   instr: "The inspector is reading your invoice..." },
-  { id: "done",      instr: "Tutorial complete! You're ready to forge on your own.", auto: true },
-];
-
-function guidedDone() { try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; } }
-
-function startGuided() {
-  GUIDE.on = true; GUIDE.step = 0; GUIDE.waitingFor3D = null;
-  post("tutorial-active", { on: true });
-  renderGuideCard();
-  advanceGuidePhase();
-}
-
-function advanceGuidePhase() {
-  const step = GUIDE_STEPS[GUIDE.step];
-  if (!step) return endGuided();
-  if (step.world) {
-    post("tutorial-phase", { phase: step.id, label: step.label || "" });
-    GUIDE.waitingFor3D = step.id;
-  }
-}
-
-function advanceGuide() {
-  if (!GUIDE.on) return;
-  GUIDE.step++;
-  if (GUIDE.step >= GUIDE_STEPS.length) return endGuided();
-  GUIDE.waitingFor3D = null;
-  renderGuideCard();
-  advanceGuidePhase();
-  // auto-advance steps that don't wait
-  const step = GUIDE_STEPS[GUIDE.step];
-  if (step.auto) setTimeout(() => endGuided(), 2000);
-}
-
-function advanceGuideOn3D(worldStep) {
-  if (!GUIDE.on) return;
-  const step = GUIDE_STEPS[GUIDE.step];
-  if (!step || !step.world) return;
-  // Map world step names to guide step ids
-  if (worldStep === "sat" && step.id === "sit") advanceGuide();
-  else if (worldStep === "grabbed" && step.id === "pickup") advanceGuide();
-  else if (worldStep === "delivered" && step.id === "deliver") advanceGuide();
-}
-
-function endGuided() {
-  GUIDE.on = false; GUIDE.waitingFor3D = null;
-  post("tutorial-active", { on: false });
-  try { localStorage.setItem(GUIDE_KEY, "1"); } catch {}
-  // Clean up the guide card
-  const card = $(".guide-card");
-  if (card) card.remove();
-  toast("Tutorial complete — good luck, forger!", "good");
-}
-
-function renderGuideCard() {
-  const step = GUIDE_STEPS[GUIDE.step];
-  if (!step) return;
-  let card = $(".guide-card");
-  if (!card) {
-    card = document.createElement("div");
-    card.className = "guide-card";
-    stage.appendChild(card);
-  }
-  const spotlight = step.spotlight || [];
-  const skipBtn = step.skippable ? `<button class="btn btn-ghost btn-small guide-skip">Skip →</button>` : "";
-  card.innerHTML = `<div class="guide-step">GUIDED TUTORIAL · STEP ${GUIDE.step + 1}/${GUIDE_STEPS.length}</div>
-    <p class="guide-instr">${step.instr}</p>${skipBtn}`;
-  card.style.display = step.world && EMBED ? "none" : "";
-  // Position the card
-  if (spotlight.length) {
-    const r = tutRect(spotlight);
-    if (r) {
-      card.style.left = Math.min(r.x + r.w + 20, 1100) + "px";
-      card.style.top = Math.max(r.y, 80) + "px";
-    }
-  } else {
-    card.style.left = "550px"; card.style.top = "30px";
-  }
-  // Skip button
-  const skipEl = $(".guide-skip", card);
-  if (skipEl) skipEl.onclick = () => { sfx("click"); advanceGuide(); };
-}
-
-// Hook: advance guide when specific game events happen
-function guideCheck(event, data) {
-  if (!GUIDE.on) return;
-  const step = GUIDE_STEPS[GUIDE.step];
-  if (!step) return;
-  switch (step.id) {
-    case "scheme": if (event === "scheme-picked") advanceGuide(); break;
-    case "edit-bank": if (event === "bank-edited") advanceGuide(); break;
-    case "edit-tool": if (event === "edit" && S.edits >= 2) advanceGuide(); break;
-    case "clerk": if (event === "clerk-sent") advanceGuide(); break;
-    case "submit": if (event === "submitted") advanceGuide(); break;
-    case "verdict": if (event === "verdict-done") handleGuidedVerdict(); break;
-  }
-}
-
-function handleGuidedVerdict() {
-  if (!GUIDE.on) return;
-  const r = S.lastResult;
-  if (r && r.caught) {
-    // Special card for caught during tutorial
-    const card = $(".guide-card");
-    if (card) {
-      const tells = r.tells.slice(0, 2).map(t => tellLabel(t[0])).join(", ");
-      card.style.display = "";
-      card.style.left = "400px"; card.style.top = "200px";
-      card.innerHTML = `<div class="guide-step">CAUGHT!</div>
-        <p class="guide-instr">The inspector noticed: <b>${tells || "something suspicious"}</b>.<br>That's okay — every failure is a lesson.</p>
-        <div style="display:flex;gap:10px;margin-top:12px">
-          <button class="btn btn-small" id="guide-continue">Continue anyway</button>
-        </div>`;
-      $("#guide-continue").onclick = () => { sfx("click"); advanceGuide(); };
-    }
-  } else {
-    advanceGuide();
-  }
-}
-
-/* ======================= Guided tutorial (12-step UI tour) =======================
- * Dims the screen, cuts a hole around one part, and points at it with an
- * arrow and a card. Runs once per browser (the first scheme pick), and any
- * time from Game Menu → Tutorial. */
+/* ======================= Tutorial (first round) =======================
+ * One hands-on tutorial for the first round. A small card sits beside whatever to use
+ * next, which glows; each step waits until the player actually does it, turns green, then
+ * moves on. In the 3D office the walking steps (sit, printer, IN tray) use the office's
+ * green arrow via the tutorial-active / tutorial-phase / tutorial-3d-done messages.
+ * Each step unlocks the matching Dossier entry, so the Dossier keeps what it taught.
+ * It runs once per browser; Options → Reset Tutorial & Tips plays it again. */
 
 const TUT_KEY = "forged-tutorial-done";
-const TUT_SCHEME = "changed_bank"; // the tutorial's steps are written for this scheme
+const TUT_SCHEME = "changed_bank"; // the steps are written for this scheme
 
 // while the tutorial waits for a scheme, only the tutorial's scheme can be picked
 function lockSchemes(on) {
@@ -1483,89 +1340,89 @@ function lockSchemes(on) {
     c.title = lock ? "Available after the tutorial" : "";
   });
 }
-// Steps with `until` are hands-on: the player does the thing, the card turns green and
-// moves on. `can` says whether the step is still possible (uses left); if not, "Skip step" shows.
 const usesLeft = id => S.inv && S.uses[id] < TOOLS.find(t => t.id === id).cap && S.edits < S.maxEdits;
-const TUTORIAL = [
-  { at: [`.scheme-card[data-scheme=${TUT_SCHEME}]`], side: "top", wait: "scheme", title: "Pick your scheme",
-    text: () => `Each card is a different kind of fake invoice, with its <b>risk</b> and <b>payout</b>. <b>Hover a card</b> to see which tools help, which to avoid, and what gives it away.<br><br>For this tutorial, start with the simplest one: <b>click Vendor changed banks.</b> The other schemes unlock as soon as the tutorial ends.` },
-  { at: ["#win-memo"], side: "right", title: "The leaked memo",
-    until: () => S.memo.some(m => m.mark),
-    text: () => `The boss's orders to the inspector: what he's watching this round. <b>Two rules are real, one is fake.</b> You work out which from what gets caught.<br><br><b>Try it:</b> click any rule to mark it REAL. Click again for FAKE.` },
-  { at: ["#win-case"], side: "right", title: "The case file",
-    text: () => `What normal looks like at this company: known vendors, their usual amounts and bank numbers, who approves what, and house rules in the notes. <b>The closer your invoice looks to normal, the harder it is to catch.</b>` },
-  { at: ["#scheme-banner", "#invoice"], side: "right", title: "Your invoice",
-    text: () => `This is a real bill from <b>${S.vendorRef ? S.vendorRef.name : "a known vendor"}</b>. Right now it pays them. Your job is to make it pay you without looking edited. You can type over the vendor name and the total; everything else changes with tools.` },
-  { at: ["#dock .dock-label", "#tools"], side: "top", title: "The toolbox",
-    text: () => `Pick a tool with ${kb("tool1")}–${kb("tool6")}, a click, or the mouse wheel, then click the invoice. The badge is how many uses are left this round. <b>You need at least 2 edits to send it</b>, and 4 is the limit. ${kb("drop")} puts a tool down. Next, you'll use three of them.` },
-  { at: [".tool[data-tool=scissors]", "#invoice .inv-bank"], side: "right", title: "Get paid: scissors & tape",
-    until: () => S.inv && ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank), can: () => usesLeft("scissors"),
-    text: () => `<b>Do it:</b> press ${kb("tool4")} (or click ✂️ Scissors), then click the <b>REMIT PAYMENT TO</b> box and pick one of your accounts.<br><br>Without this, the money goes to the real vendor and the invoice won't send.` },
-  { at: [".tool[data-tool=coffee]", "#invoice .inv-bank"], side: "right", title: "Hide it: coffee",
-    until: () => S.inv && (S.legibility.bank < 1 || S.uses.coffee >= 2), can: () => usesLeft("coffee"),
-    text: () => `A new bank number is the biggest giveaway on this scheme. <b>Do it:</b> press ${kb("tool2")} (or click ☕ Coffee mug), then click the <b>REMIT PAYMENT TO</b> box to stain it. Stains hide what's under them, but a ruined page looks odd, so one is enough.` },
-  { at: [".tool[data-tool=stamp]", "#invoice .inv-foot"], side: "right", title: "Look official: stamp",
-    until: () => S.inv && (S.stamps.length > 0 || S.uses.stamp >= 1), can: () => usesLeft("stamp"),
-    text: () => `<b>Do it:</b> press ${kb("tool5")} (or click 🔖 Stamp rack), choose <b>APPROVED</b>, then click near the signature. APPROVED calms the inspector a little.${S.level === 1 ? " Avoid URGENT here: the case file says Lou hates them." : ""}` },
-  { at: ["#win-clerk"], side: "left", title: "Sweet-talk the clerk",
-    enter: () => { tut.base = S.clerkReplies || 0; }, until: () => (S.clerkReplies || 0) > tut.base,
-    text: () => `<b>Do it:</b> press ${kb("chat")} (or click the box), type a short note and press Enter. ${LEVELS[S.level].clerk.name}'s quirk is in the window's corner: <i>${LEVELS[S.level].clerk.quirk}</i>. Notes that play to it fill the <b>Convinced</b> bar, which lowers the inspector's suspicion.` },
-  { at: [], noDim: true, drill: true, title: "Practice: the boss",
-    enter: () => { tut.hid = false; tutBossDrill(); }, until: () => tut.hid,
-    text: () => `The boss walks by while you forge. When the red <b>FOOTSTEPS!</b> banner appears, press ${kb("hide")} fast to slide a newspaper over the invoice. Miss it in a real round and you take +15 heat.<br><br><b>Practice now</b> (no heat): footsteps are coming…` },
-  { at: ["#win-inspector"], side: "left", title: "The inspector",
-    text: () => `Who's judging you, and which version he is. Every round he's retrained on your tricks and gets smarter: <b>intern → magnifier → UV lamp → cyborg</b>.` },
-  { at: ["#topbar .tb-heat", "#topbar .tb-money"], side: "bottom", title: "Heat and money",
-    text: () => `<b>Heat</b> rose with each edit you just made. It also climbs when you repeat a scheme, and high heat makes the inspector suspicious. <b>Siphoned</b> is your money so far.` },
-  { at: [], noDim: true, title: "Detector view", hold: 2600,
-    until: () => $("#debug-panel").classList.contains("show"), leave: () => $("#debug-panel").classList.remove("show"),
-    text: () => `<b>Do it:</b> press ${kb("detector")} to see exactly what the inspector's model reads: your stain, stamp and new bank number are all in there. Tools only matter through these fields.` },
-  { at: ["#envelope"], side: "left", title: EMBED ? "Print and deliver" : "Send it", last: true,
-    until: () => S.printed || S.submitted, can: () => S.edits >= 2,
-    text: () => EMBED
-      ? `<b>Do it:</b> drag this envelope onto <b>PRINT</b> (the dark box at the top right). You'll stand up: grab it at the printer (${kb("interact")}), drop it in the inspector's IN tray (${kb("interact")}), then sit back down for the verdict and the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.`
-      : `<b>Do it:</b> drag this envelope into the <b>OUTBOX</b> (the dark box at the top right). The inspector stamps it PAID or FLAGGED, then you spend your money in the shop.<br><br><kbd>Esc</kbd> opens the Game Menu any time.` },
-];
-const tut = { on: false, i: 0 };
 const kb = action => `<kbd>${ForgedKeys.label(action)}</kbd>`;
 
+/* Step fields:
+ *   at       elements that glow (and that the card sits beside)
+ *   world    an office step, done when the office reports this event ("sat", "grabbed", "delivered")
+ *   label    the green arrow's label in the office
+ *   until    hands-on: done when this returns true          can   false → "Skip step" shows
+ *   read     a reading step with a Next button              wait  "scheme": picking the scheme
+ *   dossier  entries to unlock when the step is done        enter runs when the step appears */
+const TUTORIAL = [
+  { id: "sit", world: "sat", label: "Go to your desk",
+    text: () => `Walk to your desk (follow the green arrow) and press <kbd>${ForgedKeys.label("interact")}</kbd> to sit down.` },
+  { id: "scheme", wait: "scheme", dossier: ["schemes"],
+    at: () => $("#overlay-briefing.show") ? [`.scheme-card[data-scheme=${TUT_SCHEME}]`]
+      : $("#screen-levels.active") ? ['.level-card[data-level="1"]'] : $("#screen-title.active") ? ["[data-go=levels]"] : [],
+    text: () => $("#overlay-briefing.show")
+      ? `Each card is a different kind of fake invoice, with its <b>risk</b> and <b>payout</b>. Hover a card for tips.<br><b>For your first round, click Vendor changed banks.</b> The others unlock after the tutorial.`
+      : `Start a game: click <b>▶ Play Solo</b>, then choose <b>Sunny Diner Supply</b>.` },
+  { id: "memo", at: ["#win-memo"], until: () => S.memo.some(m => m.mark), dossier: ["memo-deduction"],
+    text: () => `The leaked memo: what the inspector watches this round. <b>Two rules are real, one is fake.</b><br><b>Click any rule</b> to mark it REAL (again for FAKE).` },
+  { id: "case", at: ["#win-case"], read: true, dossier: ["case-file"],
+    text: () => `The case file shows what normal looks like here: known vendors, usual amounts, bank numbers, approvers and house rules. <b>The more normal your invoice looks, the harder it is to catch.</b>` },
+  { id: "scissors", at: [".tool[data-tool=scissors]", "#invoice .inv-bank"], dossier: ["bank-account"],
+    until: () => S.inv && ATTACKER_ACCOUNTS.some(a => a.id === S.inv.bank), can: () => usesLeft("scissors"),
+    text: () => `This bill still pays the real vendor. Press ${kb("tool4")} (or click ✂️), then click the <b>REMIT PAYMENT TO</b> box and pick one of your accounts.` },
+  { id: "coffee", at: [".tool[data-tool=coffee]", "#invoice .inv-bank"], dossier: ["coffee-stains"],
+    until: () => S.inv && (S.legibility.bank < 1 || S.uses.coffee >= 2), can: () => usesLeft("coffee"),
+    text: () => `A new bank number is this scheme's biggest giveaway. Press ${kb("tool2")} (or click ☕), then click the <b>REMIT PAYMENT TO</b> box to stain it. One stain is enough.` },
+  { id: "stamp", at: [".tool[data-tool=stamp]", "#invoice .inv-foot"], dossier: ["stamps"],
+    until: () => S.inv && (S.stamps.length > 0 || S.uses.stamp >= 1), can: () => usesLeft("stamp"),
+    text: () => `Press ${kb("tool5")} (or click 🔖), choose <b>APPROVED</b>, then click near the signature.${S.level === 1 ? " Skip URGENT: the case file says Lou hates it." : ""}` },
+  { id: "clerk", at: ["#win-clerk"], skippable: true, dossier: ["persuasion"],
+    enter: () => { tut.base = S.clerkReplies || 0; }, until: () => (S.clerkReplies || 0) > tut.base,
+    text: () => `Press ${kb("chat")}, then send ${LEVELS[S.level].clerk.name} a short note. Match the quirk: <b>${LEVELS[S.level].clerk.quirk}</b>. Convincing notes lower the inspector's suspicion.` },
+  { id: "boss", at: [], drill: true, dossier: ["boss-patrol"],
+    enter: () => { tut.hid = false; tutBossDrill(); }, until: () => tut.hid,
+    text: () => `<b>Practice:</b> the boss is coming. When the red FOOTSTEPS banner appears, press ${kb("hide")} fast to hide the invoice. No heat in practice; in a real round, missing it costs +15.` },
+  { id: "send", at: ["#envelope", "#outbox"], dossier: ["delivery"],
+    until: () => S.printed || S.submitted, can: () => S.edits >= 2,
+    text: () => EMBED ? `Drag the envelope onto <b>PRINT</b> (the dark box above). You'll stand up to deliver it.` : `Drag the envelope into the <b>OUTBOX</b> to send it.` },
+  { id: "pickup", world: "grabbed", label: "Grab it at the printer",
+    text: () => `Walk to the printer and press <kbd>${ForgedKeys.label("interact")}</kbd> to grab your invoice.` },
+  { id: "deliver", world: "delivered", label: "Drop it in the IN tray",
+    text: () => `Carry it to the inspector's IN tray and press <kbd>${ForgedKeys.label("interact")}</kbd>. Keep out of the boss's sight.` },
+  { id: "verdict", verdict: true, label: "Back to your desk", dossier: ["version-bump", "heat-basics", "tells-explained"],
+    text: () => {
+      const r = S.lastResult;
+      if (!r || !S.submitted) return EMBED ? `The inspector is reading it… head back to your desk for the verdict.` : `The inspector is reading it…`;
+      const tells = r.tells.slice(0, 2).map(t => tellLabel(t[0])).join(", ");
+      const head = r.caught ? `<b>Caught.</b> He noticed: ${tells || "something off"}. That's normal on a first try.` : `<b>Paid!</b> It got through.`;
+      return `${head} Either way he's retrained on your trick, so vary your schemes. <b>Heat</b> builds with risky edits, and ${kb("detector")} shows what his model reads.<br>Everything you just learned is in your <b>Dossier</b> (Esc → Dossier).`;
+    } },
+];
+const tut = { on: false, i: 0, steps: [] };
+
 function tutorialDone() { try { return localStorage.getItem(TUT_KEY) === "1"; } catch (e) { return false; } }
-function startTutorial(from = 0) {
-  dropTool(); hidePopover();
-  Object.assign(tut, { on: true, i: from, entered: -1 });
-  $("#tutorial").classList.add("show");
-  $("#tut-dots").innerHTML = TUTORIAL.map(() => "<i></i>").join("");
+
+function startTutorial(fromId) {
+  if (tut.on) return;
+  tut.steps = TUTORIAL.filter(st => EMBED || !st.world); // os.html on its own has no office to walk
+  Object.assign(tut, { on: true, i: Math.max(0, tut.steps.findIndex(st => st.id === fromId)), entered: -1, done: false, verdictShown: false });
+  post("tutorial-active", { on: true });
   clearInterval(tut.poll); tut.poll = setInterval(tutPoll, 200);
   showTutStep();
 }
-
-// hands-on steps: watch for the player doing the thing
-function tutPoll() {
-  if (!tut.on || S.paused) return;
-  const st = TUTORIAL[tut.i];
-  if (!st.until || tut.done) return;
-  let ok = false; try { ok = st.until(); } catch (e) { ok = false; }
-  if (ok) {
-    tut.done = true; sfx("cash");
-    $(".tut-card").classList.add("done");
-    $("#tut-step").textContent = "✓ Done!";
-    $("#tut-next").style.display = "none";
-    clearTimeout(tut.adv);
-    tut.adv = setTimeout(() => { if (tut.on && TUTORIAL[tut.i] === st) tutNext(true); }, st.hold || 1000);
-  } else if (st.can) {
-    const stuck = !st.can();
-    $("#tut-next").style.display = stuck ? "" : "none"; // out of uses: let them move on
-    $("#tut-next").textContent = "Skip step →";
-  }
-}
 function endTutorial(unfinished = false) {
+  if (!tut.on) return;
   tut.on = false;
   clearInterval(tut.poll); clearTimeout(tut.adv);
-  const st = TUTORIAL[tut.i]; st && st.leave && st.leave();
   if (S.bossPractice) { S.bossPractice = false; S.bossWindow = false; clearTimeout(S.bossTimer); $("#boss-prompt").classList.remove("show"); }
-  lockSchemes(false);
-  $("#tutorial").classList.remove("show", "passthrough");
-  if (!unfinished) try { localStorage.setItem(TUT_KEY, "1"); } catch (e) { /* it just shows again next time */ }
+  lockSchemes(false); setGlow([]);
+  const card = $(".guide-card"); if (card) card.remove();
+  post("tutorial-active", { on: false });
+  if (!unfinished) { try { localStorage.setItem(TUT_KEY, "1"); } catch (e) { /* shows again next time */ } }
+}
+const tutStep = () => tut.steps[tut.i];
+const atOf = st => (typeof st.at === "function" ? st.at() : st.at) || [];
+
+// a soft green glow on the parts to use (no dimming)
+function setGlow(sels) {
+  $$(".tut-glow").forEach(el => el.classList.remove("tut-glow"));
+  sels.forEach(q => $$(q).forEach(el => el.classList.add("tut-glow")));
 }
 
 // bounding box of the target elements, in stage coordinates
@@ -1579,81 +1436,81 @@ function tutRect(sels) {
 }
 
 function showTutStep() {
-  const step = TUTORIAL[tut.i], pad = 10;
-  // windows may still be animating in: measure again once they've settled
-  clearTimeout(tut.settle);
-  if (!tut.settling) tut.settle = setTimeout(() => { tut.settling = true; if (tut.on) showTutStep(); tut.settling = false; }, 450);
-  $("#tut-step").textContent = `Tutorial · ${tut.i + 1} of ${TUTORIAL.length}`;
-  $("#tut-title").textContent = step.title;
-  $("#tut-text").innerHTML = step.text();
-  $$("#tut-dots i").forEach((d, k) => d.classList.toggle("on", k === tut.i));
-  const action = !!step.until;
+  const st = tutStep(); if (!st) return endTutorial();
   if (tut.entered !== tut.i) { // first time showing this step
     tut.entered = tut.i; tut.done = false; clearTimeout(tut.adv);
-    $(".tut-card").classList.remove("done");
-    step.enter && step.enter();
+    st.enter && st.enter();
+    if (st.world || st.verdict) post("tutorial-phase", { phase: st.id, label: st.label || "" });
   }
-  if (tut.done) $("#tut-step").textContent = "✓ Done!";
-  $("#tut-back").style.visibility = tut.i > 0 && !TUTORIAL[tut.i - 1].wait && !step.drill ? "visible" : "hidden";
-  $("#tut-next").style.display = step.wait || action ? "none" : "";
-  $("#tut-next").textContent = "Next →";
-  $("#tutorial").classList.toggle("passthrough", !!step.wait || action);
-  $("#tutorial").classList.toggle("nodim", !!step.noDim);
-  lockSchemes(step.wait === "scheme");
-
-  const r = tutRect(step.at), hole = $(".tut-hole"), card = $(".tut-card");
-  const h = r ? { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 } : { x: 800, y: 450, w: 0, h: 0 };
-  Object.assign(hole.style, { left: h.x + "px", top: h.y + "px", width: h.w + "px", height: h.h + "px" });
-  hole.classList.toggle("none", !r);
-
-  // place the card beside the hole, on the preferred side if it fits there
-  const cw = card.offsetWidth, ch = card.offsetHeight, gap = 70, W = 1600, H = 900, m = 16;
-  const spots = {
-    right: [h.x + h.w + gap, h.y + h.h / 2 - ch / 2], left: [h.x - gap - cw, h.y + h.h / 2 - ch / 2],
-    top: [h.x + h.w / 2 - cw / 2, h.y - gap - ch], bottom: [h.x + h.w / 2 - cw / 2, h.y + h.h + gap],
-  };
-  const fits = ([x, y]) => x >= m && y >= m && x + cw <= W - m && y + ch <= H - m;
-  let pos;
-  if (!r) pos = [W / 2 - cw / 2, H / 2 - ch / 2];
-  else {
-    const order = [step.side, "right", "left", "bottom", "top"].filter(Boolean);
-    const side = order.find(sd => fits(spots[sd])) || step.side || "right";
-    pos = spots[side];
-  }
-  const cx = clamp(pos[0], m, W - cw - m), cy = clamp(pos[1], m, H - ch - m);
-  card.style.left = cx + "px"; card.style.top = cy + "px";
-
-  // arrow from the card's edge to the hole's edge
-  const line = $(".tut-line");
-  if (!r) { line.setAttribute("d", ""); return; }
-  const near = (px, py, b) => [clamp(px, b.x, b.x + b.w), clamp(py, b.y, b.y + b.h)];
-  const [sx, sy] = near(h.x + h.w / 2, h.y + h.h / 2, { x: cx, y: cy, w: cw, h: ch });
-  let [ex, ey] = near(cx + cw / 2, cy + ch / 2, h);
-  const dx = ex - sx, dy = ey - sy, len = Math.hypot(dx, dy) || 1;
-  if (len < 30) { line.setAttribute("d", ""); return; }
-  ex -= dx / len * 14; ey -= dy / len * 14; // stop just short of the outline
-  const bend = Math.min(60, len * .25);
-  const qx = (sx + ex) / 2 - dy / len * bend, qy = (sy + ey) / 2 + dx / len * bend;
-  line.setAttribute("d", `M${sx},${sy} Q${qx},${qy} ${ex},${ey}`);
+  lockSchemes(st.wait === "scheme");
+  const at = atOf(st); tut.atKey = at.join("|");
+  setGlow(at);
+  let card = $(".guide-card");
+  if (!card) { card = document.createElement("div"); card.className = "guide-card"; stage.appendChild(card); }
+  card.classList.toggle("done", tut.done);
+  const finished = st.verdict && S.submitted && S.lastResult;
+  const buttons = [
+    st.read ? `<button class="btn btn-small" data-tut="next">Next →</button>` : "",
+    finished ? `<button class="btn btn-small" data-tut="finish">Finish tutorial ✓</button>` : "",
+    st.skippable && !tut.done ? `<button class="btn btn-ghost btn-small" data-tut="next">Skip →</button>` : "",
+    st.can && !tut.done && !st.can() ? `<button class="btn btn-ghost btn-small" data-tut="next">Skip step →</button>` : "",
+  ].join("");
+  card.innerHTML = `<div class="guide-step">${tut.done ? "✓ Done!" : `Tutorial · step ${tut.i + 1} of ${tut.steps.length}`}</div>
+    <p class="guide-instr">${st.text()}</p>
+    <div class="guide-btns">${buttons}<button class="guide-quit" data-tut="quit">Skip tutorial</button></div>`;
+  // office steps happen away from the computer; the green arrow shows the way there
+  card.style.display = st.world && EMBED ? "none" : "";
+  placeTutCard(card, st);
 }
+function placeTutCard(card, st) {
+  const at = atOf(st), r = at.length ? tutRect(at) : null;
+  const cw = card.offsetWidth || 420, ch = card.offsetHeight || 140, g = 20, m = 16, top = 70;
+  if (st.verdict) { card.style.left = (1600 - cw - 40) + "px"; card.style.top = "250px"; return; } // clear of the stamp
+  if (!r) { card.style.left = (800 - cw / 2) + "px"; card.style.top = (st.drill ? 560 : 300) + "px"; return; }
+  // beside the glowing part, never on top of it (it has to stay clickable), and on screen
+  const spots = [[r.x + r.w + g, r.y], [r.x - g - cw, r.y + r.h - ch], [r.x + r.w - cw, r.y - g - ch], [r.x, r.y + r.h + g]];
+  const fits = ([x, y]) => x >= m && y >= top && x + cw <= 1600 - m && y + ch <= 900 - m;
+  const [x, y] = spots.find(fits) || spots[1];
+  card.style.left = clamp(x, m, 1600 - cw - m) + "px";
+  card.style.top = clamp(y, top, 900 - ch - m) + "px";
+}
+stage.addEventListener("click", e => {
+  const b = e.target.closest(".guide-card [data-tut]"); if (!b || !tut.on) return;
+  sfx("click");
+  if (b.dataset.tut === "quit") endTutorial();
+  else if (b.dataset.tut === "finish") tutNext(true);
+  else tutNext();
+});
 
+// hands-on steps: watch for the player doing the thing
+function tutPoll() {
+  if (!tut.on || S.paused) return;
+  const st = tutStep(); if (!st) return;
+  if (st.verdict) { if (S.submitted && S.lastResult && !tut.verdictShown) { tut.verdictShown = true; tutDone(st, false); } return; }
+  if (st.wait) { if (atOf(st).join("|") !== tut.atKey) showTutStep(); return; } // follow the player to the scheme picker
+  if (!st.until || tut.done) { if (st.can) showTutStep(); return; }
+  let ok = false; try { ok = st.until(); } catch (e) { ok = false; }
+  if (ok) tutDone(st, true);
+  else if (st.can) showTutStep(); // refresh "Skip step" when the player runs out of uses
+}
+function tutDone(st, advance) {
+  tut.done = true; sfx("cash");
+  (st.dossier || []).forEach(unlockDossierEntry);
+  showTutStep();
+  if (advance) { clearTimeout(tut.adv); tut.adv = setTimeout(() => { if (tut.on && tutStep() === st) tutNext(true); }, st.hold || 1000); }
+}
 function tutNext(auto = false) {
-  if (!auto) sfx("click");
-  const st = TUTORIAL[tut.i];
-  st.leave && st.leave();
+  const st = tutStep(); if (!st) return;
+  if (!tut.done) (st.dossier || []).forEach(unlockDossierEntry); // read / skipped steps still unlock their entry
   if (st.drill && S.bossPractice) { S.bossPractice = false; S.bossWindow = false; clearTimeout(S.bossTimer); $("#boss-prompt").classList.remove("show"); }
-  if (tut.i >= TUTORIAL.length - 1) { endTutorial(); if (auto) toast("Tutorial complete. Good luck out there!", "good"); return; }
+  if (tut.i >= tut.steps.length - 1) { endTutorial(); toast("Tutorial complete. Good luck out there!", "good"); return; }
   tut.i++; showTutStep();
 }
-$("#tut-next").onclick = tutNext;
-$("#tut-back").onclick = () => {
-  const st = TUTORIAL[tut.i];
-  if (tut.i > 0 && !TUTORIAL[tut.i - 1].wait && !st.drill) { sfx("click"); st.leave && st.leave(); tut.i--; showTutStep(); }
-};
-$("#tut-skip").onclick = () => { sfx("click"); endTutorial(); };
-const canTour = () => !!S.inv && !S.submitted && $("#screen-desk").classList.contains("active") && !$(".overlay.show");
-function replayTour() { if (canTour()) startTutorial(1); else toast("Start a round first, then open the tutorial", "bad"); }
+// the office reports walking steps
+function tutWorldEvent(ev) { const st = tut.on && tutStep(); if (st && st.world === ev) tutDone(st, true); }
 addEventListener("resize", () => tut.on && showTutStep());
+// first launch in the office: start at "Go to your desk" so the green arrow points there
+if (EMBED && !tutorialDone()) setTimeout(() => startTutorial("sit"), 600);
 
 /* ======================= Player name (the leaderboard itself is in menu.js) ======================= */
 
@@ -1677,7 +1534,7 @@ function messUpDesk() {
 function scheduleBoss() {
   clearTimeout(S.bossTimer);
   if (EMBED) return; // in the office the boss is a real NPC on patrol
-  if (GUIDE.on) return; // skip boss during guided tutorial
+  if (tut.on) return; // no boss during the tutorial (it has its own practice run)
   if (Math.random() < .35 && S.round > 1 || S.round === 2) {
     S.bossTimer = setTimeout(bossWalk, rand(9000, 20000));
   }
@@ -1685,12 +1542,12 @@ function scheduleBoss() {
 // tutorial practice: footsteps after a moment, no heat, repeats until the player hides in time
 function tutBossDrill(delay = 1800) {
   clearTimeout(S.bossTimer);
-  S.bossTimer = setTimeout(() => { if (tut.on && TUTORIAL[tut.i].drill && !S.paused) bossWalk(true); }, delay);
+  S.bossTimer = setTimeout(() => { if (tut.on && tutStep().drill && !S.paused) bossWalk(true); }, delay);
 }
 function bossWalk(practice = false) {
   if (S.paused && !practice) { S.bossTimer = setTimeout(bossWalk, 4000); return; }
-  if (!practice && (S.submitted || tut.on || GUIDE.on || !$("#screen-desk").classList.contains("active") || $(".overlay.show"))) {
-    if ((tut.on || GUIDE.on) && !S.submitted) S.bossTimer = setTimeout(bossWalk, 8000); // try again after the tour
+  if (!practice && (S.submitted || tut.on || !$("#screen-desk").classList.contains("active") || $(".overlay.show"))) {
+    if (tut.on && !S.submitted) S.bossTimer = setTimeout(bossWalk, 8000); // try again after the tutorial
     return;
   }
   sfx("steps");
@@ -1746,7 +1603,8 @@ function toggleDebug() { $("#debug-panel").classList.toggle("show"); updateDebug
 const paintDebugKey = () => { $("#debug-key").textContent = ForgedKeys.label("detector"); };
 paintDebugKey(); ForgedKeys.onChange(paintDebugKey);
 if ($("#btn-debug")) $("#btn-debug").onclick = () => { sfx("click"); toggleDebug(); };
-if ($("#btn-dossier")) $("#btn-dossier").onclick = () => { sfx("click"); renderDossier(); overlay("dossier"); };
+function openDossier() { renderDossier(); overlay("dossier"); }
+if ($("#btn-dossier")) $("#btn-dossier").onclick = () => { sfx("click"); openDossier(); };
 
 /* ======================= Pause & Game Menu =======================
  * Esc opens the Game Menu (menu.js). Inside the office the office page owns the
@@ -1765,7 +1623,7 @@ function setPaused(on) {
     clearTimeout(S.bossTimer);
     S.pausedWindow = S.bossWindow;
     dropTool(); hidePopover();
-  } else if (tut.on && TUTORIAL[tut.i].drill && !tut.hid) {
+  } else if (tut.on && tutStep().drill && !tut.hid) {
     S.bossWindow = false; $("#boss-prompt").classList.remove("show"); tutBossDrill();
   } else if (S.pausedWindow) {
     S.bossTimer = setTimeout(bossSaw, 2000); // a fresh 2 seconds to hide the invoice
@@ -1775,7 +1633,7 @@ if (!EMBED) ForgedMenu.init({
   office: false,
   onPause: setPaused,
   onQuit: quitToTitle,
-  canTour, onTour: replayTour,
+  canDossier: () => true, onDossier: openDossier,
   getStats: () => ({ money: S.money, patches: S.patches, shame: S.shame, round: S.round }),
 });
 
@@ -1799,16 +1657,8 @@ document.addEventListener("keydown", e => {
     openMenu("pause"); return;
   }
   if (S.paused) return;
-  if (tut.on && !typing) {
-    const st = TUTORIAL[tut.i];
-    if (st.wait) return; // picking a scheme: mouse only
-    if (!st.until) { // reading steps: Enter / → / Space for next, ← for back
-      if (code === "Enter" || code === "ArrowRight" || code === "Space") { e.preventDefault(); tutNext(); }
-      else if (code === "ArrowLeft") $("#tut-back").click();
-      return;
-    }
-    // hands-on steps fall through: the game's own keys work
-  }
+  // reading steps of the tutorial: Enter or → for Next (every other key plays as normal)
+  if (tut.on && !typing && tutStep().read && (code === "Enter" || code === "ArrowRight")) { e.preventDefault(); tutNext(); return; }
   if (K.is("hide", code) && S.bossWindow) { e.preventDefault(); el.blur?.(); hideInvoice(); return; }
   if (typing) { if (code === "Enter" && el.isContentEditable) { e.preventDefault(); el.blur(); } return; }
   if (EMBED && K.is("standUp", code)) { e.preventDefault(); post("stand"); return; }
@@ -1830,7 +1680,7 @@ document.addEventListener("mousedown", e => {
 // mouse wheel cycles through the tools you can still use, like a hotbar
 let wheelAt = 0;
 $("#screen-desk").addEventListener("wheel", e => {
-  if (S.paused || (tut.on && !TUTORIAL[tut.i].until) || $(".overlay.show") || !S.inv || S.submitted) return;
+  if (S.paused || $(".overlay.show") || !S.inv || S.submitted) return;
   if (e.target.closest(".win-body, #debug-panel, #popover")) return; // let windows scroll
   e.preventDefault();
   const now = performance.now(); if (now - wheelAt < 140) return; wheelAt = now; // trackpads send bursts

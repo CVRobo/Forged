@@ -511,32 +511,13 @@ kbd { background: var(--win); color: var(--ink); border: 2px solid var(--ink); b
 .guide-instr { font-size: 15px; line-height: 1.5; margin: 6px 0 0; }
 .guide-instr b { color: var(--accent-2); }
 .guide-skip { margin-top: 10px; }
+.guide-card.done { border-color: var(--paid); box-shadow: 8px 8px 0 var(--paid); }
+.guide-card.done .guide-step { font-size: 14px; }
+.guide-btns { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.guide-btns .btn { white-space: nowrap; }
+.guide-quit { margin-left: auto; background: none; border: 0; padding: 0; font: 12px var(--ui); color: var(--ink); opacity: .55; text-decoration: underline; cursor: pointer; }
+.guide-quit:hover { opacity: .9; }
+/* the tutorial's glow on what to use next: no dimming, just a pulsing green outline */
+.tut-glow { outline: 4px solid #2ecc40; outline-offset: 4px; animation: tut-glow 1.2s ease-in-out infinite; }
+@keyframes tut-glow { 0%, 100% { outline-color: rgba(46, 204, 64, .95); box-shadow: 0 0 0 0 rgba(46, 204, 64, .45); } 50% { outline-color: rgba(46, 204, 64, .45); box-shadow: 0 0 22px 6px rgba(46, 204, 64, .45); } }
 
-/* guided tutorial */
-#tutorial { position: absolute; inset: 0; z-index: 150; display: none; }
-#tutorial.show { display: block; }
-#tutorial.passthrough { pointer-events: none; } /* the highlighted part stays clickable */
-#tutorial.passthrough .tut-card { pointer-events: auto; }
-.tut-hole { position: absolute; border-radius: 14px; pointer-events: none;
-  box-shadow: 0 0 0 4000px rgba(12, 8, 4, .74); outline: 4px dashed var(--accent); outline-offset: 5px;
-  transition: left .35s cubic-bezier(.2,1,.3,1), top .35s cubic-bezier(.2,1,.3,1), width .35s cubic-bezier(.2,1,.3,1), height .35s cubic-bezier(.2,1,.3,1); }
-.tut-hole.none { outline-color: transparent; }
-#tutorial.nodim .tut-hole { box-shadow: none; outline-color: transparent; }
-.tut-card.done { border-color: var(--paid); box-shadow: 8px 8px 0 var(--paid); }
-.tut-card.done .tut-step { color: var(--paid); font-size: 14px; }
-.tut-arrow { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; pointer-events: none; overflow: visible; }
-.tut-line { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; filter: drop-shadow(3px 3px 0 var(--ink)); }
-#tut-head path { fill: var(--accent); }
-.tut-card { position: absolute; width: 450px; background: var(--win); border: 4px solid var(--ink); border-radius: 14px;
-  box-shadow: 8px 8px 0 var(--ink); padding: 20px 22px 16px; transition: left .35s cubic-bezier(.2,1,.3,1), top .35s cubic-bezier(.2,1,.3,1); }
-.tut-step { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: var(--accent-2); text-transform: uppercase; }
-.tut-card h3 { font-family: var(--display); font-size: 24px; margin: 4px 0 8px; font-weight: 400; }
-.tut-card p { font-size: 15px; line-height: 1.55; margin: 0; }
-.tut-card p b { color: var(--accent-2); }
-.tut-card kbd { font-size: 13px; }
-.tut-btns { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 18px; }
-.tut-btns > span { display: flex; gap: 8px; }
-.tut-btns .btn { white-space: nowrap; }
-.tut-dots { display: flex; gap: 4px; }
-.tut-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(0,0,0,.2); }
-.tut-dots i.on { background: var(--accent); outline: 2px solid var(--ink); }

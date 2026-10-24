@@ -49,7 +49,8 @@ Both pages use `postMessage`:
 | Computer → office | `stand` | The Stand up key (default Left Shift) was pressed on the computer |
 | Computer → office | `menu` | Esc on the computer: open the Game Menu (the office page owns it) |
 | Office → computer | `paused` | The Game Menu opened or closed: freeze or resume the computer's timers |
-| Office → computer | `quit` / `tour` | Game Menu → Quit to Title / Tutorial |
+| Office → computer | `quit` / `dossier` | Game Menu → Quit to Title / Dossier |
+| Both ways | `tutorial-active` / `tutorial-phase` / `tutorial-3d-done` | The first-round tutorial: green arrow in the office, office steps reported back |
 | Office → computer | `heat` | The boss caught you with the envelope: add heat |
 | Office → computer | `heat` `{amount}` | The boss caught you with the envelope. **Not handled by `game.js` yet (C):** add it to the heat meter |
 | Office → computer | `deliver` | The envelope reached the IN tray; the computer runs the inspection |

@@ -280,7 +280,10 @@ Direction and message types (unchanged from prototype):
 | Computer → Office | `menu` | `{screen: "pause" \| "howto" \| "board"}` | Esc (or a menu button) on the computer: open the Game Menu, which the office page owns |
 | Office → Computer | `paused` | `{on}` | The Game Menu opened/closed: freeze or resume the computer's timers |
 | Office → Computer | `quit` | `{}` | Game Menu → Quit to Title: reset the computer to its title screen |
-| Office → Computer | `tour` | `{}` | Game Menu → Tutorial: start the desk tutorial |
+| Office → Computer | `dossier` | `{}` | Game Menu → Dossier: open the Dossier on the computer |
+| Computer → Office | `tutorial-active` | `{on}` | The first-round tutorial started/ended: show the green arrow instead of the yellow marker, hold the boss |
+| Computer → Office | `tutorial-phase` | `{phase, label}` | Current tutorial step (`sit`, `pickup`, `deliver`, `verdict`); `label` is the green arrow's text |
+| Office → Computer | `tutorial-3d-done` | `{step: "sat" \| "grabbed" \| "delivered"}` | The player finished an office step of the tutorial |
 
 **Rules:**
 - All messages include `src: "forged-os"` (from computer) or `src: "forged-world"` (from office)
