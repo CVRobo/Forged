@@ -51,7 +51,7 @@ const sun = new THREE.DirectionalLight("#ffffff", 0.55);
 sun.position.set(-8, 18, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 12, bottom: -12, near: 1, far: 50 });
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 24, bottom: -24, near: 1, far: 70 });
 scene.add(sun);
 
 const RW = 26, RD = 18; // room size
@@ -116,21 +116,70 @@ floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), M("#f3ead8"));
 ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 3.2; scene.add(ceiling);
 
-// walls fade out when the camera is behind them
+/* Walls are straight runs split around doorways. Every segment collides, and a
+ * segment fades out whenever it stands between the camera and the player, so
+ * this works for any number of rooms. */
 const walls = [];
-function wall(w, d, x, z, outside) {
-  const mat = M(pal.wall, { transparent: true });
-  mats.wall.push(mat);
-  const m = box(w, 3.2, d, mat, x, 1.6, z);
-  m.castShadow = false;
-  walls.push({ m, mat, outside });
+const WALL_H = 3.2;
+function wallRun(axis, fixed, from, to, doors = [], { thick = .3, color } = {}) {
+  // axis "x": runs along x at z = fixed;  axis "z": runs along z at x = fixed
+  const seg = (a, b, y, h, solid) => {
+    const len = b - a, mid = (a + b) / 2;
+    const mat = M(color || pal.wall, { transparent: true });
+    if (!color) mats.wall.push(mat);
+    const m = axis === "x" ? box(len, h, thick, mat, mid, y, fixed) : box(thick, h, len, mat, fixed, y, mid);
+    m.castShadow = false;
+    if (solid) axis === "x" ? collide(mid, fixed, len, thick) : collide(fixed, mid, thick, len);
+    walls.push({ m, mat, axis, fixed, a, b });
+  };
+  let start = from;
+  doors.slice().sort((p, q) => p.at - q.at).forEach(d => {
+    const a = d.at - d.width / 2, b = d.at + d.width / 2;
+    if (a > start) seg(start, a, WALL_H / 2, WALL_H, true);
+    seg(a, b, WALL_H - .35, .7, false); // lintel over the doorway
+    doorFrame(axis, fixed, d.at, d.width);
+    start = b;
+  });
+  if (to > start) seg(start, to, WALL_H / 2, WALL_H, true);
 }
-wall(RW, .3, 0, -RD / 2, c => c.z < -RD / 2 + .3);
-wall(RW, .3, 0, RD / 2, c => c.z > RD / 2 - .3);
-wall(.3, RD, -RW / 2, 0, c => c.x < -RW / 2 + .3);
-wall(.3, RD, RW / 2, 0, c => c.x > RW / 2 - .3);
+function doorFrame(axis, fixed, at, width) {
+  const trim = mats.accent;
+  [-1, 1].forEach(sx => axis === "x" ? box(.12, 2.5, .4, trim, at + sx * width / 2, 1.25, fixed) : box(.4, 2.5, .12, trim, fixed, 1.25, at + sx * width / 2));
+}
+// does this wall segment block the line from the player to the camera?
+function wallBlocks(w, cam, pl) {
+  const ca = w.axis === "x" ? cam.z : cam.x, pa = w.axis === "x" ? pl.z : pl.x;
+  if ((ca - w.fixed) * (pa - w.fixed) >= 0) return false;
+  const t = (w.fixed - pa) / (ca - pa);
+  const cross = w.axis === "x" ? pl.x + t * (cam.x - pl.x) : pl.z + t * (cam.z - pl.z);
+  return cross > w.a - 1 && cross < w.b + 1;
+}
+// main office: doorways west (boss office), south (break room), east (records & mail)
+const DOORS = { west: { at: -5, width: 1.8 }, south: { at: -6, width: 2.2 }, east: { at: 5.5, width: 2 } };
+wallRun("x", -RD / 2, -RW / 2, RW / 2);
+wallRun("x", RD / 2, -RW / 2, RW / 2, [DOORS.south]);
+wallRun("z", -RW / 2, -RD / 2, RD / 2, [DOORS.west]);
+wallRun("z", RW / 2, -RD / 2, RD / 2, [DOORS.east]);
 // skirting stripe
-[[RW, .32, 0, -RD / 2 + .01], [RW, .32, 0, RD / 2 - .01]].forEach(a => box(a[0], .25, a[1], mats.accent, a[2], .12, a[3]));
+[[RW, .32, 0, -RD / 2 + .01]].forEach(a => box(a[0], .25, a[1], mats.accent, a[2], .12, a[3]));
+
+/* A room next to the main office: checker floor, ceiling and walls. Skip the
+ * side it shares with the main office (that wall already has the doorway). */
+function room({ x0, x1, z0, z1, floor = ["#d8c8a8", "#c9b894"], wallColor, skip = [], doors = {} }) {
+  const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  const tex = canvasTex(256, 256, (g) => { for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { g.fillStyle = floor[(i + j) % 2]; g.fillRect(i * 64, j * 64, 64, 64); } });
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(w / 4, d / 4);
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), M("#fff", { map: tex }));
+  f.rotation.x = -Math.PI / 2; f.position.set(cx, .005, cz); f.receiveShadow = true; scene.add(f);
+  const c = new THREE.Mesh(new THREE.PlaneGeometry(w, d), M("#f3ead8"));
+  c.rotation.x = Math.PI / 2; c.position.set(cx, WALL_H, cz); scene.add(c);
+  const opt = wallColor ? { color: wallColor } : {};
+  if (!skip.includes("north")) wallRun("x", z0, x0, x1, doors.north, opt);
+  if (!skip.includes("south")) wallRun("x", z1, x0, x1, doors.south, opt);
+  if (!skip.includes("west")) wallRun("z", x0, z0, z1, doors.west, opt);
+  if (!skip.includes("east")) wallRun("z", x1, z0, z1, doors.east, opt);
+  return { cx, cz, floor: f, ceiling: c };
+}
 
 /* ======================= Characters: chunky cartoon people ======================= */
 /* Big blocky heads with googly eyes, brows, noses and hair, in the spirit of
@@ -419,7 +468,6 @@ clerk.g.position.set(CLERK_DESK.x, 0, CLERK_DESK.z - .95); seatPose(clerk, false
 const lunchSign = signPlane("ON LUNCH", null, .8, .25, "#e0352b"); lunchSign.position.set(CLERK_DESK.x + .7, .95, CLERK_DESK.z + .56); scene.add(lunchSign);
 
 /* --- boss office door + boss --- */
-const door = box(.1, 2.4, 1.6, M("#5b3a22"), -RW / 2 + .2, 1.2, -5);
 const bossPlate = signPlane("BOSS", null, .8, .3, "#2b1d14"); bossPlate.rotation.y = Math.PI / 2; bossPlate.position.set(-RW / 2 + .27, 2.6, -5); scene.add(bossPlate);
 const boss = makeChar({ shirt: "#1b1b1b", pants: "#111", tie: "#e0352b", look: { hair: "combover", hairColor: "#555", wide: true, brows: "angry", mouth: "frown", mustache: true, nose: "big" }, name: "THE BOSS", tagColor: "#e0352b", scale: 1.12 });
 const BOSS_PATH = [[-12.2, -5], [-10.4, -5], [-10.4, 5.4], [-5.5, 5.4], [-5.5, -5.6], [-10.4, -5.6], [-12.2, -5]];
@@ -570,7 +618,9 @@ const P = { fp: false, frozenUntil: 0, lastStep: 0, stampAt: 0, started: false, 
 /* ======================= Sound (tiny WebAudio synth, same style as the computer) ======================= */
 
 let actx = null;
+const SFX_HOOKS = {};
 function sfx(kind) {
+  if (SFX_HOOKS[kind]) { try { SFX_HOOKS[kind](); } catch (e) {} return; }
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     if (actx.state === "suspended") actx.resume();
@@ -642,6 +692,7 @@ addEventListener("message", e => {
   const m = e.data;
   if (!m || m.src !== "forged-os") return;
   osLoaded = true; // any message means the computer is up
+  for (const fn of MSG_HOOKS) { try { fn(m); } catch (err) { console.error("[forged] plugin message failed", err); } }
   if (m.type === "stand") stand();
   if (m.type === "phase") {
     if (m.phase === "briefing" && !["pickup", "carrying", "judging"].includes(P.phase)) setPhase("briefing");
@@ -980,8 +1031,8 @@ $("#btn-stand").onclick = stand;
 
 function collidePlayer(pos) {
   const r = .35;
-  pos.x = clamp(pos.x, -RW / 2 + .5, RW / 2 - .5);
-  pos.z = clamp(pos.z, -RD / 2 + .5, RD / 2 - .5);
+  pos.x = clamp(pos.x, -40, 40);
+  pos.z = clamp(pos.z, -40, 40);
   for (const c of colliders) {
     const cx = clamp(pos.x, c.minX, c.maxX), cz = clamp(pos.z, c.minZ, c.maxZ);
     const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
@@ -1110,7 +1161,7 @@ function updateCamera(dt) {
   camera.position.lerp(want, Math.min(1, dt * 10));
   if (P.shake > 0) { P.shake -= dt; camera.position.x += rand(-.15, .15); camera.position.y += rand(-.1, .1); }
   camera.lookAt(t.x, 1.4, t.z);
-  walls.forEach(w => { w.mat.opacity = w.outside(camera.position) ? .1 : 1; w.mat.depthWrite = w.mat.opacity > .5; });
+  walls.forEach(w => { w.mat.opacity = wallBlocks(w, camera.position, t) ? .1 : 1; w.mat.depthWrite = w.mat.opacity > .5; });
 }
 
 function updateBubbles(now) {
@@ -1126,6 +1177,7 @@ function updateBubbles(now) {
   }
 }
 
+const UPDATERS = [], MSG_HOOKS = [];
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
@@ -1142,6 +1194,7 @@ function loop(now) {
   if (st < 1) inspector.armR.rotation.x = st < .5 ? -.3 - st * 4.8 : -2.7 + (st - .5) * 4.8;
   else inspector.armR.rotation.x = -.3;
   updateMarker(now);
+  for (const fn of UPDATERS) { try { fn(dt, now); } catch (e) { console.error("[forged] plugin update failed", e); } }
   updateCine(now);
   updateConfetti(dt);
   updateFaces(now, _look.set(player.g.position.x, 1.9, player.g.position.z));
@@ -1157,5 +1210,28 @@ requestAnimationFrame(loop);
 
 // handy in the devtools console while prototyping
 window.forged = { P, player, boss: B, camera, CINE, sit, stand, setPhase, grab, deliver };
+
+/* ======================= Plugin API =======================
+ * Rooms and features live in their own files (prototype/rooms/*.js, audio.js,
+ * voice.js, features.js) loaded after this one. They build on `window.FW`
+ * instead of editing world.js, so several people can work in parallel. */
+window.FW = {
+  THREE, scene, camera, renderer,
+  // building blocks
+  M, mats, box, cyl, sphere, outline, collide, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
+  makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses,
+  // state
+  P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,
+  npcs: { kevin, dana, inspector, clerk, boss },
+  // actions and effects
+  say, wtoast, sfx, toOS, setPhase, sit, stand, grab, deliver, near, flashVignette, burstConfetti,
+  rand, pick, clamp, money,
+  // hooks
+  onUpdate: fn => UPDATERS.push(fn),
+  onMessage: fn => MSG_HOOKS.push(fn),
+  addInteraction: it => INTERACTIONS.push(it),
+  setSfx: (kind, fn) => { SFX_HOOKS[kind] = fn; },
+  audio: () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} return actx; },
+};
 
 })();
