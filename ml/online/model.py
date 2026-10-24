@@ -59,25 +59,21 @@ class Version:
 
     def explain(self, rows: pd.DataFrame, k: int = 3) -> list[list[list]]:
         """Each row's top tells: [[tell, weight], ...], weight in Gus's suspicion points (log-odds × 10)."""
-        x = F.encode(F.frame(rows), self.vocab)
-        contrib = self.model.predict(x, pred_contrib=True)[:, :-1]  # last column is the bias
         raw = F.frame(rows)
+        x = F.encode(raw, self.vocab)
+        contrib = self.model.predict(x, pred_contrib=True)[:, :-1]  # last column is the bias
+        emu = F.is_emulator(raw).to_numpy()  # one shared definition (features.is_emulator)
         out = []
         for i in range(len(x)):
             per = {}
             for name, c in zip(F.FEATURES, contrib[i]):
                 if c > 0:
                     tell = TELL_OF.get(name, name)
-                    if tell == "new_device" and _emulator(raw.iloc[i]):
+                    if tell == "new_device" and emu[i]:
                         tell = "emulator"
                     per[tell] = per.get(tell, 0.0) + float(c)
             out.append([[t, round(w * 10, 1)] for t, w in sorted(per.items(), key=lambda kv: -kv[1])[:k]])
         return out
-
-
-def _emulator(r) -> bool:
-    # what the game's emulator looks like: a "mobile" with a desktop Firefox build string on Linux
-    return r.get("DeviceType") == "mobile" and (r.get("device") in ("firefox", "linux", "emulator") or r.get("os") == "linux")
 
 
 def splits(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

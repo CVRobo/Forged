@@ -111,3 +111,12 @@ def encode(x: pd.DataFrame, voc: dict[str, list[str]]) -> pd.DataFrame:
         v = v.where(v.isna() | v.isin(voc[c]), "other")
         x[c] = pd.Categorical(v, categories=voc[c])
     return x
+
+
+def is_emulator(x: pd.DataFrame):
+    """The game's emulator tell, as a boolean Series over a framed DataFrame (from `frame`).
+
+    A "mobile" device carrying a desktop Firefox/Linux build string. One shared definition so the
+    model's `emulator` tell and the report's family label can never disagree.
+    """
+    return (x["DeviceType"] == "mobile") & (x["device"].isin(["firefox", "linux", "emulator"]) | (x["os"] == "linux"))

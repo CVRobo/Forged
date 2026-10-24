@@ -36,7 +36,7 @@ def family(rows: pd.DataFrame) -> pd.Series:
                      ["code by email", "their home", "abroad", "nearby drop", "far drop"], "other drop")
     hide = np.select([_b(x["proxy"].eq("anonymous")), _b(x["proxy"].eq("hidden")), _b(x["dist2"] > 500)],
                      ["Tor/free VPN", "VPN", "far away"], "local")
-    device = np.where(_b(x["device"].isin(["firefox", "linux"]) & x["DeviceType"].eq("mobile")), "emulator", "real device")
+    device = np.where(_b(F.is_emulator(x)), "emulator", "real device")
     return pd.Series([" + ".join(p) for p in zip(account, ship, hide, device)], index=rows.index)
 
 
