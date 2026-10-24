@@ -37,3 +37,6 @@
   border-radius: 10px; padding: 8px 18px; box-shadow: 3px 3px 0 var(--ink, #2b1d14); cursor: pointer; }
 #btn-customize:hover { background: #f9dfb0; }
 @media (max-width: 720px) { .cz-body { grid-template-columns: 1fr; } .cz-stage { min-height: 300px; } }
+/* in a LAN or online room (lan.js): shirt colours other players wear */
+.cz-sw button.taken { opacity: .22; cursor: not-allowed; }
+.cz-note { grid-column: 1 / -1; margin: 0 0 4px; font-size: 12px; opacity: .7; }

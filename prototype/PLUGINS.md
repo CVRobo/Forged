@@ -10,6 +10,7 @@ New rooms and features live in their own files and build on `window.FW`, which `
 | `audio.js` | Sound + voice | Ambience, music, better sound effects |
 | `voice.js` | Sound + voice | Talking to NPCs with the microphone |
 | `features.js` | Gameplay features | Office life and events that don't belong to one room |
+| `lan.js` | LAN multiplayer | The other players, the shared boss and Gus (README.md, "LAN multiplayer") |
 | `world.js` | 3D polish | Only the furniture, props, characters and lighting sections |
 
 Wrap your file in an IIFE (`(() => { ... })();`) and read everything from `FW`. Don't edit `index.html`, `os.html`, `game.js` or `style.css`.
@@ -45,7 +46,8 @@ Wrap your file in an IIFE (`(() => { ... })();`) and read everything from `FW`. 
 
 **State:**
 - The player: `FW.player` (`.g` is the group) and `FW.P`. `P.phase` is one of `idle`, `briefing`, `forging`, `printing`, `pickup`, `carrying`, `judging` or `result`. Also `P.carrying`, `P.seated`, `P.fp` and `P.frozenUntil`.
-- The boss: `FW.B` (`state`, `sus`, `pauseUntil`) and `FW.BOSS_PATH`, an array of `[x, z]` points you may replace.
+- The boss: `FW.B` (`state`, `sus`, `pauseUntil`) and `FW.BOSS_PATH`, an array of `[x, z]` points you may replace. In a LAN game `B.remote` is true when another player's game walks him: don't move him or start events that do (like a fire drill) then.
+- `P.live` is true in a LAN game, where the Game Menu doesn't freeze the office.
 - Locations: `FW.CHAIR`, `FW.PRINTER`, `FW.BOOTH`, `FW.IN_TRAY`, `FW.CLERK_DESK`.
 
 **Hooks:**
@@ -58,6 +60,7 @@ Wrap your file in an IIFE (`(() => { ... })();`) and read everything from `FW`. 
 - `FW.wtoast(text, kind)` shows a toast; `kind` is `""`, `"good"` or `"bad"`.
 - `FW.sfx(kind)` plays a sound effect. `FW.setSfx(kind, fn)` overrides or adds one, and `FW.audio()` gives you the AudioContext.
 - `FW.flashVignette()` flashes the screen edges red. `FW.burstConfetti(x, y, z)` fires confetti.
+- `FW.pinVerdict({ caught, scheme, vendor })` pins a verdict to the corkboard and the TV. `FW.setTag(ch, label, color)` rewrites a character's name tag.
 - `FW.toOS(type, data)` sends a message to the computer. A new message type does nothing until C handles it in `game.js`, so list it in your report.
 - Helpers: `FW.rand`, `FW.pick`, `FW.clamp`, `FW.money`.
 
