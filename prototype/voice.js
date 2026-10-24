@@ -113,6 +113,8 @@ const VOICE = {
 };
 function speak(name, text) {
   try {
+    // If server-backed TTS is active, skip browser speech synthesis
+    if (FW.voice && FW.voice._serverTTS) return;
     const synth = window.speechSynthesis;
     if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
     const snd = FW.sound;
