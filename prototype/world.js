@@ -218,7 +218,7 @@ function wallRun(axis, fixed, from, to, doors = [], { thick = .3, color } = {}) 
       trim(.16, .05, .08, base);
       fade.push(rail, base);
     }
-    walls.push({ m, mat, mats: fade, axis, fixed, a, b });
+    walls.push({ m, mat, mats: fade, axis, fixed, a, b, solid: full });
   };
   let start = from;
   doors.slice().sort((p, q) => p.at - q.at).forEach(d => {
@@ -235,6 +235,19 @@ function doorFrame(axis, fixed, at, width) {
   [-1, 1].forEach(sx => axis === "x" ? box(.12, 2.5, .4, trim, at + sx * width / 2, 1.25, fixed) : box(.4, 2.5, .12, trim, fixed, 1.25, at + sx * width / 2));
 }
 // does this wall segment block the line from the player to the camera?
+/* Can the boss see from A to B? Full-height walls and closed doors block the line; doorways
+ * (lintels) and open doors don't. Used by the vision cone, so you can hide behind a wall or a door. */
+function sightBlocked(ax, az, bx, bz) {
+  for (const w of walls) {
+    if (w.door ? w.door.hinge && Math.abs(w.door.hinge.rotation.y - w.door.base) > .35 : !w.solid) continue; // open door / doorway
+    const af = w.axis === "x" ? az : ax, bf = w.axis === "x" ? bz : bx;
+    if ((af - w.fixed) * (bf - w.fixed) >= 0) continue;
+    const t = (w.fixed - af) / (bf - af);
+    const cross = w.axis === "x" ? ax + t * (bx - ax) : az + t * (bz - az);
+    if (cross > w.a && cross < w.b) return true;
+  }
+  return false;
+}
 function wallBlocks(w, cam, pl) {
   const ca = w.axis === "x" ? cam.z : cam.x, pa = w.axis === "x" ? pl.z : pl.x;
   if ((ca - w.fixed) * (pa - w.fixed) >= 0) return false;
@@ -276,7 +289,7 @@ function makeDoor(name, axis, fixed, at, width, into) {
   const d = { name, axis, fixed, at, width, hinge, base, openAngle, block, open: false, npcHold: false, lastNpc: 0,
     mats: [wood, dark, glass], center: axis === "x" ? { x: at, z: fixed } : { x: fixed, z: at } };
   // fades with its wall (the camera code dims anything listed in `walls`)
-  walls.push({ m: leaf, mat: wood, mats: d.mats, axis, fixed, a: at - width / 2, b: at + width / 2 });
+  walls.push({ m: leaf, mat: wood, mats: d.mats, axis, fixed, a: at - width / 2, b: at + width / 2, door: d });
   doorObjs.push(d);
   return d;
 }
@@ -1416,6 +1429,19 @@ const tutLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: tutLabelTex, d
 tutLabel.scale.set(2.2, .42, 1); tutLabel.renderOrder = 11;
 tutArrowGroup.add(tutLabel);
 
+/* tip card in the office during the tutorial's walking steps (the computer's card is hidden then) */
+const OFFICE_TIPS = {
+  sit: { title: "The office", text: () => `Follow the <b>green arrow</b> to your desk and press <kbd>${K.labels("interact")}</kbd>.<br>Meet <b>the boss</b>: he patrols the office, and the <b>yellow cone</b> on the floor is what he can see.` },
+  pickup: { title: "Don't get seen", text: () => `Grab your slip at the printer. If the boss's cone catches you <b>carrying it</b>, he stops you (+heat).<br><b>Walls and closed doors block his view.</b> Doors open as you walk into them; press <kbd>${K.labels("interact")}</kbd> by one to close it behind you.` },
+  deliver: { title: "Deliver it", text: () => `Drop it in Gus's IN tray. Act natural.<br>Tips: <b>coffee</b> from the break room makes you faster and the boss slower to notice; a <b>donut</b> can sweeten Brenda, Gus… or the boss.` },
+};
+const tipCard = document.createElement("div"); tipCard.id = "office-tip"; document.body.appendChild(tipCard);
+function showOfficeTip(phase) {
+  const t = OFFICE_TIPS[phase];
+  if (!t || !P.tutorialOn) { tipCard.classList.remove("show"); return; }
+  tipCard.innerHTML = `<div class="ot-k">Tutorial · in the office</div><div class="ot-t">${t.title}</div><p>${t.text()}</p>`;
+  tipCard.classList.add("show");
+}
 function updateTutArrowLabel() {
   if (!P.tutorialLabel) return;
   redraw(tutLabelTex, (g, w, h) => {
@@ -1550,8 +1576,8 @@ addEventListener("message", e => {
   if (m.type === "hud") applyHud(m);
   if (m.type === "print") startPrinting();
   if (m.type === "verdict") onVerdict(m);
-  if (m.type === "tutorial-active") { P.tutorialOn = !!m.on; if (!m.on) P.tutorialPhase = null; }
-  if (m.type === "tutorial-phase") { P.tutorialPhase = m.phase || null; P.tutorialLabel = m.label || ""; updateTutArrowLabel(); }
+  if (m.type === "tutorial-active") { P.tutorialOn = !!m.on; if (!m.on) P.tutorialPhase = null; showOfficeTip(P.tutorialPhase); }
+  if (m.type === "tutorial-phase") { P.tutorialPhase = m.phase || null; P.tutorialLabel = m.label || ""; updateTutArrowLabel(); showOfficeTip(P.tutorialPhase); }
 });
 
 function applyHud(h) {
@@ -2044,7 +2070,8 @@ function updateBoss(dt, now) {
   // vision cone: carrying the envelope inside it builds suspicion
   const vx = player.g.position.x - pos.x, vz = player.g.position.z - pos.z, vd = Math.hypot(vx, vz);
   let ang = Math.atan2(vx, vz) - boss.g.rotation.y; ang = Math.atan2(Math.sin(ang), Math.cos(ang));
-  const inView = !P.seated && vd < CONE_R && Math.abs(ang) < CONE_HALF;
+  const inView = !P.seated && vd < CONE_R && Math.abs(ang) < CONE_HALF
+    && !sightBlocked(pos.x, pos.z, player.g.position.x, player.g.position.z); // walls and closed doors hide you
   if (inView && P.carrying && !B.busted) {
     if (B.sus === 0) { say(boss, "Hm?", 900); sfx("huh"); }
     B.sus += dt * 1.3;
@@ -2299,9 +2326,16 @@ function renderViewArms() {
 // the envelope you carry from the printer to the IN tray
 registerHeld(carryEnv, { hand: "right", offset: [.06, .12, .08], rot: [Math.PI / 2, 0, -.12] });
 
-// inner doors: E opens/closes; other characters open them as they arrive
+// inner doors: walk into a closed one and it opens; E opens/closes; other characters open them as they arrive
 function updateDoors(dt, now) {
+  const pp = player.g.position;
   for (const d of doorObjs) {
+    if (!d.open && !P.seated && P.started) {
+      // pressing against it: within a step of the closed door, inside its width, while moving
+      const along = d.axis === "x" ? pp.x - d.at : pp.z - d.at, across = d.axis === "x" ? pp.z - d.fixed : pp.x - d.fixed;
+      const pushing = ["forward", "back", "left", "right"].some(held) && Math.abs(along) < d.width / 2 - .1 && Math.abs(across) < .62;
+      if (pushing && now > (d.closedAt || 0) + 700) { d.open = true; sfx("door"); }
+    }
     const npcNear = characters.some(ch => ch !== player && ch.g.visible && Math.hypot(ch.g.position.x - d.center.x, ch.g.position.z - d.center.z) < 1.6);
     if (npcNear) d.lastNpc = now;
     d.npcHold = now - d.lastNpc < 900;
@@ -2320,7 +2354,7 @@ for (const d of DESKS) INTERACTIONS.push({
 for (const d of doorObjs) INTERACTIONS.push({
   label: () => `${d.open ? "Close" : "Open"} the ${d.name} door`,
   can: () => !P.seated && near(d.center, 1.5),
-  act: () => { d.open = !d.open; sfx("door"); },
+  act: () => { d.open = !d.open; if (!d.open) d.closedAt = performance.now(); sfx("door"); }, // a short grace so it doesn't bounce open again
 });
 
 const UPDATERS = [], MSG_HOOKS = [];
@@ -2390,7 +2424,7 @@ window.FW = {
   // hooks
   onUpdate: fn => UPDATERS.push(fn),
   // doors: FW.doors[i].open; the emergency exit: FW.exit.propped = true lets you out (fire drill)
-  doors: doorObjs, exit: exitState, isOutside, LOT, ASSEMBLY,
+  doors: doorObjs, exit: exitState, isOutside, LOT, ASSEMBLY, sightBlocked,
   // held items: hold.register(group, { hand: "right" | "left" | () => side, offset, rot }); toggle .visible to pick up / put down
   hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),
