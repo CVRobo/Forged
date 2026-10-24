@@ -44,6 +44,7 @@ GATE_FPR = 0.08
 FORCE_FPR = 0.10
 REGRESSION_TOL = 0.05
 BOOTSTRAP = 200
+AGED_LOG_DAYS = 5.0  # log1p(domain age) above this (about 150 days) reads as a domain bought aged
 
 
 @lru_cache(maxsize=1)
@@ -62,15 +63,19 @@ def score(det: Detector, features: dict[str, float], level_id: str) -> float:
 
 
 def ensure_v1() -> int:
-    """The live version, training and saving v1 from generator data the first time."""
+    """The live version, training and saving v1 from generator data the first time. A live version
+    trained on another feature set (say, before the realistic channel) is replaced the same way,
+    as the next version."""
     current = store.current_version()
-    if current is not None:
+    if current is not None and store.load_detector(current).features == FEATURES:
         return current
     train, val, _ = base_splits()
     det = fit(train, val)
-    store.save_version(det, _meta(1, det, len(train), None, True, False, None,
-                                  ["Inspector v1 starts work. Sleepy, but trained on the usual tricks."]))
-    return 1
+    version = store.next_version()
+    note = ("Inspector v1 starts work. Sleepy, but trained on the usual tricks." if current is None else
+            f"Inspector v{version} starts over on the new case file: it reads the email and the bank-change log too.")
+    store.save_version(det, _meta(version, det, len(train), None, True, False, current, [note]))
+    return version
 
 
 def level_thresholds(det: Detector, val: list[Submission]) -> dict[str, float]:
@@ -218,6 +223,13 @@ def extract_levers(row: Submission) -> Levers:
     else:
         amount = "typical"
     stains = sum(u.tool == "mug" for u in inv.tool_uses)
+    # The email, as its features show it. A paper-mode record has none and reads as the cleanest sender.
+    if f["free_mail_sender"]:
+        sender = "free_mail"
+    elif identity == "copy":
+        sender = "spoofed_domain" if f["dmarc_fail"] else "compromised_mailbox"
+    else:
+        sender = "lookalike_domain" if identity == "lookalike" else "new_domain"
     return Levers(
         scheme_id=scheme, identity=identity, amount=amount,
         timing="right_after" if f["cadence_z"] < -2 else "on_cadence" if known else "random",
@@ -229,6 +241,12 @@ def extract_levers(row: Submission) -> Levers:
         tone="none" if not inv.cover_email else "urgent" if f["email_urgency"] > 0 else "plain",
         mention_change=bool(f["email_mentions_change"]),
         send="offhours" if f["offhours_send"] else "business", due="short" if f["due_days"] <= 7 else "normal",
+        sender=sender, aged_domain=f["log_domain_age"] > AGED_LOG_DAYS,
+        display="vendor" if f["display_name_spoof"] or inv.email is None else "person",
+        reply_to="attacker" if f["reply_to_mismatch"] else "none", cc=bool(f["cc_lookalike"]),
+        thread="new" if f["new_thread_for_payment"] else "reply",  # no email reads like a reply in thread
+        channel="email" if f["bank_change_via_email"] or scheme != "bank_change_fraud" else "phone",
+        offer_phone=bool(f["change_request_offered_phone"]),
     )
 
 

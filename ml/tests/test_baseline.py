@@ -61,7 +61,7 @@ def test_evaluate_reports_recall_per_scheme(splits):
 def test_the_gate_runs_every_spec_check(splits):
     report = run_checks(*splits)
     names = [c.name for c in report.checks]
-    assert sum(n.startswith("2.1") for n in names) == 5
+    assert sum(n.startswith("2.1") for n in names) == 6
     assert sum(n.startswith("3.1") for n in names) == 6
     assert any(n.startswith("3.2") for n in names) and any(n.startswith("4.5") for n in names)
     assert any(n.startswith("v1 recall") for n in names)

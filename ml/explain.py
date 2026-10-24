@@ -3,6 +3,8 @@
 Tells use the prototype's tell names and regions (TELL_LABELS and TELL_REGION in
 prototype/game.js) so the forensic replay highlights the right part of the paper.
 """
+import math
+
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 
@@ -30,6 +32,15 @@ TELLS = {
     "email_urgency": ("urgent_email", None), "email_mentions_change": ("urgent_email", None), "email_length": ("urgent_email", None),
     "window_count": ("heat", None), "window_sum": ("heat", None), "vendor_age_rounds": ("heat", None),
     "knn_fraud_share": ("heat", None), "knn_max_sim": ("heat", None), "self_sim": ("heat", None),
+    # the realistic channel: the email (region "email") and the vendor master's change log ("bank")
+    "reply_to_mismatch": ("reply_to", "email"), "from_domain_known": ("domain_mismatch", "email"),
+    "free_mail_sender": ("free_mail", "email"), "display_name_spoof": ("display_spoof", "email"),
+    "cc_lookalike": ("lookalike_cc", "email"), "dmarc_fail": ("auth_fail", "email"), "spf_fail": ("auth_fail", "email"),
+    "log_domain_age": ("new_domain", "email"), "first_time_sender": ("first_contact", "email"),
+    "new_thread_for_payment": ("new_thread", "email"),
+    "days_since_bank_change": ("recent_bank_change", "bank"), "bank_change_via_email": ("recent_bank_change", "bank"),
+    "bank_change_verified": ("recent_bank_change", "bank"), "change_request_offered_phone": ("recent_bank_change", "bank"),
+    "new_account_payment": ("recent_bank_change", "bank"),
 }
 
 # What each feature means, for memo rules and patch notes. {t} is the split threshold.
@@ -68,6 +79,21 @@ PHRASES = {
     "knn_fraud_share": ("invoices like ones that turned out to be fraud", "invoices like real ones"),
     "knn_max_sim": ("near-copies of earlier invoices", "invoices unlike earlier ones"),
     "self_sim": ("you repeating your favorite trick", "fresh tricks"),
+    "reply_to_mismatch": ("emails whose replies go to another domain", "replies to the sender"),
+    "from_domain_known": ("senders on a domain the desk hasn't seen for this vendor", "the vendor's usual domains"),
+    "free_mail_sender": ("vendors writing from Gmail or another free mailbox", "company email"),
+    "display_name_spoof": ("a vendor's name on someone else's address", "names that match the address"),
+    "cc_lookalike": ("CCs to a domain a letter or two off a vendor's", "ordinary CCs"),
+    "dmarc_fail": ("emails that fail DMARC", "emails that pass DMARC"),
+    "spf_fail": ("emails that fail SPF", "emails that pass SPF"),
+    "log_domain_age": ("sender domains registered in the last {a:.0f} days", "long-registered domains"),
+    "first_time_sender": ("first emails from a new address", "addresses the desk knows"),
+    "new_thread_for_payment": ("payment requests that start a new thread", "replies in the vendor's thread"),
+    "days_since_bank_change": ("payments within {d:.0f} days of a bank-details change", "long-standing bank details"),
+    "bank_change_via_email": ("bank details changed by email", "bank details changed another way"),
+    "bank_change_verified": ("bank changes nobody confirmed on the number on file", "bank changes confirmed by callback"),
+    "change_request_offered_phone": ("bank changes that came with their own 'call me' number", "no number offered"),
+    "new_account_payment": ("the first payments into a newly changed account", "accounts on file for a while"),
 }
 TREE_AGREEMENT = 0.85  # spec 5.1: only use rules from a tree that agrees with the model this often
 
@@ -89,7 +115,7 @@ def tells(det: Detector, features: dict[str, float], k: int = 5, memory: bool = 
 def phrase(feature: str, threshold: float | None = None, high: bool = True, limit: float = 2500.0) -> str:
     text = PHRASES.get(feature, (feature.replace("_", " "), "not " + feature.replace("_", " ")))[0 if high else 1]
     t = threshold if threshold is not None else 0.0
-    return text.format(t=t, p=max(0.0, (t - 1) * 100), d=t, limit=limit)
+    return text.format(t=t, p=max(0.0, (t - 1) * 100), d=t, a=math.expm1(t), limit=limit)
 
 
 def memo_rules(det: Detector, rows: list, k: int = 2, memory: bool = True) -> list[str]:

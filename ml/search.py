@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ml import store, training
-from ml.attackers import KNOWN_VENDOR_SCHEMES, Levers, sample_levers
+from ml.attackers import KNOWN_VENDOR_SCHEMES, SENDERS, Levers, sample_levers, sender_for
+from ml.mail import OWN_ADDRESS
 from ml.generate import clone_attacks
 from ml.payloads import SCHEMES
 from ml.schema import LEVELS, Submission
@@ -37,13 +38,15 @@ TOP_SETTINGS = 2
 PER_SETTING = 10
 LEVEL = "sunny_diner"
 
-COMMON = ("photocopies", "stains", "stamp", "tone", "mention_change", "send", "due")
+COMMON = ("photocopies", "stains", "stamp", "tone", "mention_change", "send", "due",
+          "sender", "aged_domain", "display", "reply_to", "cc", "thread")  # the email (realistic channel)
 RELEVANT = {  # the levers each scheme's builder in attackers.py reads
     "bank_switcheroo": ("identity", "amount", "timing", "letterhead") + COMMON,
     "padded_invoice": ("identity", "amount", "timing", "letterhead", "pad_method") + COMMON,
     "duplicate_dance": ("identity", "dup_change", "letterhead") + COMMON,
     "phantom_supplier": ("identity", "amount", "letterhead", "reuse_payee") + COMMON,
     "boss_request": ("amount", "reuse_payee") + COMMON,
+    "bank_change_fraud": ("identity", "amount", "letterhead", "channel", "offer_phone") + COMMON,
 }
 CHOICES = {
     "amount": ("typical", "under_limit", "round", "inflated"),
@@ -59,10 +62,19 @@ CHOICES = {
     "send": ("business", "offhours"),
     "due": ("normal", "short"),
     "reuse_payee": (False, True),
+    "aged_domain": (False, True),
+    "display": ("vendor", "person"),
+    "reply_to": ("none", "attacker"),
+    "cc": (False, True),
+    "thread": ("new", "reply"),
+    "channel": ("email", "phone"),
+    "offer_phone": (False, True),
 }
 DEFAULTS = {"identity": "fresh", "amount": "typical", "timing": "random", "letterhead": "match", "pad_method": "price",
             "dup_change": "number", "photocopies": 0, "stains": 0, "stamp": "none", "tone": "none",
-            "mention_change": False, "send": "business", "due": "normal", "reuse_payee": False}
+            "mention_change": False, "send": "business", "due": "normal", "reuse_payee": False, "sender": "auto",
+            "aged_domain": False, "display": "vendor", "reply_to": "none", "cc": False, "thread": "new",
+            "channel": "email", "offer_phone": False}
 
 
 @dataclass
@@ -74,29 +86,39 @@ class Found:
     kept: list[tuple[Levers, float]] = field(default_factory=list)  # every setting that got PAID, most evasive first
 
 
-def options(scheme_id: str) -> dict[str, tuple]:
-    identity = ("copy", "lookalike") if scheme_id in KNOWN_VENDOR_SCHEMES else ("lookalike", "fresh")
-    return {"identity": identity, **CHOICES}
+def options(scheme_id: str, identity: str | None = None) -> dict[str, tuple]:
+    identities = ("copy", "lookalike") if scheme_id in KNOWN_VENDOR_SCHEMES else ("lookalike", "fresh")
+    senders = SENDERS[identity] if identity else tuple(dict.fromkeys(s for i in identities for s in SENDERS[i]))
+    return {"identity": identities, "sender": senders, **CHOICES}
 
 
 def relevant_levers(lv: Levers) -> tuple[str, ...]:
     """The levers that change this setting's invoices: the letterhead only matters on a
-    lookalike, and mentioning a change only in a cover email."""
-    names = RELEVANT[lv.scheme_id]
+    lookalike, mentioning a change only in a cover email, a domain's age only on a domain the
+    attacker registered, the display name only off the vendor's own domain, and the thread
+    only for a known vendor's."""
+    names, sender = RELEVANT[lv.scheme_id], sender_for(lv)
     return tuple(n for n in names if not (n == "letterhead" and lv.identity != "lookalike")
-                 and not (n == "mention_change" and lv.tone == "none"))
+                 and not (n == "mention_change" and lv.tone == "none")
+                 and not (n == "aged_domain" and sender not in ("lookalike_domain", "new_domain"))
+                 and not (n == "display" and sender in OWN_ADDRESS)
+                 and not (n == "thread" and lv.scheme_id not in KNOWN_VENDOR_SCHEMES))
 
 
 def canonical(lv: Levers) -> Levers:
     """The same setting with every lever it ignores at its default, so equal settings compare equal."""
-    keep = relevant_levers(lv)
-    return lv.model_copy(update={n: DEFAULTS[n] for n in DEFAULTS if n not in keep})
+    for _ in range(2):  # resetting an ignored identity can change which sender it resolves to
+        lv = lv.model_copy(update={"sender": sender_for(lv)})
+        keep = relevant_levers(lv)
+        lv = lv.model_copy(update={n: DEFAULTS[n] for n in DEFAULTS if n not in keep})
+    return lv
 
 
 def mutate(lv: Levers, rng: random.Random) -> Levers:
     """Change one lever that matters to another of its values."""
-    name = rng.choice(relevant_levers(lv))
-    value = rng.choice([v for v in options(lv.scheme_id)[name] if v != getattr(lv, name)])
+    lv = lv.model_copy(update={"sender": sender_for(lv)})
+    name = rng.choice([n for n in relevant_levers(lv) if len(options(lv.scheme_id, lv.identity)[n]) > 1])
+    value = rng.choice([v for v in options(lv.scheme_id, lv.identity)[name] if v != getattr(lv, name)])
     return lv.model_copy(update={name: value})
 
 

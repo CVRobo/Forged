@@ -24,6 +24,7 @@ PAYLOAD_FEATURES = {  # each scheme's unavoidable tell (design doc scheme catalo
     "boss_request": ("vendor_unknown", "no_open_order"),
     "phantom_supplier": ("vendor_unknown",),
     "padded_invoice": ("order_amount_ratio",),
+    "bank_change_fraud": ("new_account_payment", "days_since_bank_change"),  # pays an account changed lately
 }
 HISTORY_FEATURES = ("window_count", "window_sum", "vendor_age_rounds", "amount_jump_ratio", "cadence_z", "dup_similarity")
 TEXT_FEATURES = ("vague_text_score", "email_urgency", "email_mentions_change", "email_length")

@@ -55,3 +55,31 @@ def cover_email(rng: random.Random, tone: str, *, vendor: str, number: str, amou
         parts.append(rng.choice(CHANGES))
     parts += [rng.choice(EXTRAS[tone]), rng.choice(SIGNOFFS[tone]), f"{vendor} billing"]
     return " ".join(p for p in parts if p)
+
+
+# Act 1 (docs/realistic-data-plan.md section 3): real vendors and attackers ask for a bank change in the same words.
+CHANGE_REQUESTS = (
+    "We've moved our business banking. Please update our remittance details to account {account} before the next payment run.",
+    "Our bank details have changed. Going forward, please send all payments to account {account}.",
+    "Please update the bank account on file for us to {account}. The old account will be closed shortly.",
+    "Quick note from accounts: our new account for payments is {account}. Kindly update your vendor records.",
+)
+VERIFY_LINES = ("If you'd like to confirm, call me directly at {phone}.", "You can verify this with me at {phone}.",
+                "Questions? My direct line is {phone}.")
+CHANGE_SUBJECTS = ("Updated bank details", "Change of remittance details", "New banking information",
+                   "Please update our payment details")
+
+
+def change_request_text(rng: random.Random, tone: str, *, vendor: str, account: str, phone: str | None = None) -> str:
+    parts = [rng.choice(GREETINGS[tone]), rng.choice(CHANGE_REQUESTS).format(account=account)]
+    if phone:
+        parts.append(rng.choice(VERIFY_LINES).format(phone=phone))
+    if tone == "urgent":
+        parts.append("Please update this today so the next payment isn't delayed.")
+    parts += [rng.choice(SIGNOFFS[tone]), f"{vendor} accounts"]
+    return " ".join(parts)
+
+
+def invoice_subject(rng: random.Random, number: str, vendor: str, urgent: bool = False) -> str:
+    subject = rng.choice((f"Invoice {number}", f"{vendor} invoice {number}", f"Invoice {number} attached"))
+    return f"URGENT: {subject}" if urgent else subject

@@ -13,6 +13,7 @@ from pathlib import Path
 import joblib
 
 from ml.baseline import Detector
+from ml.features import backfill
 from ml.schema import Submission
 
 
@@ -74,8 +75,10 @@ def append_text_rows(lines: list[str], name: str) -> None:
 
 
 def load_rows(name: str = "buffer") -> list[Submission]:
+    """Rows stored before the realistic channel get its features backfilled (ml.features.backfill)."""
     path = model_dir() / f"{name}.jsonl"
-    return [Submission.model_validate_json(line) for line in path.read_text().splitlines()] if path.exists() else []
+    rows = [Submission.model_validate_json(line) for line in path.read_text().splitlines()] if path.exists() else []
+    return [r.model_copy(update={"features": backfill(r.features, r.invoice)}) for r in rows]
 
 
 def clear_cache() -> None:

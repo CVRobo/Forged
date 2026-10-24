@@ -62,14 +62,22 @@ def apply_decision(request: VendorChangeRequest, callback: str, level: int = 1, 
                           callback_result=result, applied=applied, reason=reason or callback)
 
 
-def to_event(request: VendorChangeRequest, decision: ChangeDecision) -> BankChangeEvent | None:
-    """The vendor-master change-log row for an applied change."""
+def to_event(request: VendorChangeRequest, decision: ChangeDecision, old_account: str | None = None) -> BankChangeEvent | None:
+    """The vendor-master change-log row for an applied change. old_account: what the file held (default: the
+    vendor's starting account)."""
     if not decision.applied:
         return None
-    return BankChangeEvent(vendor_id=request.vendor_id, old_account=VENDOR_SPECS[request.vendor_id].bank,
+    spec = VENDOR_SPECS[request.vendor_id]
+    return BankChangeEvent(vendor_id=request.vendor_id, old_account=old_account or spec.bank,
                            new_account=request.new_bank_account, changed_at=request.requested_at,
                            request_id=request.request_id, channel=request.channel,
-                           verified=decision.callback_result == "vendor_confirmed" and decision.callback == "number_on_file")
+                           verified=decision.callback_result == "vendor_confirmed" and decision.callback == "number_on_file",
+                           offered_phone=offered_other_number(request))
+
+
+def offered_other_number(request: VendorChangeRequest) -> bool:
+    """The request offers a number "for verification" that isn't the one on file."""
+    return bool(request.phone_number_given) and request.phone_number_given != VENDOR_SPECS[request.vendor_id].phone
 
 
 def suspicion(request: VendorChangeRequest) -> float:

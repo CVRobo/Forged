@@ -44,8 +44,10 @@ class ToolUse(BaseModel):
 
 AuthResult = Literal["pass", "fail", "none"]
 # How the sender got its From address (docs/realistic-data-plan.md section 2). vendor_mailbox is a
-# real vendor writing from its own address; the other four are the attacker's options.
-SenderIdentity = Literal["vendor_mailbox", "lookalike_domain", "free_mail", "spoofed_domain", "compromised_mailbox"]
+# real vendor writing from an address it controls; the others are the attacker's options, and
+# new_domain is a domain registered for the occasion (a phantom supplier's own).
+SenderIdentity = Literal["vendor_mailbox", "lookalike_domain", "free_mail", "spoofed_domain", "compromised_mailbox",
+                         "new_domain"]
 
 
 class EmailMessage(BaseModel):
@@ -93,6 +95,7 @@ class BankChangeEvent(BaseModel):
     request_id: str
     channel: Literal["email", "phone", "portal"]
     verified: bool  # confirmed by a callback to the number on file
+    offered_phone: bool = False  # the request offered a number that isn't the one on file
 
 
 class Invoice(BaseModel):  # raw, player-editable state
@@ -196,7 +199,16 @@ class Submission(BaseModel):  # one row per round, the training record
 
 
 # Feature names in a fixed order, so vectors line up across training and serving.
-# Appendix A table order: money, identity, process, text, physical, session.
+# Appendix A table order: money, identity, process, text, physical, session. Then the
+# realistic channel's two groups (docs/realistic-data-plan.md sections 2 and 3).
+EMAIL_FEATURES = (  # the email that delivered the invoice
+    "reply_to_mismatch", "from_domain_known", "free_mail_sender", "display_name_spoof", "cc_lookalike",
+    "dmarc_fail", "spf_fail", "log_domain_age", "first_time_sender", "new_thread_for_payment",
+)
+CHANGE_FEATURES = (  # the vendor master's change log
+    "days_since_bank_change", "bank_change_via_email", "bank_change_verified", "change_request_offered_phone",
+    "new_account_payment",
+)
 BASE_FEATURES = (
     "amount_z", "amount_is_round", "amount_to_limit_ratio", "bank_changed",
     "order_amount_ratio", "max_unit_price_ratio",
@@ -207,7 +219,7 @@ BASE_FEATURES = (
     "field_altered_count", "max_illegibility", "copy_generation", "scan_quality",
     "stamp_count", "stamp_matches_vendor",
     "window_count", "window_sum", "vendor_age_rounds", "amount_jump_ratio",
-)
+) + EMAIL_FEATURES + CHANGE_FEATURES
 # Spec 2.3: served from the kNN index at submit time and stored in Submission.features.
 # The search vectors themselves hold BASE_FEATURES only.
 MEMORY_FEATURES = ("knn_fraud_share", "knn_max_sim", "self_sim")

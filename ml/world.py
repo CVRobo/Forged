@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
-from ml.features import edit_distance
+from ml.features import FREE_MAIL_DOMAINS, edit_distance
 from ml.schema import CaseFile, LineItem, Stamp, VendorProfile
 
 LEVEL_ID = "sunny_diner"
@@ -100,8 +100,9 @@ BOSS_NAMES = ("Office of the Owner", "Big Lou Executive Office", "Sunny Diner HQ
 BOSS_DOMAINS = ("owner-office.net", "sunnydiner-hq.com", "sunnydinner.com", "biglou.biz")
 BOSS_LINES = ("Urgent confidential payment", "Owner discretionary expense", "Equipment deposit", "Supplier prepayment")
 BILLING_DOMAINS = ("quickinvoice.com", "billtrail.io", "invoicely.co")  # services real vendors send bills through
-BRANCHES = ("East", "Oakland", "Downtown", "Wholesale")  # new branches of approved vendors, onboarded separately
-FREE_MAIL_DOMAINS = ("gmail.com", "outlook.com", "yahoo.com")
+BRANCHES = ("East", "Oakland", "Downtown", "Wholesale")
+CONTACT_NAMES = ("Dana Whitfield", "Jordan Lee", "Priya Raman", "Sam Ortiz", "Morgan Blake", "Casey Nguyen",
+                 "Riley Adams", "Avery Chen")  # people who write for a vendor (or say they do)  # new branches of approved vendors, onboarded separately
 TLDS = (".com", ".co", ".biz", ".net")
 
 

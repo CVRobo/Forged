@@ -6,7 +6,12 @@ the kNN memory features come from the vector index (spec 2.3).
 
 Pass the case file and history as they stood *before* this invoice: paid_invoices
 must not contain it yet, and history entries after the current round are ignored.
+
+The email features read invoice.email, the message that delivered the invoice, and the
+change features read case_file.bank_changes, the vendor master's change log. Without an
+email they take neutral values, except the two that only need the sender's domain.
 """
+import math
 import re
 from difflib import SequenceMatcher
 
@@ -18,6 +23,17 @@ DEFAULT_STAIN = 0.35      # legibility lost per mug stain (same as the prototype
 CADENCE_CV = 0.25         # cadence std as a share of cadence_days (VendorProfile has no std)
 DUP_DATE_SCALE_DAYS = 30  # invoices this many days apart score 0 on date similarity
 BUSINESS_HOURS = (9, 17)  # weekdays only
+FREE_MAIL_DOMAINS = ("gmail.com", "outlook.com", "yahoo.com", "hotmail.com", "aol.com", "icloud.com", "proton.me")
+NEUTRAL_DOMAIN_AGE_DAYS = 3650  # log_domain_age without an email: an established domain
+CHANGE_HORIZON_DAYS = 365       # days_since_bank_change with no change on file
+NEW_ACCOUNT_DAYS = 60           # new_account_payment: the account was changed less than this many days ago
+NO_EMAIL = {  # what an invoice without an email gets (from_domain_known and free_mail_sender read the sender domain)
+    "reply_to_mismatch": False, "display_name_spoof": False, "cc_lookalike": False, "dmarc_fail": False,
+    "spf_fail": False, "log_domain_age": math.log1p(NEUTRAL_DOMAIN_AGE_DAYS), "first_time_sender": False,
+    "new_thread_for_payment": False,
+}
+NO_CHANGE = {"days_since_bank_change": CHANGE_HORIZON_DAYS, "bank_change_via_email": False,
+             "bank_change_verified": False, "change_request_offered_phone": False, "new_account_payment": False}
 
 URGENCY_TERMS = (
     "urgent", "urgently", "asap", "immediately", "right away", "as soon as possible",
@@ -47,6 +63,8 @@ def compute_features(invoice: Invoice, case_file: CaseFile, session_history: Ses
         **_text(invoice),
         **_physical(invoice, vendor),
         **_session(invoice, vendor, session_history, vendor_paid),
+        **_email(invoice, vendor, case_file, vendor_paid),
+        **_changes(invoice, vendor, case_file),
     }
     return {name: float(f[name]) for name in BASE_FEATURES}
 
@@ -148,7 +166,71 @@ def _session(inv: Invoice, vendor: VendorProfile | None, hist: SessionHistory, v
     }
 
 
+def _email(inv: Invoice, vendor: VendorProfile | None, cf: CaseFile, vendor_paid: list[Invoice]) -> dict:
+    mail = inv.email
+    domain = email_domain(mail.from_addr) if mail else _norm(inv.sender_domain)
+    known = {_norm(p.sender_domain) for p in vendor_paid} | ({_norm(vendor.sender_domain)} if vendor else set())
+    f = {
+        "from_domain_known": domain in known,  # the vendor's domain on file, or one its paid invoices came from
+        "free_mail_sender": domain in FREE_MAIL_DOMAINS,
+        **NO_EMAIL,
+    }
+    if mail is None:
+        return f
+    vendor_domains = [_norm(v.sender_domain) for v in cf.vendors]
+    age = mail.sender_domain_age_days
+    return {**f,
+        "reply_to_mismatch": bool(mail.reply_to) and email_domain(mail.reply_to) != domain,
+        "display_name_spoof": any(name_like(mail.from_name, v.name) and domain != _norm(v.sender_domain) for v in cf.vendors),
+        "cc_lookalike": any(1 <= min((edit_distance(email_domain(c), d) for d in vendor_domains), default=0) <= 2
+                            for c in mail.cc),
+        "dmarc_fail": mail.dmarc == "fail",
+        "spf_fail": mail.spf == "fail",
+        "log_domain_age": math.log1p(max(0, age)) if age is not None else f["log_domain_age"],
+        "first_time_sender": mail.first_time_sender,
+        "new_thread_for_payment": mail.thread_id is None and mail.in_reply_to is None,
+    }
+
+
+def _changes(inv: Invoice, vendor: VendorProfile | None, cf: CaseFile) -> dict:
+    """The vendor's latest bank-data change. The issue date can't hide one: a change after it counts as 0 days."""
+    events = [e for e in cf.bank_changes if vendor and e.vendor_id == vendor.vendor_id]
+    if not events:
+        return dict(NO_CHANGE)
+    last = max(events, key=lambda e: e.changed_at)
+    days = min(CHANGE_HORIZON_DAYS, max(0, (inv.issue_date - last.changed_at.date()).days))
+    recent = days < CHANGE_HORIZON_DAYS
+    return {
+        "days_since_bank_change": days,
+        "bank_change_via_email": recent and last.channel == "email",
+        "bank_change_verified": recent and last.verified,
+        "change_request_offered_phone": recent and last.offered_phone,
+        "new_account_payment": inv.bank_account == last.new_account and days < NEW_ACCOUNT_DAYS,
+    }
+
+
+def backfill(features: dict[str, float], invoice: Invoice) -> dict[str, float]:
+    """A row stored before the realistic channel, with the values an email-less invoice and an empty
+    change log give the features it lacks."""
+    if all(n in features for n in BASE_FEATURES):
+        return features
+    channel = {**NO_EMAIL, **NO_CHANGE, "from_domain_known": not features.get("domain_mismatch", 0.0),
+               "free_mail_sender": _norm(invoice.sender_domain) in FREE_MAIL_DOMAINS}
+    return {**{n: float(v) for n, v in channel.items()}, **features}
+
+
 # ---------- helpers ----------
+
+def email_domain(address: str) -> str:
+    return _norm(address.rpartition("@")[2].strip(" >"))
+
+
+def name_like(display: str, vendor_name: str) -> bool:
+    """A display name that reads as this vendor: its first two words, or a close match to the whole name."""
+    d, v = _plain(display), _plain(vendor_name)
+    core = " ".join(v.split()[:2])
+    return bool(d) and (core in d or SequenceMatcher(None, d, v).ratio() >= 0.8)
+
 
 def find_vendor(inv: Invoice, cf: CaseFile) -> VendorProfile | None:
     return next((v for v in cf.vendors if v.vendor_id == inv.vendor_id), None) if inv.vendor_id else None
@@ -199,6 +281,10 @@ def _words(text: str) -> list[str]:
 
 def _norm(s: str) -> str:
     return s.strip().lower()
+
+
+def _plain(s: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9 ]", "", s.lower()).split())
 
 
 def _mean(values) -> float:
