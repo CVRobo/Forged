@@ -70,7 +70,8 @@ const CARD = "background:var(--card,#fffaf0);border:3px solid var(--ink,#2b1d14)
 const wrap = document.createElement("div");
 wrap.style.cssText = "position:fixed;left:16px;bottom:16px;z-index:5;display:none;flex-direction:column;gap:10px;pointer-events:none;font-family:var(--ui,monospace);color:var(--ink,#2b1d14);";
 const achBox = document.createElement("div");
-achBox.style.cssText = CARD + "padding:8px 12px;font-size:12px;width:240px;display:none;";
+// compact list that fits between the minimap and the top-left HUD; scrolls if the window is short
+achBox.style.cssText = CARD + "padding:8px 12px;font-size:12px;width:fit-content;min-width:200px;max-height:max(90px, calc(100vh - 420px));overflow-y:auto;pointer-events:auto;display:none;";
 const mapBox = document.createElement("div");
 mapBox.style.cssText = CARD + "padding:6px 6px 4px;width:fit-content;";
 const mapHead = document.createElement("div");
@@ -90,7 +91,7 @@ function renderAch() {
   achBox.innerHTML = `<div style="font-family:var(--display,sans-serif);font-size:14px;margin-bottom:4px;">Achievements ${unlocked.size}/${ACH.length}</div>` +
     ACH.map(a => {
       const on = unlocked.has(a.id);
-      return `<div style="display:flex;gap:6px;align-items:baseline;margin:2px 0;opacity:${on ? 1 : .45}"><b style="color:${on ? "var(--paid,#1d9a4b)" : "inherit"}">${on ? "✓" : "☐"}</b><span><b>${a.name}</b><br><small>${a.desc}</small></span></div>`;
+      return `<div title="${a.desc}" style="display:flex;gap:6px;align-items:baseline;margin:1px 0;line-height:1.35;white-space:nowrap;opacity:${on ? 1 : .45}"><b style="color:${on ? "var(--paid,#1d9a4b)" : "inherit"}">${on ? "✓" : "☐"}</b><span>${a.name}</span></div>`;
     }).join("");
 }
 renderAch();
