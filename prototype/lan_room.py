@@ -168,7 +168,7 @@ class Room:
         if n in DESKS and n != p.desk and all(q.desk != n for q in self.players.values()):
             p.desk = n
             return self._out((self.ids(), self.roster()))
-        return [([p.id], self.roster())]  # taken (or no change): only they hear back, and snap back
+        return [([p.id], {**self.roster(), "refused": n})]  # taken (or no change): only they hear back, and snap back
 
     def _on_name(self, p: Player, m: dict):
         name = text(m.get("name"), 16)

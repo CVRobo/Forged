@@ -750,7 +750,7 @@ function updateHud() {
   updateDebug();
   const st = stageFor(S.version);
   post("hud", { level: S.level, money: S.money, heat: S.heat, version: S.version, round: S.round,
-    patches: S.patches, shame: S.shame,
+    patches: S.patches, shame: S.shame, lanBrain: !!S.lanBrain,
     inspector: LEVELS[S.level].inspector.name, emoji: st.emoji, clerk: LEVELS[S.level].clerk });
 }
 
