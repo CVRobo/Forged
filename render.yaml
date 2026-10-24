@@ -10,4 +10,5 @@ services:
     dockerContext: .
     healthCheckPath: /
     autoDeployTrigger: commit # every push to the Blueprint's branch redeploys
-    # optional environment variables, set in the dashboard: ANTHROPIC_API_KEY (Claude's lines), SENTRY_DSN
+    # optional environment variables, set in the dashboard: ANTHROPIC_API_KEY (Claude's lines),
+    # CARTESIA_API_KEY (NPC voices; without it the browser's own voice speaks them), SENTRY_DSN

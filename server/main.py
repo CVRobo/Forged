@@ -84,9 +84,11 @@ else:
     from server.routes.round import router as round_router
     from server.routes.clerk import router as clerk_router
     from server.routes.meta import router as meta_router
+    from server.routes.npc import router as npc_router
 
     app.include_router(round_router, tags=["round"])
     app.include_router(clerk_router, tags=["clerk"])
+    app.include_router(npc_router, tags=["npc"])
     app.include_router(meta_router, tags=["meta"])
 
 
