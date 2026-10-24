@@ -58,6 +58,13 @@ body.seated #hud, body.seated #controls { opacity: 0; }
 #monitor.show .bezel { transform: scale(1); }
 .screen { aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; border: 3px solid #000; }
 .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
+.screen { position: relative; }
+.boot { position: absolute; inset: 0; background: #111; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+#monitor.booting .boot { display: flex; }
+.boot-logo { font-family: var(--display); font-size: 42px; color: var(--accent); -webkit-text-stroke: 1.5px #000; }
+.boot-bar { width: 220px; height: 12px; border: 2px solid #666; border-radius: 6px; overflow: hidden; }
+.boot-bar i { display: block; height: 100%; width: 0; background: var(--accent); animation: boot .45s linear forwards; }
+@keyframes boot { to { width: 100%; } }
 .bezel-bottom { display: flex; align-items: center; gap: 12px; height: 28px; color: #aaa; font-size: 12px; }
 .brand { font-family: var(--display); letter-spacing: 2px; color: #888; }
 .led { width: 8px; height: 8px; border-radius: 50%; background: #49d16a; box-shadow: 0 0 8px #49d16a; }
@@ -81,3 +88,12 @@ body.seated #hud, body.seated #controls { opacity: 0; }
   .hud-obj { max-width: 220px; font-size: 13px; }
   .start-logo { font-size: 56px; }
 }
+
+/* first-person crosshair */
+body.fp::after { content: ""; position: fixed; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #fff; border: 2px solid var(--ink); z-index: 6; pointer-events: none; }
+body.fp.seated::after { display: none; }
+
+/* red edges: pulses with the boss's suspicion, flashes on FLAGGED */
+#vignette { --sus: 0; position: fixed; inset: 0; pointer-events: none; z-index: 3; box-shadow: inset 0 0 180px 60px rgba(224,53,43,.85); opacity: calc(var(--sus) * .8); }
+#vignette.flash { animation: vflash 1.1s ease-out; }
+@keyframes vflash { 0% { opacity: 1; } 100% { opacity: calc(var(--sus) * .8); } }

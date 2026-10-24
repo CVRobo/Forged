@@ -6,7 +6,7 @@ A third-person office game. The forging desk is the operating system of your in-
 python -m http.server 8765
 ```
 
-Then open http://localhost:8765. It needs to be served over http (not opened as a file) so the office and the computer can talk to each other.
+Then open http://localhost:8765. After pulling changes, hard-refresh (Ctrl+F5): the simple server lets the browser keep old copies of the files. It needs to be served over http (not opened as a file) so the office and the computer can talk to each other.
 
 ## Files
 
@@ -30,6 +30,9 @@ Then open http://localhost:8765. It needs to be served over http (not opened as 
 - The inspector's gear changes with his version: stapler (v1–3), magnifying glass (v4–6), UV lamp (v7–9), cyborg eye (v10+).
 - The **DETECTOR LIVE** TV on the east wall charts every attempt and the catch rate.
 - Your desk gets messier every round.
+- Everyone is a chunky cartoon character with googly eyes that follow you around. The inspector's face changes with his version too: sleepy lids, then glasses, UV goggles, and finally a cyborg plate.
+- **Why I caught you:** when you drop the envelope, the camera cuts to the counter. The inspector holds up your invoice and scans it, circles the fields that gave you away, and slams the stamp down: confetti on PAID, a red flash on FLAGGED.
+- When the boss's suspicion builds, you hear a heartbeat and the screen edges turn red.
 
 Controls: `WASD` move · `Shift` run · mouse look (click to capture it) · mouse wheel zoom · `E` interact · `Esc` stand up or free the mouse. On the computer: `1`–`6` tools · `D` detector view · `Space` hide the invoice.
 
@@ -42,7 +45,7 @@ Both pages use `postMessage`:
 | Computer → office | `hud` | Money, heat, inspector version and face, level (the office recolors to the level's palette) |
 | Computer → office | `phase` | `briefing` or `forging`, which drives the objective text |
 | Computer → office | `print` | The envelope was dropped on the outbox; the printer starts |
-| Computer → office | `verdict` | PAID or FLAGGED, the inspector's line, payout; shown in the inspector's bubble and on the corkboard |
+| Computer → office | `verdict` | PAID or FLAGGED, the inspector's line, payout, and `tells` (the top reasons he caught you); drives the booth close-up, the bubble and the corkboard |
 | Computer → office | `stand` | `Esc` was pressed on the computer |
 | Office → computer | `heat` `{amount}` | The boss caught you with the envelope. **Not handled by `game.js` yet (C):** add it to the heat meter |
 | Office → computer | `deliver` | The envelope reached the IN tray; the computer runs the inspection |

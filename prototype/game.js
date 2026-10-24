@@ -806,7 +806,7 @@ function submit() {
       const L = LEVELS[S.level];
       const said = pick(L.lines[caught ? "catch" : "pass"]);
       $("#inspect-line").textContent = `${L.inspector.name} v${S.version}: "${said}"`;
-      post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor });
+      post("verdict", { caught, line: said, payout, scheme: SCHEMES[S.scheme].name, vendor: S.inv.vendor, tells: tells.slice(0, 3).map(t => t[0]) });
       $("#inspect-line").classList.add("show");
       if (caught) {
         sfx("buzz"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
