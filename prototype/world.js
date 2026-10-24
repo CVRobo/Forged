@@ -837,10 +837,12 @@ plant(-12.2, 8.2, "tall"); plant(12.2, 8.2, "bush"); plant(12.2, -8.2, "bush"); 
   K.place(); blob(x, z, .85, .85);
 }
 const jug = cyl(.26, .26, .5, M("#7cc6ff", { transparent: true, opacity: .7 }), -12.3, 1.25, -8.2); jug.castShadow = false; collide(-12.3, -8.2, .7, .7);
-const exitSign = signPlane("EXIT", null, 1, .35, "#1d9a4b"); exitSign.position.set(0, 2.6, RD / 2 - .17); exitSign.rotation.y = Math.PI; scene.add(exitSign);
+// the emergency exit sits on the south wall east of the break room, so it opens onto the outside
+const EXIT_X = 6;
+const exitSign = signPlane("EXIT", null, 1, .35, "#1d9a4b"); exitSign.position.set(EXIT_X, 2.6, RD / 2 - .17); exitSign.rotation.y = Math.PI; scene.add(exitSign);
 // the emergency exit under the sign: double metal doors with push bars and wired-glass windows
 const exitDoor = (() => {
-  const zf = RD / 2 - .16, g = new THREE.Group(); scene.add(g);
+  const zf = RD / 2 - .16, g = new THREE.Group(); g.position.x = EXIT_X; scene.add(g);
   const frame = M("#2e2a28"), metalDoor = M("#6f8f86"), chrome = M("#c9ced3"), red = M("#e0352b");
   box(.12, 2.42, .12, frame, -.86, 1.21, zf, g); box(.12, 2.42, .12, frame, .86, 1.21, zf, g); box(1.84, .12, .12, frame, 0, 2.42, zf, g);
   const leaves = [-1, 1].map(side => {
@@ -948,7 +950,7 @@ poster(["HANG IN", "THERE"], "IT'S ALMOST FRIDAY", "#f4a63a", "#2b1d14", (g, w) 
   g.beginPath(); g.moveTo(w / 2 + 60, 210); g.lineTo(w / 2 + 50, 150); g.lineTo(w / 2 + 15, 190); g.fill();
   g.fillStyle = "#fff"; [-25, 25].forEach(dx => { g.beginPath(); g.arc(w / 2 + dx, 245, 16, 0, 7); g.fill(); });
   g.fillStyle = "#111"; [-25, 25].forEach(dx => { g.beginPath(); g.arc(w / 2 + dx + 3, 248, 7, 0, 7); g.fill(); });
-}, 4.5, RD / 2 - .17, Math.PI);
+}, 2, RD / 2 - .17, Math.PI);
 if (document.fonts) document.fonts.ready.then(() => posterTexs.forEach(t => redraw(t)));
 
 /* --- floor cable cover from the coworker pod to the wall, then a raceway up to the ceiling --- */
@@ -1267,7 +1269,7 @@ const INTERACTIONS = [
   { label: () => "Drop it in the IN tray", can: () => P.carrying && near(IN_TRAY, 1.9), act: deliver },
   { label: () => `Talk to ${P.hud ? P.hud.clerk.name : "Brenda"}`, can: () => near({ x: CLERK_DESK.x, z: CLERK_DESK.z + 1.2 }, 2.2) || near({ x: CLERK_DESK.x, z: CLERK_DESK.z - 1.6 }, 1.6), act: () => say(clerk, P.hud ? `"${P.hud.clerk.hello}" <br><small>(Send your cover note from your computer.)</small>` : `"I'm on lunch, hon. Email me."`, 3800) },
   { label: () => `Chat with ${P.hud ? P.hud.inspector : "Gus"}`, can: () => !P.carrying && P.phase !== "judging" && !(P.phase === "result" && bubbles.some(b => b.ch === inspector)) && near(IN_TRAY, 1.9), act: () => say(inspector, pick(["Mmm… pie.", "Did you know I have a stapler?", "I read every invoice. Mostly.", "Is it lunch yet?"]), 2600) },
-  { label: () => "Clock out early", can: () => near({ x: 0, z: RD / 2 - 1 }, 1.6), act: () => {
+  { label: () => "Clock out early", can: () => near({ x: EXIT_X, z: RD / 2 - 1 }, 1.6), act: () => {
       exitOpenUntil = performance.now() + 1600; sfx("door");
       if (P.carrying) say(player, "Leave with a forged invoice in my hand? Bold.", 2600);
       else say(player, pick(["Not before quota. The boss would notice.", "One more invoice. Then I'm out.", "The parking lot looks free… but my desk looks profitable."]), 2600);
@@ -1708,7 +1710,7 @@ window.forged = { P, player, boss: B, camera, CINE, sit, stand, setPhase, grab, 
 window.FW = {
   THREE, scene, camera, renderer,
   // building blocks
-  M, mats, box, cyl, sphere, outline, collide, walls, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
+  M, mats, box, cyl, sphere, outline, collide, walls, EXIT_X, signPlane, canvasTex, redraw, wallRun, room, doorFrame, DOORS, RW, RD, WALL_H,
   makeChar, animWalk, seatPose, standPose, characters, buildHead, glasses,
   // state
   P, player, B, BOSS_PATH, CHAIR, MY_DESK, PRINTER, BOOTH, IN_TRAY, CLERK_DESK, CINE, get pal() { return pal; }, PALETTES,

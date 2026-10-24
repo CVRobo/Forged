@@ -13,6 +13,7 @@
 "use strict";
 const FW = window.FW;
 if (!FW) return;
+const EXIT_X = FW.EXIT_X ?? 0; // where the emergency exit is on the south wall
 const { THREE, P, B, player, npcs } = FW;
 const { kevin, dana, inspector, clerk, boss } = npcs;
 const rand = FW.rand, pick = FW.pick, clamp = FW.clamp;
@@ -127,7 +128,7 @@ const bg = document.createElement("canvas"); bg.width = mapCv.width; bg.height =
   for (const [x, z] of [[FW.MY_DESK.x, FW.MY_DESK.z], [-3, 2], [-3, -3], [FW.CLERK_DESK.x, FW.CLERK_DESK.z]]) g.fillRect(mx(x - 1.1), mz(z - .55), 2.2 * MS, 1.1 * MS);
   g.fillStyle = "#1f8a8a"; g.fillRect(mx(FW.BOOTH.x - 1.8), mz(FW.BOOTH.z - .6), 3.6 * MS, 1.2 * MS);
   g.fillStyle = "#2e2a28"; g.fillRect(mx(FW.PRINTER.x - .5), mz(FW.PRINTER.z - .4), MS, .8 * MS);
-  g.fillStyle = "#1d9a4b"; g.fillRect(mx(-.6), mz(9) - 3, 1.2 * MS, 4);           // exit sign
+  g.fillStyle = "#1d9a4b"; g.fillRect(mx(EXIT_X - .6), mz(9) - 3, 1.2 * MS, 4);           // exit sign
   g.fillStyle = "#8a5a35"; g.beginPath(); g.arc(mx(COFFEE.x), mz(COFFEE.z), 3, 0, 7); g.fill();
   g.font = "bold 8px 'Space Mono', monospace"; g.fillStyle = "rgba(43,29,20,.55)"; g.textAlign = "center";
   for (const r of rooms) if (r.label) g.fillText(r.label, mx((r.x0 + r.x1) / 2), mz(r.z1) - 4);
@@ -212,8 +213,8 @@ function makeNpc(ch, name, standOff, toJunction, toExit) {
 }
 // Kevin sits on the south side of the north desk, Dana on the south side of the south desk.
 const NPCS = [
-  makeNpc(kevin, "Kevin", .75, [[-5, 4.4]], [[0.6, 7.8]]),
-  makeNpc(dana, "Dana", .75, [[-5, -1.0], [-5, 4.4]], [[-0.9, -0.6], [-0.6, 7.8]]),
+  makeNpc(kevin, "Kevin", .75, [[-5, 4.4]], [[0.6, 6.4], [EXIT_X - .6, 7.8]]),
+  makeNpc(dana, "Dana", .75, [[-5, -1.0], [-5, 4.4]], [[-0.9, -0.6], [-0.6, 6.4], [EXIT_X + .6, 7.8]]),
 ];
 const npcByName = { kevin: NPCS[0], dana: NPCS[1] };
 
@@ -387,9 +388,9 @@ function updatePhone(dt, now) {
 
 const drill = { active: false, endAt: 0, nextAt: performance.now() + rand(240000, 330000), nextBeep: 0, beepHi: false, lastOp: -1 };
 const alarmLight = new THREE.PointLight("#ff2020", 0, 40, 1.5);       // built once, stays in the scene (intensity 0 when idle)
-alarmLight.position.set(-2, 2.9, 1); FW.scene.add(alarmLight);
+alarmLight.position.set(EXIT_X - 2, 2.9, 1); FW.scene.add(alarmLight);
 const alarmBulb = new THREE.Mesh(new THREE.SphereGeometry(.16, 12, 12), new THREE.MeshBasicMaterial({ color: "#5a1010" }));
-alarmBulb.position.set(0, 3.0, FW.RD / 2 - .25); FW.scene.add(alarmBulb);
+alarmBulb.position.set(EXIT_X, 3.0, FW.RD / 2 - .25); FW.scene.add(alarmBulb);
 const redOverlay = document.createElement("div");
 redOverlay.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:radial-gradient(ellipse at center, rgba(255,0,0,0) 45%, rgba(255,20,20,.55) 100%);";
 document.body.appendChild(redOverlay);
