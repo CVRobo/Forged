@@ -29,3 +29,6 @@ dump.rdb
 # OS
 .DS_Store
 Thumbs.db
+
+# online fraud model versions (retrained from players)
+ml/online/models/

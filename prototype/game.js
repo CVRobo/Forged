@@ -497,6 +497,11 @@ function startPlanning() {
   const L = LEVELS[S.level], r = rank(), h = S.holder, first = h.name.split(" ")[0].toLowerCase(), last = h.name.split(" ")[1].toLowerCase();
   // answers to the questions a rank doesn't ask yet: a plain look-alike shopper at home
   S.input = { item: "", price: "", name: "", email: `${first}.${last}${10 + h.addr1 % 80}@gmail.com`, device: "", where: "", ship: "", when: "", repeat: "", gap: "" };
+  // the questions a rank doesn't ask yet come as a quiet starter kit: their stolen login, on their kind of phone, from their city
+  const asks = id => steps().some(s => s.id === id);
+  if (!asks("you")) Object.assign(S.input, { name: h.name, email: h.email });
+  if (!asks("device")) S.input.device = h.phone === "iphone" ? "iPhone" : "Samsung Galaxy";
+  if (!asks("where")) S.input.where = h.city.split(",")[0];
   S.inv = { orders: [], cur: 0, coverEmail: "" };
   S.step = steps()[0].id;
   S.sugg = {}; S.touched = new Set();
@@ -935,8 +940,10 @@ async function judge() {
   if (!API || !S.roundId) return mock;
   try {
     const { verdict, ...rec } = record(); // the verdict is what we're asking for
-    // the server keeps the rows; until it has its own model it answers with the browser's Gus
-    const gus = { caught: mock.caught, tells: mock.tells.map(t => [t[0], +(+t[1]).toFixed(2)]), payout: mock.payout };
+    // the server's fraud model judges the rows (it falls back to the browser's Gus without one)
+    const mult = S.perks.includes("night") ? 2 : 1; // what each order pays you if it gets through
+    const values = S.inv.orders.map(o => { const f = factsOf(o); return f.ship.toYou ? +(f.amount * mult).toFixed(2) : 0; });
+    const gus = { caught: mock.caught, tells: mock.tells.map(t => [t[0], +(+t[1]).toFixed(2)]), payout: mock.payout, values };
     const r = await api("POST", "/submit", { round_id: S.roundId, player: playerName(), record: rec, perks: S.perks, gus }, 10000);
     return adaptVerdict(r, mock);
   } catch (e) { offline(e); return mock; }

@@ -132,7 +132,9 @@ Playtest feedback on v0.3: losing made Gus stronger, so a losing player could ne
 
 ## 9b. Server: online records are saved (built)
 
-`POST /submit` accepts the checkout's record (`mode: "online"`, see `OnlineRecord` in `server/models/schemas.py`), in both the stub and the real server. The server appends every order's row to `server/data/ieee_rows.csv` (or `FORGED_DATA_DIR`): the 434 IEEE-CIS columns, the game's columns and `player`, git-ignored. Until there is a model trained on these rows, the browser sends its scripted Gus's verdict as `gus` and the server answers with it, so the game plays the same online and offline. To swap in a model, replace `submit_online` in `server/services/online_data.py`.
+`POST /submit` accepts the checkout's record (`mode: "online"`, see `OnlineRecord` in `server/models/schemas.py`), in both the stub and the real server. The server appends every order's row to `server/data/ieee_rows.csv` (or `FORGED_DATA_DIR`): the 434 IEEE-CIS columns, the game's columns and `player`, git-ignored. The verdict comes from the fraud model in `ml/online` (see its README): LightGBM trained on the dataset's online segment plus simulated shoppers, retrained in the background on the orders that get through, and promoted only if it passes a gate on real and player data. Without a trained model, the server answers with the scripted Gus the browser sends as `gus`.
+
+Questions a rank doesn't ask yet now default to a quiet starter kit: the victim's own login, their kind of phone, their city. Rookies choose only what to buy and where it goes, and the model judges those fairly.
 
 After a catch, **Try again** replays the same victim and card with the answers filled in. It opens on the step Gus caught, and the lines that gave you away blink red until you change them.
 

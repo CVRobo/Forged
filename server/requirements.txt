@@ -12,3 +12,7 @@ opentelemetry-sdk>=1.28.0
 # ML detector (ml/detector.py); without these the server falls back to rule-based tells
 numpy>=1.26
 scikit-learn>=1.4
+# Fraud model (ml/online); without these the server answers with the browser's scripted Gus
+pandas>=2.2
+lightgbm>=4.3
+joblib>=1.3
