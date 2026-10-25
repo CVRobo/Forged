@@ -151,6 +151,13 @@ function objectiveTarget() {
   if (P.carrying || P.phase === "carrying") return FW.IN_TRAY;
   return FW.CHAIR;
 }
+// trace a vision cone's outline (FW.shapeCone keeps it in userData.pts) as the current path
+function coneShape(c) {
+  const pts = c && c.visible && c.userData.pts;
+  if (!pts || pts.length < 3) return false;
+  mg.beginPath(); pts.forEach(([x, z], i) => i ? mg.lineTo(mx(x), mz(z)) : mg.moveTo(mx(x), mz(z))); mg.closePath();
+  return true;
+}
 let nextMapDraw = 0;
 function drawMap(now) {
   mg.setTransform(1, 0, 0, 1, 0, 0);
@@ -166,10 +173,17 @@ function drawMap(now) {
   if (drill.active && Math.sin(now / 120) > 0) { mg.fillStyle = "rgba(224,53,43,.35)"; mg.fillRect(0, 0, MW, MH); }
   // boss + cone
   if (boss.g.visible) {
-    const bp = boss.g.position, r = boss.g.rotation.y, a = Math.atan2(Math.cos(r), Math.sin(r));
-    mg.beginPath(); mg.moveTo(mx(bp.x), mz(bp.z)); mg.arc(mx(bp.x), mz(bp.z), 4.2 * MS, a - .55, a + .55); mg.closePath();
-    mg.fillStyle = B.sus > 0 ? "rgba(224,53,43,.35)" : "rgba(224,53,43,.15)"; mg.fill();
+    const bp = boss.g.position;
+    // his real cone (world.js shapes it each frame: desk or walking size, cut off at walls)
+    if (coneShape(FW.bossCone)) { mg.fillStyle = B.sus > 0 ? "rgba(224,53,43,.35)" : "rgba(224,53,43,.15)"; mg.fill(); }
     dot(bp.x, bp.z, 4.5, "#e0352b");
+  }
+  // level 4's guard bot (security-bot.js) + its sweeping amber cone
+  const rb = FW.roamer;
+  if (rb && rb.group.visible) {
+    const bp = rb.group.position;
+    if (coneShape(rb.cone)) { mg.fillStyle = rb.bot.sus > 0 ? "rgba(224,53,43,.4)" : "rgba(255,179,0,.3)"; mg.fill(); }
+    dot(bp.x, bp.z, 4, "#ffb300");
   }
   // NPCs
   if (kevin.g.visible) dot(kevin.g.position.x, kevin.g.position.z, 3, "#7a5cff");

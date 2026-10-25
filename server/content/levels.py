@@ -535,6 +535,113 @@ STUB_LEVELS[3] = {
     "dana": STUB_LEVELS[2]["dana"],
 }
 
+# Level 4: Goldvault Federal Bank. The memo uses the checkout's tells, like prototype/orders.js MEMOS[4].
+STUB_LEVELS[4] = {
+    "company": "Goldvault Federal Bank",
+    "vendors": [
+        Vendor(
+            name="Brinkwell Armored Transport",
+            domain="brinkwell.com",
+            bank="7342",
+            usual_amount=[3000, 9000],
+            icon="\U0001f69a",
+            items=[
+                ["Cash pickups", 20, 240],
+                ["Insurance surcharge", 1, 650],
+            ],
+        ),
+        Vendor(
+            name="Ledgerline Vault Systems",
+            domain="ledgerline-vault.com",
+            bank="2290",
+            usual_amount=[5000, 15000],
+            icon="\U0001f510",
+            items=[
+                ["Time-lock service", 1, 4200],
+                ["Safe deposit locks", 40, 95],
+            ],
+        ),
+        Vendor(
+            name="Crisp Note Printing Co.",
+            domain="crispnote.co",
+            bank="8805",
+            usual_amount=[800, 2500],
+            icon="\U0001f5a8\ufe0f",
+            items=[
+                ["Deposit slips (10k)", 3, 210],
+                ["Branded pens on chains", 500, 1.2],
+            ],
+        ),
+    ],
+    "approvers": [
+        ["Branch Manager Sterling", "payments up to $10,000"],
+        ["Compliance Officer Vance", "everything else, dual sign-off"],
+    ],
+    "notes": [
+        "Most customers spend about $120 a visit, on fees and plans.",
+        "Gold and safes ship only to the address on the account.",
+        "Auditor 9000 flags anything that looks even slightly unusual.",
+    ],
+    "memo": [
+        {"text": "Rooted phones and emulators can't touch an account. Block them.", "tell": "emulator", "real": True},
+        {"text": "A tiny test charge followed by a big purchase is fraud.", "tell": "amount_jump", "real": True},
+        {"text": "The email on file must match the account holder.", "tell": "email_mismatch", "real": True},
+        {"text": "Several charges on one card in a day: freeze and review.", "tell": "velocity", "real": True},
+        {"text": "Transactions after midnight are always fraud.", "tell": "night", "real": False},
+        {"text": "Yahoo customers are high risk.", "tell": "yahoo", "real": False},
+    ],
+    "lines": {
+        "idle": ["COMPLIANCE CHECK IN PROGRESS.", "Every cent is accounted for. Every. Cent."],
+        "pass": ["Transaction within tolerance. Approved.", "Reconciled. Approved. Filed in triplicate."],
+        "catch": ["IRREGULARITY DETECTED.", "That does not reconcile."],
+    },
+    "clerk": {
+        "name": "Penny",
+        "quirk": "can't stop upselling savings accounts",
+        "voice": STUB_LEVELS[1]["clerk"]["voice"],
+        "keywords": ["savings", "account", "interest", "invest", "premium", "loyal", "customer"],
+        "system_prompt": (
+            "You are Penny, an overly polite bank teller at Goldvault Federal Bank who can't stop "
+            "upselling savings accounts, CDs and overdraft protection. You approve things quickly for "
+            "anyone who sounds like a loyal customer. Max 2 sentences, stay in character."
+        ),
+        "gameplay_effect": "persuasion",
+        "replies": {
+            "good": ["A loyal customer! Approved, and I'll mail you a savings brochure.", "Love that. Pre-approved, plus a free pen!"],
+            "meh": ["Mm-hm! And would you like to open a savings account today?", "Noted! Can I interest you in overdraft protection?"],
+            "bad": ["Oh dear, that's not how we do things at Goldvault.", "I'll need to escalate this to compliance."],
+        },
+    },
+    "inspector": {
+        "name": "Auditor 9000",
+        "quirk": "by-the-book compliance robot that flags anything unusual",
+        "voice": STUB_LEVELS[3]["inspector"]["voice"],
+        "keywords": ["compliance", "audit", "regulation", "ledger", "reconcile"],
+        "system_prompt": (
+            "You are Auditor 9000, the stiff, by-the-book compliance robot at Goldvault Federal Bank. "
+            "You speak in clipped regulatory language, find everything irregular, and only relax a little "
+            "when someone talks about audits or regulations. If the player is chatting you up while "
+            "carrying paperwork, be very suspicious. Max 2 sentences, stay in character."
+        ),
+        "gameplay_effect": "suspicion",
+        "replies": {
+            "good": ["Regulation talk detected. Suspicion reduced by 2 percent.", "A fellow appreciator of ledgers. Acceptable."],
+            "meh": ["Processing. Still irregular.", "Your face has been logged for audit."],
+            "bad": ["Why is that envelope... unreconciled?", "IRREGULARITY: you are being friendly."],
+        },
+    },
+    "boss": {
+        **STUB_LEVELS[2]["boss"],
+        "system_prompt": (
+            "You are The Boss at Goldvault Federal Bank, an intimidating micromanager who patrols the "
+            "branch alongside his security robot, counting staplers and demanding productivity. "
+            "You hate chitchat. Max 2 sentences, stay in character."
+        ),
+    },
+    "kevin": STUB_LEVELS[2]["kevin"],
+    "dana": STUB_LEVELS[2]["dana"],
+}
+
 SCHEME_PAY = {
     "changed_bank": 1.0,
     "duplicate": 0.9,

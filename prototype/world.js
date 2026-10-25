@@ -28,6 +28,7 @@ const PALETTES = {
   1: { floor: "#e8b77a", floor2: "#dba66a", carpet: "#9a8470", wall: "#fff1d6", accent: "#1f8a8a", accent2: "#f4a63a", bg: "#2a1d14" },
   2: { floor: "#e3f4ee", floor2: "#cfe9e0", carpet: "#7f93a3", wall: "#f7fbff", accent: "#2f6fd6", accent2: "#14a37f", bg: "#10202a" },
   3: { floor: "#b9a589", floor2: "#a8937a", carpet: "#2b3a5c", wall: "#e9e2d3", accent: "#ff9a2e", accent2: "#1d2a44", bg: "#0b1220" }, // Port Nocturne: weathered planks, navy and dock orange
+  4: { floor: "#eef2f6", floor2: "#e2e8f0", carpet: "#1d3557", wall: "#f8fafc", accent: "#1d3557", accent2: "#c9a227", bg: "#0f1b2d" }, // Goldvault Federal Bank: white stone, navy, a touch of gold
 };
 
 /* ======================= Renderer / scene ======================= */
@@ -52,7 +53,7 @@ addEventListener("resize", resize); resize();
 
 // warm key light from above (ceiling panels): shadows fall short, right under things, never "through" a wall.
 // Cool sky bounce from below/behind: a subtle warm/cool split
-scene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", 0.52));
+const hemi = new THREE.HemisphereLight("#fff4dc", "#7c86a3", 0.52); scene.add(hemi);
 const sun = new THREE.DirectionalLight("#ffecd0", 0.62);
 sun.position.set(-1.6, 30, 2.6); // almost straight down, a touch south-west so shapes keep a little depth
 sun.castShadow = true;
@@ -252,6 +253,40 @@ function sightBlocked(ax, az, bx, bz) {
     if (cross > w.a && cross < w.b) return true;
   }
   return false;
+}
+// how far a look from (ax, az) along (dx, dz) (unit) gets before a solid wall or closed door (max R)
+function sightDist(ax, az, dx, dz, R) {
+  let best = R;
+  for (const w of walls) {
+    if (w.glass) continue;
+    if (w.door ? w.door.hinge && Math.abs(w.door.hinge.rotation.y - w.door.base) > .35 : !w.solid) continue;
+    const af = w.axis === "x" ? az : ax, df = w.axis === "x" ? dz : dx;
+    if (Math.abs(df) < 1e-6) continue;
+    const t = (w.fixed - af) / df;
+    if (t <= 0 || t >= best) continue;
+    const cross = w.axis === "x" ? ax + t * dx : az + t * dz;
+    if (cross > w.a && cross < w.b) best = t;
+  }
+  return best;
+}
+/* Reshape a flat vision cone (a CircleGeometry fan lying on the floor) so it stops at walls: each
+ * rim point is pulled in to where that line of sight is blocked. Works for a cone parented to a
+ * character (any position, rotation, scale) or one in the scene. Keeps the world points in
+ * mesh.userData.pts for the minimap. facing uses the game's convention: direction (sin a, cos a). */
+const _cv = new THREE.Vector3();
+function shapeCone(mesh, ax, az, facing, R, half) {
+  const pos = mesh.geometry.attributes.position, n = pos.count - 1; // vertex 0 is the centre
+  mesh.updateWorldMatrix(true, false);
+  const y = mesh.getWorldPosition(_cv).y, pts = [[ax, az]];
+  _cv.set(ax, y, az); mesh.worldToLocal(_cv); pos.setXYZ(0, _cv.x, _cv.y, 0);
+  for (let i = 1; i <= n; i++) {
+    const a = facing + half - (2 * half) * (i - 1) / (n - 1), dx = Math.sin(a), dz = Math.cos(a);
+    const d = sightDist(ax, az, dx, dz, R), x = ax + dx * d, z = az + dz * d;
+    pts.push([x, z]);
+    _cv.set(x, y, z); mesh.worldToLocal(_cv); pos.setXYZ(i, _cv.x, _cv.y, 0);
+  }
+  pos.needsUpdate = true; mesh.geometry.computeBoundingSphere();
+  mesh.userData.pts = pts;
 }
 function wallBlocks(w, cam, pl) {
   const ca = w.axis === "x" ? cam.z : cam.x, pa = w.axis === "x" ? pl.z : pl.x;
@@ -1082,6 +1117,8 @@ const CLERK_STYLES = {
     sign: ["ASK MY MANAGER", "#2f6fd6", 1.1] }, // (wider: longer text)
   3: { look: { skin: "#8d5524", hair: "messy", hairColor: "#1a1210", brows: "flat", mouth: "flat", nose: "big", shirt: "#1d2a44", pants: "#2b2b44", tie: null },
     sign: ["NIGHT DESK", "#1d2a44"] },
+  4: { look: { skin: "#e0a77a", hair: "bun", hairColor: "#c98a3a", brows: "raised", mouth: "grin", nose: "round", earrings: true, glasses: false, shirt: "#1d3557", pants: "#1d3557", tie: "#c9a227" },
+    sign: ["ASK ME ABOUT SAVINGS", "#1d3557", 1.1] },
 };
 const clerkSigns = {};
 for (const [n, st] of Object.entries(CLERK_STYLES)) {
@@ -1090,7 +1127,7 @@ for (const [n, st] of Object.entries(CLERK_STYLES)) {
   clerkSigns[n] = s;
 }
 const lunchSign = clerkSigns[1]; // (kept: plugins may still look for it)
-const clerkProps = { 2: new THREE.Group(), 3: new THREE.Group() };
+const clerkProps = { 2: new THREE.Group(), 3: new THREE.Group(), 4: new THREE.Group() };
 Object.values(clerkProps).forEach(g => { g.visible = false; scene.add(g); });
 // Theo: a teetering stack of forms "for the manager"
 for (let i = 0; i < 7; i++) box(.3, .035, .4, M(i % 3 ? "#fffaf0" : "#dbe9ff"), CLERK_DESK.x - .55 + (i % 2) * .02, .8 + i * .036, CLERK_DESK.z - .15, clerkProps[2]).rotation.y = (i % 2 ? .08 : -.06);
@@ -1098,6 +1135,10 @@ for (let i = 0; i < 7; i++) box(.3, .035, .4, M(i % 3 ? "#fffaf0" : "#dbe9ff"), 
 cyl(.11, .1, .22, M("#ff9a2e"), CLERK_DESK.x - .55, .89, CLERK_DESK.z - .1, clerkProps[3]);
 cyl(.09, .09, .01, M("#3b2416"), CLERK_DESK.x - .55, .995, CLERK_DESK.z - .1, clerkProps[3]);
 { const h = new THREE.Mesh(new THREE.TorusGeometry(.06, .018, 6, 12), M("#ff9a2e")); h.position.set(CLERK_DESK.x - .43, .9, CLERK_DESK.z - .1); clerkProps[3].add(h); }
+// Penny: a brochure stand ("HIGH-YIELD SAVER!") and the pen on a chain
+box(.3, .03, .16, M("#9aa7b4"), CLERK_DESK.x - .55, .8, CLERK_DESK.z - .1, clerkProps[4]);
+[-.08, .08].forEach((o, i) => { const b = box(.12, .2, .015, M(i ? "#c9a227" : "#2f6fd6"), CLERK_DESK.x - .55 + o, .9, CLERK_DESK.z - .14, clerkProps[4]); b.rotation.x = -.2; });
+cyl(.012, .012, .16, M("#1b1b1b"), CLERK_DESK.x - .2, .82, CLERK_DESK.z - .3, clerkProps[4]).rotation.z = Math.PI / 2;
 let clerkLevel = 1;
 function setClerkLevel(level) {
   const n = CLERK_STYLES[level] ? +level : 1;
@@ -1133,6 +1174,8 @@ const LEVEL_RULES = {
   // level 3 keeps level 2's glass office and sharp eyes, and his patrol is unpredictable: a different
   // loop each time, sometimes doubling back, with shorter breaks between walks (boss-office.js picks the route)
   3: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22] },
+  // level 4: everything from level 3, plus a guard bot patrolling the floor (security-bot.js)
+  4: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22], securityBot: true },
 };
 let LV = LEVEL_RULES[1];
 // level 2: what he sees from his desk through the glass (the printer is ~12.5 m away). The cone is narrow and
@@ -1207,6 +1250,7 @@ function setExitPassable(on) {
  * is the emergency exit. Break room to the west (x < 0), records room to the east (x > 13). */
 const LOT = { x0: .15, x1: 12.6, z0: RD / 2 + .15, z1: 17.6 };
 const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
+const BAY = 2.33, CAR_SCALE = 1.6; // parking bays (m wide) and the cars' size: people here are ~2.3 m tall, so cars are scaled up to match
 {
   const w = LOT.x1 - LOT.x0, d = LOT.z1 - LOT.z0, cx = (LOT.x0 + LOT.x1) / 2, cz = (LOT.z0 + LOT.z1) / 2;
   // asphalt with painted bays along the east fence and a walkway from the door
@@ -1217,7 +1261,7 @@ const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
     g.globalAlpha = 1;
     const X = x => (x - LOT.x0) / w * cw, Z = z => (z - LOT.z0) / d * ch;
     g.strokeStyle = "#f2efe6"; g.lineWidth = 6;
-    for (let i = 0; i <= 4; i++) { const z = 10.4 + i * 1.75; g.beginPath(); g.moveTo(X(8.2), Z(z)); g.lineTo(X(LOT.x1), Z(z)); g.stroke(); } // 4 bays
+    for (let i = 0; i <= 3; i++) { const z = 10.4 + i * BAY; g.beginPath(); g.moveTo(X(8.2), Z(z)); g.lineTo(X(LOT.x1), Z(z)); g.stroke(); } // 3 bays, sized for the cars
     g.fillStyle = "#f2efe6"; for (let z = LOT.z0; z < 13.4; z += .7) g.fillRect(X(EXIT_X - .9), Z(z), X(EXIT_X + .9) - X(EXIT_X - .9), Z(z + .35) - Z(z)); // zebra walkway
     g.strokeStyle = "#ffd23f"; g.lineWidth = 8; g.setLineDash([26, 18]);
     g.beginPath(); g.arc(X(ASSEMBLY.x), Z(ASSEMBLY.z), (2.0 / w) * cw, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); // assembly circle
@@ -1245,19 +1289,20 @@ const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
   };
   fence(-.2, LOT.z1, LOT.x1, LOT.z1);
   fence(LOT.x1, RD / 2 + .1, LOT.x1, LOT.z1);
-  // two parked cars in the bays
+  // two parked cars in the bays (built at 2.2 m long, then scaled to match the characters)
   const car = (x, z, color, ry) => {
-    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; g.scale.setScalar(CAR_SCALE); scene.add(g);
     const body = M(color), glass = M("#bfe8ff"), tyre = M("#1f1f22"), chrome = M("#d6dadf");
     box(2.2, .55, 1.05, body, 0, .5, 0, g);
     box(1.15, .45, .95, body, -.15, .98, 0, g);
     box(1.0, .34, .97, glass, -.15, .98, 0, g);
     [[-.7, .5], [.7, .5], [-.7, -.5], [.7, -.5]].forEach(([wx, wz]) => { const t = cyl(.22, .22, .16, tyre, wx, .22, wz, g); t.rotation.x = Math.PI / 2; });
     box(.06, .14, .9, chrome, 1.12, .48, 0, g);
-    collide(x, z, Math.abs(Math.cos(ry)) * 2.3 + Math.abs(Math.sin(ry)) * 1.15, Math.abs(Math.sin(ry)) * 2.3 + Math.abs(Math.cos(ry)) * 1.15);
+    const L = 2.3 * CAR_SCALE, W = 1.15 * CAR_SCALE;
+    collide(x, z, Math.abs(Math.cos(ry)) * L + Math.abs(Math.sin(ry)) * W, Math.abs(Math.sin(ry)) * L + Math.abs(Math.cos(ry)) * W);
   };
-  car(10.6, 11.27, "#2f6fd6", 0);
-  car(10.6, 14.77, "#e0352b", 0);
+  car(10.6, 10.4 + BAY * .5, "#2f6fd6", 0);   // first bay
+  car(10.6, 10.4 + BAY * 2.5, "#e0352b", 0);  // third bay (the middle one is free)
   // lamp post, bench, assembly sign
   cyl(.07, .09, 4.2, post, 7.6, 2.1, 16.9); box(.6, .1, .3, post, 7.35, 4.2, 16.9);
   const lampGlass = new THREE.Mesh(new THREE.BoxGeometry(.4, .06, .24), new THREE.MeshBasicMaterial({ color: "#fff3c4" })); lampGlass.position.set(7.2, 4.13, 16.9); scene.add(lampGlass);
@@ -2071,7 +2116,7 @@ const START_LEVELS = [
   { n: 1, name: "Sunny Diner Supply", icon: "🥞", diff: "Easy", color: "#f4a63a", note: "The boss patrols the floor" },
   { n: 2, name: "St. Mercy Pharmacy", icon: "🏥", diff: "Medium", color: "#9fd8c4", note: "Glass boss office · sharper boss" },
   { n: 3, name: "Port Nocturne Shipping", icon: "🚢", diff: "Hard", color: "#ff9a2e", note: "Unpredictable boss · Old Salt never forgets" },
-  { n: 4, name: "Neon Arcade Holdings", icon: "🕹️", diff: "Boss", color: "#ff2bd6", locked: "COMING SOON" },
+  { n: 4, name: "Goldvault Federal Bank", icon: "🏦", diff: "Boss", color: "#1d3557", note: "Guard bot on patrol · Auditor 9000 flags anything odd" },
 ];
 const LEVEL_KEY = "forged-level";
 const tutorialFinished = () => { try { return localStorage.getItem("forged-tutorial-done-v2") === "1"; } catch (e) { return false; } };
@@ -2275,6 +2320,7 @@ function updateBoss(dt, now) {
  * Either fills his suspicion; when it's full, +10 heat. */
 const PRINTER_TRAY = { x: PRINTER.x, z: PRINTER.z + .55 };
 function bossWatch(dt, now, pos, facing, R, half, walking, rate = LV.susRate) {
+  shapeCone(cone, pos.x, pos.z, facing, R, half); // the lit floor = exactly what he can see
   const sees = (x, z) => {
     const vx = x - pos.x, vz = z - pos.z;
     if (Math.hypot(vx, vz) > R) return false;
@@ -2385,8 +2431,76 @@ const levelProps = {};
   }
   levelProps[3] = { g, blocks };
 }
+/* level 4 dressing: Goldvault Federal Bank, a modern glass bank. ATMs, a small round vault door,
+ * glass partitions with steel posts, a scrolling stock ticker along the north wall, queue posts with
+ * navy ropes, waiting benches and the bank's sign. */
+{
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const blocks = [];
+  const solid = (x, z, w, d) => blocks.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+  const NAVY = "#1d3557", GOLD = "#c9a227", steel = M("#9aa7b4"), steelDk = M("#5a6470"), navy = M(NAVY), white = M("#f8fafc");
+  const glowM = c => new THREE.MeshBasicMaterial({ color: c });
+  // two ATMs on the north wall, by Gus's booth
+  const atmScreen = canvasTex(128, 96, (c, w, h) => {
+    c.fillStyle = "#0f1b2d"; c.fillRect(0, 0, w, h); c.fillStyle = "#c9a227"; c.font = "bold 16px sans-serif"; c.textAlign = "center";
+    c.fillText("GOLDVAULT", w / 2, 30); c.fillStyle = "#e2e8f0"; c.font = "12px sans-serif"; c.fillText("Insert card", w / 2, 58); c.fillText("$ 20  40  100", w / 2, 80);
+  });
+  [6.4, 7.5].forEach(x => {
+    box(.9, 1.7, .55, steel, x, .85, -8.45, g);
+    box(.92, .22, .57, navy, x, 1.82, -8.45, g);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.5, .38), new THREE.MeshBasicMaterial({ map: atmScreen })); scr.position.set(x, 1.32, -8.165); g.add(scr);
+    box(.5, .06, .2, steelDk, x, 1.02, -8.12, g);                       // keypad shelf
+    box(.22, .02, .02, glowM("#2fb36b"), x + .1, 1.12, -8.165, g);       // card slot light
+  });
+  solid(6.95, -8.45, 2.1, .7);
+  // a small round vault door on the north wall
+  const vault = new THREE.Group(); vault.position.set(9.4, 1.35, -8.8); g.add(vault);
+  const vd = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .14, 32).rotateX(Math.PI / 2), M("#7d8a98")); vd.position.z = .07; vault.add(vd);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.86, .07, 8, 32), steelDk); rim.position.z = .1; vault.add(rim);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .12, 16).rotateX(Math.PI / 2), M(GOLD)); hub.position.z = .2; vault.add(hub);
+  for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(.05, .62, .05), M(GOLD)); s.position.z = .22; s.rotation.z = i * Math.PI / 6; vault.add(s); }
+  // glass partitions with steel posts (south side, in front of the waiting area)
+  const glassM = new THREE.MeshStandardMaterial({ color: "#cfeeff", transparent: true, opacity: .25, roughness: .1 });
+  [[8.4, 7.3, 2.0], [10.6, 7.3, 2.0]].forEach(([x, z, w]) => {
+    const pane = new THREE.Mesh(new THREE.BoxGeometry(w, 1.5, .04), glassM); pane.position.set(x, .85, z); g.add(pane);
+    [-w / 2, w / 2].forEach(o => box(.06, 1.6, .06, steelDk, x + o, .8, z, g));
+    box(w, .04, .06, steelDk, x, 1.6, z, g);
+    solid(x, z, w, .15);
+  });
+  // waiting benches behind the glass
+  [[8.6, 8.3], [10.8, 8.3]].forEach(([x, z]) => { box(1.6, .1, .5, navy, x, .45, z, g); box(1.6, .45, .08, navy, x, .72, z + .22, g); [-.7, .7].forEach(o => box(.06, .42, .4, steelDk, x + o, .21, z, g)); });
+  // queue posts with navy ropes beside Gus's booth (clear of the boss's and the bot's routes)
+  const posts = [[9.6, -4.6], [9.6, -3.2], [11.2, -3.2], [11.2, -4.6]];
+  posts.forEach(([x, z]) => { cyl(.05, .05, .95, steel, x, .48, z, g); cyl(.15, .15, .04, steelDk, x, .02, z, g); sphere(.07, M(GOLD), x, .98, z, g); });
+  [[0, 1], [1, 2], [2, 3]].forEach(([a, b]) => {
+    const [ax, az] = posts[a], [bx, bz] = posts[b], len = Math.hypot(bx - ax, bz - az);
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, len, 6), navy);
+    r.position.set((ax + bx) / 2, .82, (az + bz) / 2); r.rotation.z = Math.PI / 2; r.rotation.y = -Math.atan2(bz - az, bx - ax); g.add(r);
+  });
+  // a stock ticker strip along the top of the north wall (scrolls; see tickTicker)
+  const tickerTex = canvasTex(2048, 64, (c, w, h) => {
+    c.fillStyle = "#0f1b2d"; c.fillRect(0, 0, w, h); c.font = "bold 34px 'Space Mono', monospace"; c.textBaseline = "middle";
+    const items = [["GVB", "+1.2"], ["SUNNY", "-0.4"], ["MERCY", "+0.8"], ["NOCT", "-2.1"], ["GOLD", "+3.3"], ["PIE", "+9.9"], ["STAPLR", "-0.1"], ["GUS", "+0.0"]];
+    let x = 20; for (const [n, ch] of items) { c.fillStyle = "#e2e8f0"; c.fillText(n, x, h / 2); x += c.measureText(n).width + 14; c.fillStyle = ch[0] === "-" ? "#e0352b" : "#2fb36b"; c.fillText((ch[0] === "-" ? "▼" : "▲") + ch, x, h / 2); x += c.measureText(ch).width + 70; }
+  });
+  tickerTex.wrapS = THREE.RepeatWrapping; tickerTex.repeat.set(2, 1);
+  const ticker = new THREE.Mesh(new THREE.PlaneGeometry(RW - 1, .32), new THREE.MeshBasicMaterial({ map: tickerTex })); ticker.position.set(0, 3.0, -RD / 2 + .19); g.add(ticker);
+  levelProps.tickers = [tickerTex];
+  // the bank's sign on the north wall, above the ATMs and the vault (clear of the Never Again board)
+  const sign = signPlane("GOLDVAULT", "FEDERAL BANK · EST. 1888", 2.6, .55, NAVY, GOLD);
+  sign.position.set(7.9, 2.55, -8.76); g.add(sign);
+  // brass-and-navy trim along the bottom of the walls
+  box(RW - .5, .08, .04, M(GOLD), 0, .3, -RD / 2 + .19, g);
+  levelProps[4] = { g, blocks };
+}
+// the ticker scrolls (only while level 4's props are showing)
+function tickTicker(dt) {
+  if (!levelProps[4] || !levelProps[4].g.visible) return;
+  for (const t of levelProps.tickers || []) t.offset.x = (t.offset.x + dt * .03) % 1;
+}
 function setLevelProps(level) {
   for (const [n, p] of Object.entries(levelProps)) {
+    if (!p.g) continue; // (levelProps.tickers is a list of textures, not a level)
     const on = +n === level;
     p.g.visible = on;
     p.blocks.forEach(b => { const i = colliders.indexOf(b); if (on && i < 0) colliders.push(b); if (!on && i >= 0) colliders.splice(i, 1); });
@@ -2395,6 +2509,9 @@ function setLevelProps(level) {
 function applyLevelRules(level) {
   LV = LEVEL_RULES[level] || LEVEL_RULES[1];
   setLevelProps(+level);
+  // a level can ask for dim light (rules.dim)
+  hemi.intensity = LV.dim ? .3 : .52; hemi.color.set(LV.dim ? "#d9c8ff" : "#fff4dc");
+  sun.intensity = LV.dim ? .4 : .62;
   const old = PATROL_CONE; PATROL_CONE = coneGeo(LV.coneR, LV.coneHalf);
   if (cone.geometry === old) cone.geometry = PATROL_CONE;
   old.dispose();
@@ -2449,6 +2566,7 @@ function updateBubbles(now) {
 
 /* ======================= Minimap ======================= */
 
+const MINIMAP_HOOKS = [];
 const miniCanvas = $("#minimap");
 const miniCtx = miniCanvas ? miniCanvas.getContext("2d") : null;
 const toMX = x => (x / RW + .5) * 200;
@@ -2504,6 +2622,7 @@ function drawMinimap(now) {
       }
     }
   }
+  for (const fn of MINIMAP_HOOKS) { try { fn(g, toMX, toMZ, now); } catch (e) { /* a plugin's dot */ } }
   // Player dot (red) with facing line
   const px = toMX(player.g.position.x), pz = toMZ(player.g.position.z);
   g.fillStyle = "#e0352b"; g.beginPath(); g.arc(px, pz, 4, 0, Math.PI * 2); g.fill();
@@ -2701,7 +2820,7 @@ function loop(now) {
     exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); });
   }
   updateDoors(dt, now);
-  if (!P.paused) clerkIdle(now);
+  if (!P.paused) { clerkIdle(now); tickTicker(dt); }
   for (const fn of UPDATERS) { try { fn(dt, now); } catch (e) { console.error("[forged] plugin update failed", e); } }
   updateCine(now);
   updateConfetti(dt);
@@ -2752,6 +2871,9 @@ window.FW = {
   hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),
   tutTargets: TUT_TARGETS,
+  shapeCone, sightDist, bossCone: cone, // vision cones that stop at walls; bossCone.userData.pts = its outline for the minimap
+  setSus, // the suspicion vignette (0–1): security-bot.js shows the higher of its own and the boss's
+  onMinimap: fn => MINIMAP_HOOKS.push(fn), // fn(ctx, toMX, toMZ, now): draw extra dots
   addInteraction: it => INTERACTIONS.push(it),
   setSfx: (kind, fn) => { SFX_HOOKS[kind] = fn; },
   audio: () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} return actx; },

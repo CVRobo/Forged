@@ -118,7 +118,27 @@ const LEVELS = {
       catch: ["Seen this one before, sailor.", "That cargo's crooked.", "Nope. I wrote this trick down in '09."],
     },
   },
-  4: { name: "Neon Arcade Holdings", short: "Neon Arcade", icon: "🕹️", difficulty: "Boss", swatches: ["#ff2bd6", "#19e3ff", "#120014"], inspector: { name: "GL1TCH", personality: "Paranoid, flags anything unusual" }, locked: true },
+  4: {
+    name: "Goldvault Federal Bank", short: "Goldvault", icon: "🏦", difficulty: "Boss",
+    swatches: ["#1d3557", "#f1f5f9", "#c9a227"],
+    inspector: { name: "Auditor 9000", personality: "By-the-book compliance robot that flags anything unusual" },
+    memoryCap: 200, // remembers like Old Salt
+    clerk: { name: "Penny", avatar: "💼", quirk: "can't stop upselling savings accounts",
+      look: { skin: "#e0a77a", hair: "messy", hairColor: "#c98a3a", mouth: "grin", brows: "raised", earrings: true },
+      hello: "Goldvault Federal, Penny speaking! Before we start: have you heard about our High-Yield Saver?",
+      keywords: ["savings", "account", "interest", "invest", "premium", "loyal", "customer"],
+      replies: {
+        good: ["A loyal customer! Approved, and I'll mail you a savings brochure.", "Love that. Pre-approved, plus a free pen!", "Wonderful! Processing. Have you considered a CD?"],
+        meh: ["Mm-hm! And would you like to open a savings account today?", "I'll look into it. Our rates are 4.1 percent, by the way.", "Noted! Can I interest you in overdraft protection?"],
+        bad: ["Oh dear, that's not how we do things at Goldvault.", "I'll need to escalate this to compliance.", "Auditor 9000 is going to have questions."],
+      } },
+    memo: O.MEMOS[4],
+    lines: {
+      idle: ["COMPLIANCE CHECK IN PROGRESS.", "Every cent is accounted for. Every. Cent.", "I audited my own audit. It passed. Barely."],
+      pass: ["Transaction within tolerance. Approved.", "Reconciled. Approved. Filed in triplicate.", "APPROVED. Subject to future review."],
+      catch: ["IRREGULARITY DETECTED.", "That does not reconcile.", "Account frozen. Pending investigation."],
+    },
+  },
 };
 
 /* Every plan the player sends gets a name for the corkboard and the collection,
