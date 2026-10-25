@@ -96,6 +96,9 @@ def test_every_tell_has_a_label_and_a_box_in_the_game():
     assert M.TELLS <= _js_keys(PROTOTYPE / "orders.js", "TELL_LABELS")
     assert M.TELLS <= _js_keys(PROTOTYPE / "orders.js", "TELL_BOX")
     assert M.TELLS <= _js_keys(PROTOTYPE / "game.js", "TELL_REGION")
+    # Gus's order slip in the booth circles only the tells it has a row for (world.js)
+    assert M.TELLS <= _js_keys(PROTOTYPE / "world.js", "TELL_ROWS")
+    assert M.TELLS <= _js_keys(PROTOTYPE / "world.js", "TELL_SHORT")
     assert set(M.TELL_OF.values()) <= M.TELLS
 
 

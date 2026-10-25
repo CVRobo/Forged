@@ -1003,7 +1003,8 @@ function adaptVerdict(r, mock) {
   }).filter(t => t[0]);
   const v = +(r.new_version ?? r.version);
   return { caught, tells, payout: +(r.payout ?? (caught ? 0 : mock.payout)), results: r.results ?? mock.results, rows: mock.rows,
-    line: r.inspector_line || r.line || null, newVersion: Number.isFinite(v) && v > 0 ? v : null, source: "api" };
+    line: r.inspector_line || r.line || null, newVersion: Number.isFinite(v) && v > 0 ? v : null, source: "api",
+    learning: r.learning || null }; // the model's server: can it retrain, and how many wins are waiting
 }
 
 async function judge() {
@@ -1145,12 +1146,21 @@ function showCorkboard() {
     (top.length ? top : [["heat"]]).map((t, i) => `
     <div class="cork-card" style="left:${pos[i][0]}px;top:${pos[i][1]}px;transform:rotate(${rand(-5, 5)}deg)">
       <b>${r.caught ? "Clue" : "Studying"} #${i + 1}</b>${tellLabel(t[0])}</div>`).join("");
+  // the model only changes when the server retrains: until then a win is filed, not learned
+  const lr = r.learning, filed = !r.caught && !forgotten && !!lr && S.version === oldV;
+  S.lastFiled = filed;
+  if (filed) $$("#cork-pins .cork-card:not(.main) b").forEach((b, i) => b.textContent = `On file #${i + 1}`);
   const cx = 510, cy = 130;
   $("#cork-string").innerHTML = (top.length ? top : [0]).map((_, i) =>
     `<path d="M${cx},${cy} Q${(cx + pos[i][0] + 100) / 2},${(cy + pos[i][1]) / 2 + 60} ${pos[i][0] + 105},${pos[i][1] + 10}"/>`).join("");
   $("#cork-portrait").innerHTML = faceSVG(LOOKS.inspector, stageIndex(S.version));
-  $("#cork-line").textContent = forgotten ? "Wait… where did that file go?" : r.caught ? "Gotcha. I already knew that one." : "You fooled me. I'm studying this.";
+  $("#cork-line").textContent = forgotten ? "Wait… where did that file go?" : r.caught ? "Gotcha. I already knew that one."
+    : !filed ? "You fooled me. I'm studying this."
+    : !lr.can_retrain ? "You fooled me. Filed for my next retrain."
+    : lr.retraining ? "You fooled me. I'm retraining on it right now."
+    : `You fooled me. ${winsToRetrain(lr)} more win${winsToRetrain(lr) > 1 ? "s" : ""} like that and I retrain.`;
   $("#ver-old").textContent = "v" + oldV; $("#ver-new").textContent = "v" + S.version;
+  $("#ver-old").hidden = $("#ver-arrow").hidden = filed; // no "v4 → v4": the version stays until a retrain
   overlay("cork");
   sfx("stamp");
 }
@@ -1159,16 +1169,30 @@ $("#btn-after-cork").onclick = () => { sfx("click"); overlay("cork", false); sho
 
 /* ======================= Between rounds: patch notes + shop ======================= */
 
+const winsToRetrain = lr => Math.max(1, lr.retrain_every - lr.wins_waiting);
+
+/* a win the server's model filed but hasn't retrained on yet (adaptVerdict `learning`): say so */
+function filedLines(lr) {
+  const risky = (S.studied || []).slice(0, 2).map(t => `<li>The riskiest part of your order: <b>${tellLabel(t)}</b>.</li>`);
+  const when = !lr.can_retrain
+    ? `<li>Your win went into Gus's training file. This server can't retrain him (the training data isn't here), so <b>he hasn't changed yet</b>.</li>`
+    : lr.retraining
+      ? `<li>Gus is <b>retraining right now</b> on players' wins. The new version goes live only if it passes the safety gate.</li>`
+      : `<li>Your win went into Gus's training file: <b>${lr.wins_waiting} of ${lr.retrain_every}</b> wins until he retrains. A new version goes live only if it passes the safety gate.</li>`;
+  return [when, ...risky];
+}
+
 function showBetween() {
   const r = S.lastResult;
   $("#patch-title").textContent = `Gus v${S.version}`;
   const items = r.caught
     ? [`<li>Gus caught you, so <b>he didn't learn anything new</b>. Change something and try again.</li>`]
+    : S.lastFiled ? filedLines(r.learning)
     : (S.studied || []).length
       ? [...S.studied.slice(0, 2).map(t => `<li>Gus studied your win. He now watches for: <b>${tellLabel(t)}</b></li>`), `<li>He'll recognize <b>this exact trick</b> next time.</li>`]
       : [`<li>Gus studied your win. He'll recognize <b>this exact trick</b> next time.</li>`];
   const st = stageFor(S.version);
-  if (stageFor(S.version - 1) !== st) items.push(`<li>Promoted to <b>${st.title}</b></li>`);
+  if (S.version > S.prevVersion && stageFor(S.prevVersion) !== st) items.push(`<li>Promoted to <b>${st.title}</b></li>`);
   if (S.streak >= 2) { items.push(`<li>🔥 Streak ×${S.streak}: keep changing your plan.</li>`); showTip("first-streak", "🔥 Streak! Keep changing your plan to keep it.", "streak-bonus"); }
   if (S.rankUp) {
     items.unshift(`<li class="rank-up">⭐ <b>Rank up: ${S.rankUp.title}!</b> New: ${S.rankUp.unlocks}.</li>`);

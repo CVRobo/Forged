@@ -234,6 +234,13 @@ def test_heat_tips_a_quiet_order():
     assert submit("rookie_kit", heat=80).verdict == "DECLINED"
 
 
+def test_a_verdict_says_whether_gus_can_learn_from_it():
+    # the game only claims Gus learned when this server can retrain (game.js filedLines)
+    lr = submit("rookie_kit", heat=40).learning
+    assert set(lr) == {"can_retrain", "retraining", "wins_waiting", "retrain_every"}
+    assert lr["retrain_every"] == online_data.RETRAIN_EVERY and lr["wins_waiting"] >= 0
+
+
 def test_the_gut_feeling_includes_the_nudges():
     calm = online_data.preview(record("careful_local", persuasion=50))
     tense = online_data.preview(record("careful_local", persuasion=0))
