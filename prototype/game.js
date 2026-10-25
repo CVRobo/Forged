@@ -413,6 +413,7 @@ function startRun(level) {
   $("#desk-mess").innerHTML = "";
   const L = LEVELS[level];
   $("#tb-level").textContent = L.name;
+  $("#tb-clock").hidden = !SHIFT_SECONDS[level];
   $("#case-client").textContent = O.SHOPS[level].domain;
   $("#memo-to").textContent = L.inspector.name;
   if (EMBED) $("#insp-win-title").textContent = `Printer · ${L.inspector.name} down the hall`;
@@ -427,6 +428,7 @@ function startRun(level) {
 /* retry: after a catch, the same victim and card come back with your answers filled in,
  * and the checkout opens where Gus caught you */
 function nextRound(retry = false) {
+  stopClock();
   S.round++;
   S.heat = Math.round(S.heat * 0.6);
   const prev = S.holder; // a new stolen card every round
@@ -560,6 +562,7 @@ function startPlanning() {
   if (r.windows.includes("clerk")) clerkSay(L.clerk.hello);
   inspectorSay(pick(L.lines.idle));
   scheduleBoss();
+  startClock();
   post("phase", { phase: "forging" });
   if (tut.on && tutStep().wait) setTimeout(() => tutDone(tutStep(), true), 350); // made it to the checkout
   else if (!tutorialDone() && S.round === 1) setTimeout(() => { if (tut.on) showTutStep(); else startTutorial("victim"); }, 350);
@@ -956,12 +959,59 @@ $("#envelope").addEventListener("pointerdown", e => {
   document.addEventListener("pointermove", mv); document.addEventListener("pointerup", up);
 });
 
+/* ======================= Shift clock (St. Mercy) =======================
+ * Level 2 gives each round a fixed shift. The clock runs while you plan, stops
+ * while the game is paused, and when it hits zero the order goes in as it is. */
+const SHIFT_SECONDS = { 2: 75 };
+const clock = { left: 0, last: 0, timer: null };
+function renderClock() {
+  const s = Math.ceil(clock.left);
+  $("#clock-num").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  $("#tb-clock").classList.toggle("hurry", s <= 15);
+}
+function startClock() {
+  stopClock();
+  const total = SHIFT_SECONDS[S.level];
+  if (!total) return;
+  clock.left = total; clock.last = Date.now();
+  renderClock();
+  clock.timer = setInterval(tickClock, 250);
+}
+function stopClock() { clearInterval(clock.timer); clock.timer = null; $("#tb-clock").classList.remove("hurry"); }
+function tickClock() {
+  const now = Date.now(), dt = (now - clock.last) / 1000;
+  clock.last = now;
+  if (S.paused || tut.on || S.submitted || !S.inv) return;
+  const before = Math.ceil(clock.left);
+  clock.left = Math.max(0, clock.left - dt);
+  const after = Math.ceil(clock.left);
+  if (after !== before && after <= 10 && after > 0) sfx("click");
+  renderClock();
+  if (clock.left <= 0) timeUp();
+}
+function timeUp() {
+  stopClock();
+  if (S.submitted) return;
+  sfx("buzz");
+  if (planReady()) {
+    toast("⏱ Shift's over! The order goes in as it is.", "bad");
+    trySubmit();
+    return;
+  }
+  // the plan isn't finished, so there is nothing worth sending
+  S.submitted = true; clearTimeout(S.bossTimer); dropTool(); hidePopover();
+  addHeat(15);
+  toast("⏱ Shift's over and the plan isn't finished. +15 heat", "bad");
+  inspectorSay("Clocking out. Whatever you were doing can wait.");
+  setTimeout(() => nextRound(), 2200);
+}
+
 function trySubmit() {
   if (!planReady()) { sfx("bad"); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); toast("Fill in every blank of the plan first", "bad"); return; }
   addHeat(planHeat());
   if (EMBED) {
     // in the office the envelope is printed, then carried to the inspector by hand
-    S.submitted = S.printed = true; clearTimeout(S.bossTimer); dropTool();
+    S.submitted = S.printed = true; clearTimeout(S.bossTimer); dropTool(); stopClock();
     sfx("chunk"); toast("🖨️ Printing the order slip… grab it at the printer and drop it in Gus's tray", "good");
     $("#envelope").classList.add("printed");
     post("print");
@@ -1061,7 +1111,7 @@ function finishRows(res) {
 }
 
 async function submit() {
-  S.submitted = true; clearTimeout(S.bossTimer);
+  S.submitted = true; clearTimeout(S.bossTimer); stopClock();
   sfx("chunk");
   const L = LEVELS[S.level];
   const ob = $("#outbox"); ob.classList.add("scanning");
@@ -1297,6 +1347,7 @@ $("#btn-retry").onclick = () => startNext(true);
 function quitToTitle() {
   $$(".overlay").forEach(o => o.classList.remove("show"));
   clearTimeout(S.bossTimer); S.bossWindow = false; $("#boss-prompt").classList.remove("show");
+  stopClock();
   if (tut.on) endTutorial(true);
   dropTool(); hidePopover(); hideSchemeTip(); $("#debug-panel").classList.remove("show");
   Object.assign(S, { inv: null, submitted: false });
@@ -1341,7 +1392,7 @@ const TUTORIAL = [
     until: () => S.printed || S.submitted, can: () => planReady(),
     text: () => EMBED ? `Drag the envelope onto <b>PRINT</b> (the dark box above). You'll stand up to deliver it.` : `Drag the envelope into the <b>OUTBOX</b> to send it.` },
   { id: "pickup", world: "grabbed", label: "Grab it at the printer", dossier: ["hiding"],
-    text: () => `Walk to the printer and press <kbd>${ForgedKeys.label("interact")}</kbd> to grab your order slip.` },
+    text: () => `Walk to the printer and press <kbd>${ForgedKeys.label("interact")}</kbd> to grab your order slip. Don't leave it sitting there: if the boss walks by and sees it at the printer, he gets mad (+10 heat).` },
   { id: "deliver", world: "delivered", label: "Drop it in the IN tray", dossier: ["break-perks"],
     text: () => `Carry it to Gus's IN tray and press <kbd>${ForgedKeys.label("interact")}</kbd>. Keep out of the boss's sight.` },
   { id: "verdict", verdict: true, label: "Back to your desk", dossier: ["version-bump", "heat-basics", "tells-explained"],
@@ -1531,10 +1582,49 @@ function bossSaw() {
   sfx("buzz"); addHeat(15); toast("The boss saw something… +15 heat", "bad");
   inspectorSay("Huh? What's the boss looking at?");
 }
+/* The newspaper you hide behind: a different edition each time, with a grayed-out
+ * newsprint photo. `level` limits an edition to one client; the rest run anywhere. */
+const EDITIONS = [
+  { paper: "THE DAILY LEDGER", title: "Local diner wins pie contest, again", sub: "Rivals demand recount, second slice",
+    photo: ["🥧", "🏆"], cap: "The winning pie, moments before the judges ate the evidence.", layout: "photo-left",
+    box: ["WEATHER", "Cloudy with a chance of audits."], level: 1 },
+  { paper: "THE SUNNY SIDE", title: "Pancake prices flip again", sub: "Flour shortage blamed on 'a guy named Pete'",
+    photo: ["🥞"], cap: "A stack of pancakes, photographed against its will.", layout: "photo-top",
+    box: ["CLASSIFIEDS", "LOST: one stapler. Answers to 'Gus'. Reward: pie."], level: 1 },
+  { paper: "ST. MERCY BULLETIN", title: "Form 7-B now required in quadruplicate", sub: "Staff thrilled, according to Form 7-C",
+    photo: ["📋", "💊"], cap: "The new form, shown here at actual size.", layout: "photo-right",
+    box: ["CAFETERIA", "Today: beige soup. Tomorrow: soup, beige."], level: 2 },
+  { paper: "THE MORNING MEMO", title: "Office stapler shortage reaches crisis", sub: "Interns asked to 'hold it together'",
+    photo: ["📎"], cap: "The last known paperclip, under guard.", layout: "photo-left",
+    box: ["HOROSCOPE", "Libra: someone is reading over your shoulder. Keep reading."] },
+  { paper: "ACCOUNTS WEEKLY", title: "Area man reads every invoice twice", sub: "Coworkers: 'he blinks a lot less now'",
+    photo: ["🧐", "🔍"], cap: "Pictured: an ordinary amount of paperwork.", layout: "photo-right",
+    box: ["STOCKS", "Rubber stamps ▲ 4% · Whiteout ▼ 2% · Coffee ▲▲▲"] },
+  { paper: "THE GOSSIP SHEET", title: "Who keeps stealing the good pens?", sub: "Investigation enters its fourth year",
+    photo: ["🖊️", "🕵️"], cap: "Suspect sketch, drawn with a borrowed pen.", layout: "photo-top",
+    box: ["CROSSWORD", "1 across: a document you'd never fake (7)"] },
+];
+let newsDeck = [];
+function renderNewspaper() {
+  if (!newsDeck.length) newsDeck = shuffle(EDITIONS.filter(e => !e.level || e.level === S.level));
+  const e = newsDeck.pop(), np = $("#newspaper");
+  np.style.setProperty("--np-tilt", rand(-5, 2).toFixed(1) + "deg");
+  np.innerHTML = `
+    <div class="np-head">${e.paper}</div>
+    <div class="np-dateline"><span>Vol. ${40 + S.round}</span><span>${S.inv?.date || "Friday"}</span><span>25¢</span></div>
+    <div class="np-title">${e.title}</div>
+    <div class="np-sub">${e.sub}</div>
+    <div class="np-body ${e.layout}">
+      <div class="np-fig"><div class="np-photo">${e.photo.map(p => `<span>${p}</span>`).join("")}</div><div class="np-cap">${e.cap}</div></div>
+      <div class="np-col"><div class="np-lines"></div><div class="np-box"><b>${e.box[0]}</b>${e.box[1]}</div></div>
+    </div>`;
+}
+
 function hideInvoice() {
   if (!S.bossWindow) return;
   S.bossWindow = false; clearTimeout(S.bossTimer);
   $("#boss-prompt").classList.remove("show");
+  renderNewspaper();
   const np = $("#newspaper"); np.classList.add("show"); sfx("whoosh");
   toast("Smooth. Just reading the paper.", "good");
   if (S.bossPractice) { S.bossPractice = false; tut.hid = true; }
