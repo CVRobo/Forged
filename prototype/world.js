@@ -2030,17 +2030,39 @@ function pickLevel(n) {
   document.querySelectorAll(".sl-card").forEach(c => c.classList.toggle("on", +c.dataset.level === n));
   applyPalette(n); // the office behind the card changes to match
 }
+// Gus's saved brain per level (game.js keeps it under "forged.gus.<level>": version, learned, memory)
+const GUS_KEY = n => "forged.gus." + n;
+function gusBrain(n) { try { return JSON.parse(localStorage.getItem(GUS_KEY(n)) || "null"); } catch (e) { return null; } }
+function gusLine(L) {
+  if (L.locked) return "";
+  const b = gusBrain(L.n), v = Math.max(1, +(b && b.version) || 1);
+  const fresh = !b || (v === 1 && !Object.keys(b.learned || {}).length && !(b.memory || []).length);
+  return `<div class="sl-gus"><span>Gus v${v}</span>${fresh ? `<span class="sl-fresh">fresh</span>` : `<button class="sl-reset" data-reset="${L.n}" title="Forget everything Gus learned on this level">↺ Reset</button>`}</div>`;
+}
 function renderStartLevels() {
   const box = $("#start-levels"); if (!box) return;
   box.innerHTML = START_LEVELS.map(L => {
     const lock = levelLock(L);
-    return `<button class="sl-card" data-level="${L.n}" style="--sl:${L.color}" ${lock ? "disabled" : ""}>
+    return `<div class="sl-wrap"><button class="sl-card" data-level="${L.n}" style="--sl:${L.color}" ${lock ? "disabled" : ""}>
       <div class="sl-art">${L.icon}</div>
       <div class="sl-body"><div class="sl-num">LEVEL ${L.n}</div><div class="sl-name">${L.name}</div>
         <span class="sl-diff">${L.diff}</span>${L.note ? `<div class="sl-note">${L.note}</div>` : ""}</div>
-      ${lock ? `<div class="sl-lock">${lock}</div>` : ""}</button>`;
+      ${lock ? `<div class="sl-lock">${lock}</div>` : ""}</button>${gusLine(L)}</div>`;
   }).join("");
   box.querySelectorAll(".sl-card").forEach(c => c.onclick = () => { if (!c.disabled) { sfx("click"); pickLevel(+c.dataset.level); } });
+  // reset Gus to v1 on that level: click once to arm ("Sure?"), again within 3 s to do it
+  box.querySelectorAll(".sl-reset").forEach(btn => btn.onclick = () => {
+    const n = +btn.dataset.reset;
+    if (!btn.classList.contains("armed")) {
+      btn.classList.add("armed"); btn.textContent = "Sure? Click again"; sfx("click");
+      clearTimeout(btn._t); btn._t = setTimeout(() => { btn.classList.remove("armed"); btn.textContent = "↺ Reset"; }, 3000);
+      return;
+    }
+    try { localStorage.removeItem(GUS_KEY(n)); } catch (e) {}
+    sfx("pick");
+    wtoast(`Gus is back to v1 on ${START_LEVELS.find(L => L.n === n).name}. He forgot everything.`, "good");
+    renderStartLevels();
+  });
   let saved = 1; try { saved = +localStorage.getItem(LEVEL_KEY) || 1; } catch (e) {}
   const ok = START_LEVELS.find(L => L.n === saved && !levelLock(L));
   pickLevel(ok ? saved : 1);
