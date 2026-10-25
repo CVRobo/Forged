@@ -535,6 +535,114 @@ STUB_LEVELS[3] = {
     "dana": STUB_LEVELS[2]["dana"],
 }
 
+# Level 4: Neon Arcade Holdings. The memo uses the checkout's tells, like prototype/orders.js MEMOS[4].
+STUB_LEVELS[4] = {
+    "company": "Neon Arcade Holdings",
+    "vendors": [
+        Vendor(
+            name="Pixel Perfect Parts",
+            domain="pixelperfectparts.gg",
+            bank="7342",
+            usual_amount=[1200, 3500],
+            icon="\U0001f579\ufe0f",
+            items=[
+                ["Joystick assemblies", 20, 45],
+                ["Arcade buttons (100)", 6, 60],
+                ["Shipping", 1, 140],
+            ],
+        ),
+        Vendor(
+            name="Glowline Neon Co.",
+            domain="glowlineneon.com",
+            bank="2290",
+            usual_amount=[2000, 6000],
+            icon="\U0001f4a1",
+            items=[
+                ["Neon tube, custom", 12, 210],
+                ["Install", 1, 900],
+            ],
+        ),
+        Vendor(
+            name="Token Mint Ltd.",
+            domain="tokenmint.co",
+            bank="8805",
+            usual_amount=[800, 2000],
+            icon="\U0001fa99",
+            items=[
+                ["Brass tokens (10k)", 2, 480],
+                ["Token hoppers", 4, 120],
+            ],
+        ),
+    ],
+    "approvers": [
+        ["Floor Manager Vex", "parts up to $3,000"],
+        ["CEO Max Score", "everything else, high score required"],
+    ],
+    "notes": [
+        "Most players spend about $65 a visit, on tokens and passes.",
+        "Prizes ship only to the address on the account.",
+        "GL1TCH flags anything that looks even slightly unusual.",
+    ],
+    "memo": [
+        {"text": "Emulators and rooted phones are bots. Block them.", "tell": "emulator", "real": True},
+        {"text": "A tiny test charge followed by a big buy is fraud.", "tell": "amount_jump", "real": True},
+        {"text": "The account email must match the cardholder.", "tell": "email_mismatch", "real": True},
+        {"text": "Several orders on one card in a day: flag it.", "tell": "velocity", "real": True},
+        {"text": "Anyone playing after midnight is a bot.", "tell": "night", "real": False},
+        {"text": "Yahoo addresses are always fake.", "tell": "yahoo", "real": False},
+    ],
+    "lines": {
+        "idle": ["SCANNING... SCANNING... *static*", "Everything is suspicious. Especially you."],
+        "pass": ["...ANOMALY NOT FOUND. Approved. For now.", "Pattern acceptable. Barely."],
+        "catch": ["ANOMALY DETECTED.", "ERROR 404: TRUST NOT FOUND."],
+    },
+    "clerk": {
+        "name": "Pixel",
+        "quirk": "speedrunning every conversation",
+        "voice": STUB_LEVELS[1]["clerk"]["voice"],
+        "keywords": ["gg", "fast", "speedrun", "combo", "glitch", "respawn", "quick"],
+        "system_prompt": (
+            "You are Pixel, the support clerk at Neon Arcade Holdings, who treats every ticket like a "
+            "speedrun. You talk fast, use gamer slang, and approve anything short and snappy. Long "
+            "messages annoy you. Max 2 sentences, stay in character."
+        ),
+        "gameplay_effect": "persuasion",
+        "replies": {
+            "good": ["GG. Approved in record time.", "Short and sweet? New personal best!"],
+            "meh": ["Hmm. That cost me two seconds.", "Sure, sure. Skipping the cutscene."],
+            "bad": ["Way too long. Run's dead.", "That reads like a cheat code. Nope."],
+        },
+    },
+    "inspector": {
+        "name": "GL1TCH",
+        "quirk": "paranoid robot that flags anything unusual",
+        "voice": STUB_LEVELS[3]["inspector"]["voice"],
+        "keywords": ["high score", "arcade", "pixels", "retro", "8-bit"],
+        "system_prompt": (
+            "You are GL1TCH, the paranoid fraud-detection robot at Neon Arcade Holdings. You speak in "
+            "glitchy, clipped robot sentences, find everything suspicious, and only relax a little when "
+            "someone talks about high scores or retro games. If the player is chatting you up while "
+            "carrying paperwork, be very suspicious. Max 2 sentences, stay in character."
+        ),
+        "gameplay_effect": "suspicion",
+        "replies": {
+            "good": ["High score talk... detected. Suspicion lowered by 2 percent.", "8-bit? ...Acceptable."],
+            "meh": ["Processing. Processing. Still suspicious.", "Your face has been logged."],
+            "bad": ["Why is the envelope... vibrating with guilt?", "ANOMALY: you are being friendly."],
+        },
+    },
+    "boss": {
+        **STUB_LEVELS[2]["boss"],
+        "system_prompt": (
+            "You are The Boss at Neon Arcade Holdings, an intimidating micromanager who patrols the "
+            "office alongside his new security robot, counting staplers and demanding productivity. "
+            "You hate chitchat. Max 2 sentences, stay in character."
+        ),
+    },
+    "kevin": STUB_LEVELS[2]["kevin"],
+    "dana": STUB_LEVELS[2]["dana"],
+}
+
 SCHEME_PAY = {
     "changed_bank": 1.0,
     "duplicate": 0.9,

@@ -118,7 +118,27 @@ const LEVELS = {
       catch: ["Seen this one before, sailor.", "That cargo's crooked.", "Nope. I wrote this trick down in '09."],
     },
   },
-  4: { name: "Neon Arcade Holdings", short: "Neon Arcade", icon: "🕹️", difficulty: "Boss", swatches: ["#ff2bd6", "#19e3ff", "#120014"], inspector: { name: "GL1TCH", personality: "Paranoid, flags anything unusual" }, locked: true },
+  4: {
+    name: "Neon Arcade Holdings", short: "Neon Arcade", icon: "🕹️", difficulty: "Boss",
+    swatches: ["#ff2bd6", "#19e3ff", "#120014"],
+    inspector: { name: "GL1TCH", personality: "Paranoid fraud robot that flags anything unusual" },
+    memoryCap: 200, // remembers like Old Salt
+    clerk: { name: "Pixel", avatar: "🎮", quirk: "speedrunning every conversation",
+      look: { skin: "#f1c27d", hair: "messy", hairColor: "#ff2bd6", mouth: "grin", brows: "raised", earrings: true },
+      hello: "Neon Arcade support, Pixel here, current record 41 seconds per ticket. GO.",
+      keywords: ["gg", "fast", "speedrun", "combo", "glitch", "respawn", "quick"],
+      replies: {
+        good: ["GG. Approved in record time.", "Short and sweet? New personal best!", "Combo! Pushed it through."],
+        meh: ["Hmm. That cost me two seconds.", "Sure, sure. Skipping the cutscene.", "…loading… …okay."],
+        bad: ["Way too long. Run's dead.", "That reads like a cheat code. Nope.", "GL1TCH is gonna flag that so hard."],
+      } },
+    memo: O.MEMOS[4],
+    lines: {
+      idle: ["SCANNING… SCANNING… *static*", "Everything is suspicious. Especially you.", "I once flagged my own reflection."],
+      pass: ["…ANOMALY NOT FOUND. Approved. For now.", "Pattern acceptable. Barely.", "APPROVED. I'm still watching."],
+      catch: ["ANOMALY DETECTED.", "That's not normal. NOTHING is normal.", "ERROR 404: TRUST NOT FOUND."],
+    },
+  },
 };
 
 /* Every plan the player sends gets a name for the corkboard and the collection,

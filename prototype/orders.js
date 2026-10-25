@@ -68,10 +68,26 @@ const SHOPS = {
     ],
     notes: ["Most orders are business freight around $180.", "Freight only goes to verified dock addresses.", "Old Salt keeps a ledger of every trick he's ever seen."],
   },
+  4: {
+    domain: "neonarcade.gg", prefix: "NA", typical: 65, spread: 70, country: "US",
+    catalog: [
+      { sku: "donate4", name: "Drop $4 in the high-score charity jar", price: 4, kind: "digital", cd: "S", ico: "🪙" },
+      { sku: "tokens", name: "Token bundle (500)", price: 25, kind: "digital", cd: "C", ico: "🎟️" },
+      { sku: "pass", name: "Season pass (monthly)", price: 14.99, kind: "digital", cd: "R", ico: "🎫" },
+      { sku: "headset", name: "Retro gaming headset", price: 129, kind: "physical", cd: "W", ico: "🎧" },
+      { sku: "gift50a", name: "Gift card $50", price: 50, kind: "digital", cd: "C", ico: "🎁" },
+      { sku: "gift250", name: "Gift card $250", price: 250, kind: "digital", cd: "C", ico: "🎁" },
+      { sku: "cabinet", name: "Mini arcade cabinet", price: 899, kind: "physical", cd: "W", ico: "🕹️" },
+      { sku: "vr", name: "VR rig", price: 1599, kind: "physical", cd: "W", ico: "🥽" },
+    ],
+    notes: ["Most players spend about $65 a visit, on tokens and passes.", "Prizes ship only to the address on the account.", "GL1TCH flags anything that looks even slightly unusual."],
+  },
 };
 // how close a copy has to be before Gus says "I've seen this one" (signature fields that match, out of 11).
 // Level 3's Old Salt remembers everything: he spots a trick even with three details changed.
-const COPYCAT_AT = { 1: .78, 2: .78, 3: .7 };
+const COPYCAT_AT = { 1: .78, 2: .78, 3: .7, 4: .7 };
+// level 4's GL1TCH is paranoid: every red flag counts for more
+const PARANOIA = { 4: 1.15 };
 
 /* ======================= Cardholders (the victims) ======================= */
 
@@ -431,6 +447,14 @@ const MEMOS = {
     { text: "Friday freight is always fraud.", tell: "friday", real: false },
     { text: "Never trust an order placed from a phone on the docks.", tell: "device_mobile", real: false },
   ],
+  4: [
+    { text: "Emulators and rooted phones are bots. Block them.", tell: "emulator", real: true },
+    { text: "A tiny test charge followed by a big buy is fraud.", tell: "amount_jump", real: true },
+    { text: "The account email must match the cardholder.", tell: "email_mismatch", real: true },
+    { text: "Several orders on one card in a day: flag it.", tell: "velocity", real: true },
+    { text: "Anyone playing after midnight is a bot.", tell: "night", real: false },
+    { text: "Yahoo addresses are always fake.", tell: "yahoo", real: false },
+  ],
 };
 
 /* score one campaign. Returns per-order results and the campaign verdict.
@@ -482,7 +506,7 @@ function judgeOrders(ctx) {
     });
     const tells = t.sort((a, b) => b[1] - a[1]);
     // leniency: Gus goes easy on new players (game.js passes more at low ranks)
-    let suspicion = tells.reduce((a, x) => a + x[1], 0) * skill - persuasion * .18 + jitter(-10, 10) - (ctx.leniency || 0);
+    let suspicion = tells.reduce((a, x) => a + x[1], 0) * skill * (PARANOIA[level] || 1) - persuasion * .18 + jitter(-10, 10) - (ctx.leniency || 0);
     if (f.amount < 5) suspicion -= 12; // nobody reviews a $1 charge
     const caught = suspicion > 38;
     if (caught) stopped = true; // a flagged order blocks the card for the rest of the campaign

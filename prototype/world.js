@@ -28,6 +28,7 @@ const PALETTES = {
   1: { floor: "#e8b77a", floor2: "#dba66a", carpet: "#9a8470", wall: "#fff1d6", accent: "#1f8a8a", accent2: "#f4a63a", bg: "#2a1d14" },
   2: { floor: "#e3f4ee", floor2: "#cfe9e0", carpet: "#7f93a3", wall: "#f7fbff", accent: "#2f6fd6", accent2: "#14a37f", bg: "#10202a" },
   3: { floor: "#b9a589", floor2: "#a8937a", carpet: "#2b3a5c", wall: "#e9e2d3", accent: "#ff9a2e", accent2: "#1d2a44", bg: "#0b1220" }, // Port Nocturne: weathered planks, navy and dock orange
+  4: { floor: "#2a2140", floor2: "#231b38", carpet: "#1a1030", wall: "#3a2d5c", accent: "#ff2bd6", accent2: "#19e3ff", bg: "#07000d" }, // Neon Arcade: dark purple, hot pink and cyan
 };
 
 /* ======================= Renderer / scene ======================= */
@@ -52,7 +53,7 @@ addEventListener("resize", resize); resize();
 
 // warm key light from above (ceiling panels): shadows fall short, right under things, never "through" a wall.
 // Cool sky bounce from below/behind: a subtle warm/cool split
-scene.add(new THREE.HemisphereLight("#fff4dc", "#7c86a3", 0.52));
+const hemi = new THREE.HemisphereLight("#fff4dc", "#7c86a3", 0.52); scene.add(hemi);
 const sun = new THREE.DirectionalLight("#ffecd0", 0.62);
 sun.position.set(-1.6, 30, 2.6); // almost straight down, a touch south-west so shapes keep a little depth
 sun.castShadow = true;
@@ -252,6 +253,40 @@ function sightBlocked(ax, az, bx, bz) {
     if (cross > w.a && cross < w.b) return true;
   }
   return false;
+}
+// how far a look from (ax, az) along (dx, dz) (unit) gets before a solid wall or closed door (max R)
+function sightDist(ax, az, dx, dz, R) {
+  let best = R;
+  for (const w of walls) {
+    if (w.glass) continue;
+    if (w.door ? w.door.hinge && Math.abs(w.door.hinge.rotation.y - w.door.base) > .35 : !w.solid) continue;
+    const af = w.axis === "x" ? az : ax, df = w.axis === "x" ? dz : dx;
+    if (Math.abs(df) < 1e-6) continue;
+    const t = (w.fixed - af) / df;
+    if (t <= 0 || t >= best) continue;
+    const cross = w.axis === "x" ? ax + t * dx : az + t * dz;
+    if (cross > w.a && cross < w.b) best = t;
+  }
+  return best;
+}
+/* Reshape a flat vision cone (a CircleGeometry fan lying on the floor) so it stops at walls: each
+ * rim point is pulled in to where that line of sight is blocked. Works for a cone parented to a
+ * character (any position, rotation, scale) or one in the scene. Keeps the world points in
+ * mesh.userData.pts for the minimap. facing uses the game's convention: direction (sin a, cos a). */
+const _cv = new THREE.Vector3();
+function shapeCone(mesh, ax, az, facing, R, half) {
+  const pos = mesh.geometry.attributes.position, n = pos.count - 1; // vertex 0 is the centre
+  mesh.updateWorldMatrix(true, false);
+  const y = mesh.getWorldPosition(_cv).y, pts = [[ax, az]];
+  _cv.set(ax, y, az); mesh.worldToLocal(_cv); pos.setXYZ(0, _cv.x, _cv.y, 0);
+  for (let i = 1; i <= n; i++) {
+    const a = facing + half - (2 * half) * (i - 1) / (n - 1), dx = Math.sin(a), dz = Math.cos(a);
+    const d = sightDist(ax, az, dx, dz, R), x = ax + dx * d, z = az + dz * d;
+    pts.push([x, z]);
+    _cv.set(x, y, z); mesh.worldToLocal(_cv); pos.setXYZ(i, _cv.x, _cv.y, 0);
+  }
+  pos.needsUpdate = true; mesh.geometry.computeBoundingSphere();
+  mesh.userData.pts = pts;
 }
 function wallBlocks(w, cam, pl) {
   const ca = w.axis === "x" ? cam.z : cam.x, pa = w.axis === "x" ? pl.z : pl.x;
@@ -1064,6 +1099,8 @@ const CLERK_STYLES = {
     sign: ["ASK MY MANAGER", "#2f6fd6", 1.1] }, // (wider: longer text)
   3: { look: { skin: "#8d5524", hair: "messy", hairColor: "#1a1210", brows: "flat", mouth: "flat", nose: "big", shirt: "#1d2a44", pants: "#2b2b44", tie: null },
     sign: ["NIGHT DESK", "#1d2a44"] },
+  4: { look: { skin: "#f1c27d", hair: "spiky", hairColor: "#ff2bd6", brows: "raised", mouth: "grin", nose: "round", earrings: true, shirt: "#19e3ff", pants: "#1a1030", tie: null },
+    sign: ["SPEEDRUN SUPPORT", "#ff2bd6", 1.1] },
 };
 const clerkSigns = {};
 for (const [n, st] of Object.entries(CLERK_STYLES)) {
@@ -1072,7 +1109,7 @@ for (const [n, st] of Object.entries(CLERK_STYLES)) {
   clerkSigns[n] = s;
 }
 const lunchSign = clerkSigns[1]; // (kept: plugins may still look for it)
-const clerkProps = { 2: new THREE.Group(), 3: new THREE.Group() };
+const clerkProps = { 2: new THREE.Group(), 3: new THREE.Group(), 4: new THREE.Group() };
 Object.values(clerkProps).forEach(g => { g.visible = false; scene.add(g); });
 // Theo: a teetering stack of forms "for the manager"
 for (let i = 0; i < 7; i++) box(.3, .035, .4, M(i % 3 ? "#fffaf0" : "#dbe9ff"), CLERK_DESK.x - .55 + (i % 2) * .02, .8 + i * .036, CLERK_DESK.z - .15, clerkProps[2]).rotation.y = (i % 2 ? .08 : -.06);
@@ -1080,6 +1117,10 @@ for (let i = 0; i < 7; i++) box(.3, .035, .4, M(i % 3 ? "#fffaf0" : "#dbe9ff"), 
 cyl(.11, .1, .22, M("#ff9a2e"), CLERK_DESK.x - .55, .89, CLERK_DESK.z - .1, clerkProps[3]);
 cyl(.09, .09, .01, M("#3b2416"), CLERK_DESK.x - .55, .995, CLERK_DESK.z - .1, clerkProps[3]);
 { const h = new THREE.Mesh(new THREE.TorusGeometry(.06, .018, 6, 12), M("#ff9a2e")); h.position.set(CLERK_DESK.x - .43, .9, CLERK_DESK.z - .1); clerkProps[3].add(h); }
+// Pixel: a handheld console and a glowing speedrun timer
+box(.26, .04, .13, M("#19e3ff"), CLERK_DESK.x - .55, .8, CLERK_DESK.z - .1, clerkProps[4]).rotation.y = .3;
+{ const t = signPlane("00:41.07", null, .36, .13, "#120014", "#ff2bd6"); t.material = new THREE.MeshBasicMaterial({ map: t.material.map });
+  t.position.set(CLERK_DESK.x - .05, .93, CLERK_DESK.z - .36); t.rotation.y = Math.PI; clerkProps[4].add(t); }
 let clerkLevel = 1;
 function setClerkLevel(level) {
   const n = CLERK_STYLES[level] ? +level : 1;
@@ -1115,6 +1156,8 @@ const LEVEL_RULES = {
   // level 3 keeps level 2's glass office and sharp eyes, and his patrol is unpredictable: a different
   // loop each time, sometimes doubling back, with shorter breaks between walks (boss-office.js picks the route)
   3: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22] },
+  // level 4: everything from level 3, plus a security bot patrolling the floor (security-bot.js), in dimmer neon light
+  4: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22], securityBot: true, dim: true },
 };
 let LV = LEVEL_RULES[1];
 // level 2: what he sees from his desk through the glass (the printer is ~12.5 m away). The cone is narrow and
@@ -2040,7 +2083,7 @@ const START_LEVELS = [
   { n: 1, name: "Sunny Diner Supply", icon: "🥞", diff: "Easy", color: "#f4a63a", note: "The boss patrols the floor" },
   { n: 2, name: "St. Mercy Pharmacy", icon: "🏥", diff: "Medium", color: "#9fd8c4", note: "Glass boss office · sharper boss" },
   { n: 3, name: "Port Nocturne Shipping", icon: "🚢", diff: "Hard", color: "#ff9a2e", note: "Unpredictable boss · Old Salt never forgets" },
-  { n: 4, name: "Neon Arcade Holdings", icon: "🕹️", diff: "Boss", color: "#ff2bd6", locked: "COMING SOON" },
+  { n: 4, name: "Neon Arcade Holdings", icon: "🕹️", diff: "Boss", color: "#ff2bd6", note: "Security bot on patrol · GL1TCH flags anything odd" },
 ];
 const LEVEL_KEY = "forged-level";
 const tutorialFinished = () => { try { return localStorage.getItem("forged-tutorial-done-v2") === "1"; } catch (e) { return false; } };
@@ -2244,6 +2287,7 @@ function updateBoss(dt, now) {
  * Either fills his suspicion; when it's full, +10 heat. */
 const PRINTER_TRAY = { x: PRINTER.x, z: PRINTER.z + .55 };
 function bossWatch(dt, now, pos, facing, R, half, walking, rate = LV.susRate) {
+  shapeCone(cone, pos.x, pos.z, facing, R, half); // the lit floor = exactly what he can see
   const sees = (x, z) => {
     const vx = x - pos.x, vz = z - pos.z;
     if (Math.hypot(vx, vz) > R) return false;
@@ -2354,6 +2398,60 @@ const levelProps = {};
   }
   levelProps[3] = { g, blocks };
 }
+/* level 4 dressing: Neon Arcade Holdings. Arcade cabinets, a claw machine, a pinball table, bean bags,
+ * neon strips along the tops of the walls, a glowing sign, and pink/cyan light. */
+{
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const blocks = [];
+  const solid = (x, z, w, d) => blocks.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+  const glow = c => new THREE.MeshBasicMaterial({ color: c });
+  const PINK = "#ff2bd6", CYAN = "#19e3ff", body = M("#1d1233"), body2 = M("#2b1d4f");
+  const screenTex = canvasTex(128, 96, (c, w, h) => {
+    c.fillStyle = "#05010a"; c.fillRect(0, 0, w, h);
+    c.fillStyle = "#19e3ff"; for (let i = 0; i < 9; i++) c.fillRect(12 + i * 12, 70 - (i % 3) * 8, 8, 8); // invaders, roughly
+    c.fillStyle = "#ff2bd6"; c.fillRect(56, 18, 16, 10); c.fillStyle = "#ffd23f"; c.font = "bold 14px monospace"; c.fillText("1UP 41070", 8, 14);
+  });
+  // an arcade cabinet facing +z (dir = 1) or -z (dir = -1)
+  const cabinet = (x, z, dir, trim) => {
+    const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = dir > 0 ? 0 : Math.PI; g.add(c);
+    box(.78, 1.85, .7, body, 0, .925, 0, c);
+    box(.8, .2, .72, glow(trim), 0, 1.95, -.02, c);                    // marquee
+    box(.8, .04, .72, glow(trim), 0, .02, 0, c);                       // floor glow
+    box(.74, .1, .3, body2, 0, 1.0, .45, c).rotation.x = -.35;          // control panel
+    box(.06, .14, .06, M("#1b1b1b"), -.15, 1.12, .48, c); cyl(.045, .045, .04, M("#e0352b"), -.15, 1.2, .48, c); // stick
+    [.05, .17, .29].forEach((bx, i) => cyl(.035, .035, .03, M(["#ffd23f", CYAN, PINK][i]), bx, 1.08, .5, c));
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.6, .45), new THREE.MeshBasicMaterial({ map: screenTex }));
+    scr.position.set(0, 1.45, .356); scr.rotation.x = -.12; c.add(scr);
+  };
+  cabinet(6.55, -8.25, 1, PINK); cabinet(7.45, -8.25, 1, CYAN);
+  // claw machine
+  box(1.0, .9, .9, body2, 8.75, .45, -8.2, g);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(.96, .95, .86), new THREE.MeshStandardMaterial({ color: "#bff6ff", transparent: true, opacity: .25 }));
+  glass.position.set(8.75, 1.38, -8.2); g.add(glass);
+  box(1.0, .14, .9, glow(PINK), 8.75, 1.92, -8.2, g);
+  [["#ffd23f", 8.55, -8.3], ["#2fb36b", 8.85, -8.05], [PINK, 9.0, -8.35], [CYAN, 8.6, -8.0]].forEach(([c, x, z]) => sphere(.11, M(c), x, 1.0, z, g));
+  box(.04, .4, .04, M("#9aa0a6"), 8.75, 1.65, -8.2, g);
+  solid(7.6, -8.2, 3.3, 1.15);
+  // pinball table + a cabinet by the south wall
+  box(.8, .14, 1.5, body, 9.1, .9, 8.15, g).rotation.x = .08;
+  box(.76, .02, 1.44, glow("#2f1a5c"), 9.1, .98, 8.15, g).rotation.x = .08;
+  [[-.25, 7.75], [.25, 7.75], [-.25, 8.55], [.25, 8.55]].forEach(([dx, z]) => box(.06, .85, .06, M("#1b1b1b"), 9.1 + dx, .42, z, g));
+  box(.8, .7, .1, body2, 9.1, 1.3, 8.85, g); box(.7, .5, .02, glow(CYAN), 9.1, 1.33, 8.79, g); // backglass
+  cabinet(10.7, 8.25, -1, CYAN);
+  solid(9.9, 8.2, 2.5, 1.5);
+  // bean bags
+  [[-2.8, 8.2, PINK], [-1.6, 8.35, CYAN]].forEach(([x, z, c]) => { const b = sphere(.42, M(c), x, .26, z, g); b.scale.set(1, .6, 1); });
+  // neon strips along the tops of the walls
+  const half = RW / 2 - .18, halfD = RD / 2 - .18;
+  box(RW - .5, .06, .06, glow(PINK), 0, 3.0, -halfD, g); box(RW - .5, .06, .06, glow(PINK), 0, 3.0, halfD, g);
+  box(.06, .06, RD - .5, glow(CYAN), half, 3.0, 0, g); box(.06, .06, RD - .5, glow(CYAN), -half, 3.0, 4.5, g).scale.z = .5;
+  // glowing sign over the board on the north wall
+  const sign = signPlane("NEON ARCADE", "HOLDINGS · INSERT COIN", 3.2, .7, "#120014", PINK);
+  sign.material = new THREE.MeshBasicMaterial({ map: sign.material.map }); sign.position.set(3, 2.75, -8.7); g.add(sign);
+  // coloured light (no shadows)
+  [[PINK, -6, 0], [CYAN, 6, 1]].forEach(([c, x, z]) => { const l = new THREE.PointLight(c, .7, 16, 1.6); l.position.set(x, 2.7, z); g.add(l); });
+  levelProps[4] = { g, blocks };
+}
 function setLevelProps(level) {
   for (const [n, p] of Object.entries(levelProps)) {
     const on = +n === level;
@@ -2364,6 +2462,9 @@ function setLevelProps(level) {
 function applyLevelRules(level) {
   LV = LEVEL_RULES[level] || LEVEL_RULES[1];
   setLevelProps(+level);
+  // level 4 is lit low so the neon pops
+  hemi.intensity = LV.dim ? .3 : .52; hemi.color.set(LV.dim ? "#d9c8ff" : "#fff4dc");
+  sun.intensity = LV.dim ? .4 : .62;
   const old = PATROL_CONE; PATROL_CONE = coneGeo(LV.coneR, LV.coneHalf);
   if (cone.geometry === old) cone.geometry = PATROL_CONE;
   old.dispose();
@@ -2418,6 +2519,7 @@ function updateBubbles(now) {
 
 /* ======================= Minimap ======================= */
 
+const MINIMAP_HOOKS = [];
 const miniCanvas = $("#minimap");
 const miniCtx = miniCanvas ? miniCanvas.getContext("2d") : null;
 const toMX = x => (x / RW + .5) * 200;
@@ -2468,6 +2570,7 @@ function drawMinimap(now) {
       }
     }
   }
+  for (const fn of MINIMAP_HOOKS) { try { fn(g, toMX, toMZ, now); } catch (e) { /* a plugin's dot */ } }
   // Player dot (red) with facing line
   const px = toMX(player.g.position.x), pz = toMZ(player.g.position.z);
   g.fillStyle = "#e0352b"; g.beginPath(); g.arc(px, pz, 4, 0, Math.PI * 2); g.fill();
@@ -2716,6 +2819,9 @@ window.FW = {
   hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),
   tutTargets: TUT_TARGETS,
+  shapeCone, sightDist, bossCone: cone, // vision cones that stop at walls; bossCone.userData.pts = its outline for the minimap
+  setSus, // the suspicion vignette (0–1): security-bot.js shows the higher of its own and the boss's
+  onMinimap: fn => MINIMAP_HOOKS.push(fn), // fn(ctx, toMX, toMZ, now): draw extra dots
   addInteraction: it => INTERACTIONS.push(it),
   setSfx: (kind, fn) => { SFX_HOOKS[kind] = fn; },
   audio: () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} return actx; },

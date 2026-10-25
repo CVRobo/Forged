@@ -291,6 +291,23 @@ const timeLabels = [5, 10, 15, 20].map(s => {
   return { sp, s };
 });
 const route = { active: false, start: 0, used: 0 };
+// level 4: the security bot's next 20 s too, in cyan (FW.roamer from security-bot.js)
+const botDashes = [];
+for (let i = 0; i < MAX_DASH; i++) {
+  const m = new THREE.Mesh(dashGeo, new THREE.MeshBasicMaterial({ color: "#19e3ff", transparent: true, opacity: 0, depthWrite: false }));
+  m.rotation.order = "XYZ"; m.rotation.x = -Math.PI / 2; m.position.y = .037; m.visible = false; m.renderOrder = 2;
+  scene.add(m); botDashes.push({ m, t: 0 });
+}
+let botUsed = 0;
+function predictBot(now) {
+  botUsed = 0;
+  if (!FW.roamer || !FW.roamer.active()) { botDashes.forEach(d => d.m.visible = false); return false; }
+  FW.roamer.predict(ROUTE_SECS, DASH_STEP, now).slice(0, MAX_DASH).forEach(p => {
+    const d = botDashes[botUsed++]; d.m.position.set(p.x, .037, p.z); d.m.rotation.z = p.a; d.m.visible = true; d.t = p.t;
+  });
+  for (let i = botUsed; i < MAX_DASH; i++) botDashes[i].m.visible = false;
+  return botUsed > 0;
+}
 
 // walk the path from where he is now, emitting a dash every DASH_STEP metres
 function predictRoute(now) {
@@ -323,6 +340,7 @@ function predictRoute(now) {
 }
 function clearRoute() {
   route.active = false;
+  botDashes.forEach(d => { d.m.visible = false; }); botUsed = 0;
   dashes.forEach(d => { d.m.visible = false; });
   timeLabels.forEach(l => l.sp.visible = false);
 }
@@ -336,14 +354,21 @@ function updateRoute(now) {
     if (el > d.t) { d.m.visible = false; continue; } // he's already walked past it
     d.m.material.opacity = fade * (.55 + .4 * Math.sin(now / 140 - d.t * 2.4));
   }
+  for (let i = 0; i < botUsed; i++) {
+    const d = botDashes[i];
+    if (el > d.t) { d.m.visible = false; continue; }
+    d.m.material.opacity = fade * (.55 + .4 * Math.sin(now / 140 - d.t * 2.4));
+  }
   timeLabels.forEach(l => { if (l.sp.visible && el > l.s) l.sp.visible = false; });
 }
 
 function readPlanner() {
   const now = performance.now();
   const left = predictRoute(now);
+  const bot = predictBot(now);
+  if (bot) route.active = true;
   FW.sfx("pickup");
-  FW.wtoast(`Planner: "9:00 Loom. 9:05 Glare. 9:15 Big chair." Route shown for ${ROUTE_SECS} s. Back at his desk in ~${Math.round(left)} s.`, "good");
+  FW.wtoast(`Planner: "9:00 Loom. 9:05 Glare. 9:15 Big chair." Route shown for ${ROUTE_SECS} s. Back at his desk in ~${Math.round(left)} s.${bot ? " The cyan line is the security bot." : ""}`, "good");
   FW.say(player, "<i>*flip flip*</i>", 1200);
   if (P.tutorialOn) FW.toOS("tutorial-3d-done", { step: "planner-read" }); // the tutorial's last step
 }
