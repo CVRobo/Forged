@@ -46,6 +46,15 @@ HEAT_START, HEAT_WEIGHT = 40.0, 0.5  # heat over 40 adds (heat - 40) * 0.5
 REPORT_RISK_PER_DAY = 0.04           # each day between orders, the cardholder may report the card
 RETRY_SECONDS = 60                   # a model that failed to load is tried again after this long
 
+# Per-level rank thresholds (rank 1 = Rookie, rank 5 = Mastermind).
+# Lower levels: high ceiling, high floor, slow ramp (lenient Gus).
+# Higher levels: lower ceiling, lower floor, fast ramp (strict Gus).
+# Levels not listed fall back to the model's trained rank thresholds.
+LEVEL_RANK_CUTOFF = {
+    1: {1: 0.9, 2: 0.85, 3: 0.8, 4: 0.7, 5: 0.55},
+    3: {1: 0.75, 2: 0.55, 3: 0.4, 4: 0.3, 5: 0.2},
+}
+
 # The leaked memo while the model is live: two true rules, picked from the tell families the live
 # version weighs most, and a decoy about something it never weighs (the scripted Gus's fake rules).
 MEMO_RULES = {
@@ -212,6 +221,16 @@ def _number(value) -> float:
     return x if math.isfinite(x) else 0.0
 
 
+def _level_threshold(record, v) -> float:
+    """Threshold based on level and rank. Per-level curves override the model's trained thresholds."""
+    level = getattr(record, "level", 1)
+    rank = int(getattr(record, "rank", None) or 1)
+    cutoffs = LEVEL_RANK_CUTOFF.get(level)
+    if cutoffs is not None:
+        return cutoffs.get(rank, cutoffs[max(cutoffs)])
+    return v.game_threshold(rank)
+
+
 def judge(record: OnlineRecord, gus: GusVerdict | None, perks=()) -> dict:
     """Per order: declined or not, why, and the score. A flagged or reported card blocks the rest."""
     v = _model()
@@ -223,7 +242,7 @@ def judge(record: OnlineRecord, gus: GusVerdict | None, perks=()) -> dict:
     import pandas as pd
     rows = pd.DataFrame(record.rows)
     scores, why = v.scores(rows), v.explain(rows)
-    cut = v.game_threshold(getattr(record, "rank", None))
+    cut = _level_threshold(record, v)
     nudge = _nudge(record)
     values = list(gus.values) if gus and gus.values else []
     results, stopped, payout = [], False, 0.0
@@ -258,7 +277,7 @@ def preview(record: OnlineRecord) -> PreviewResponse:
     if rows.empty:
         raise HTTPException(status_code=422, detail="no orders yet")
     scores = [float(s) for s in v.scores(rows)]
-    cut = v.game_threshold(getattr(record, "rank", None))
+    cut = _level_threshold(record, v)
     nudged = [_shift(s, _nudge(record)) for s in scores]
     worst = max(range(len(scores)), key=nudged.__getitem__)
     return PreviewResponse(worry=round(nudged[worst] / cut, 4), scores=[round(s, 4) for s in scores], threshold=cut,
