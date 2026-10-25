@@ -1659,7 +1659,6 @@ addEventListener("message", e => {
   if (m.type === "print") startPrinting();
   if (m.type === "verdict") onVerdict(m);
   if (m.type === "tutorial-active") { P.tutorialOn = !!m.on; if (!m.on) P.tutorialPhase = null; showOfficeTip(P.tutorialPhase); }
-  if (m.type === "tutorial-phase" && m.phase === "planner" && B.state === "wait") B.t = Math.min(B.t, .8); // send him out so the planner can be read
   if (m.type === "tutorial-phase") { P.tutorialPhase = m.phase || null; P.tutorialLabel = m.label || ""; updateTutArrowLabel(); showOfficeTip(P.tutorialPhase); }
 });
 
@@ -2185,7 +2184,8 @@ function updateBoss(dt, now) {
   if (B.state === "wait") {
     if (!B.remote) { // LAN game: the owner's boss decides when he heads out (lan.js)
       B.t -= dt;
-      if (P.tutorialOn && P.tutorialPhase === "planner") B.t = Math.min(B.t, 4); // short breaks while the tutorial waits for you
+      // the tutorial's planner step: he waits at his desk while you're still at your computer, and heads out once you stand up
+    if (P.tutorialOn && P.tutorialPhase === "planner") B.t = P.seated ? Math.max(B.t, 1) : Math.min(B.t, .8);
     if (B.t <= 0 && (!P.tutorialOn || P.tutorialPhase === "planner")) { // the tutorial's planner step sends him out
         BOSS_WALK_HOOKS.forEach(fn => { try { fn(LV); } catch (e) { console.error("[forged] boss route hook failed", e); } }); // e.g. pick today's route
         B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door");

@@ -239,8 +239,10 @@ const ROUTES = [
   [[-12.2, -5], [-10.4, -5], [-10.4, 5.4], [-.3, 6.3], [10.6, 6.3], [10.6, -2.2], [4.6, -2.2], [4.6, -6.3], [-10.4, -6.3], [-12.2, -5]], // the long way round, by the clerk
 ];
 let lastRoute = 0;
+const tutPlanner = () => P.tutorialOn && P.tutorialPhase === "planner";
 function pickRoute(rules) {
   let loop = LOOP;
+  if (tutPlanner()) loop = LOOP.concat(LOOP.slice(1), LOOP.slice(1)); // the tutorial: three laps of the floor (kept going below until you've read it)
   if (rules && rules.randomRoutes) {
     let k; do { k = Math.floor(Math.random() * ROUTES.length); } while (k === lastRoute && Math.random() < .7); // rarely the same twice
     lastRoute = k; loop = ROUTES[k].map(p => p.slice());
@@ -255,6 +257,12 @@ function pickRoute(rules) {
   RETURN_IDX = OUT.length + loop.length;
 }
 if (FW.onBossWalk) FW.onBossWalk(pickRoute);
+// the tutorial's planner step: while you haven't read it yet, he never starts his last lap home
+const LAP = LOOP.length - 1;
+FW.onUpdate(() => {
+  if (!tutPlanner() || B.state !== "walk" || B.remote) return;
+  if (B.i > OUT.length + 2 * LAP) B.i -= LAP; // same corner one lap earlier: he goes round again
+});
 boss.g.position.set(SEAT.x, 0, SEAT.z);
 
 // his vision cone (a child of boss.g) shouldn't show while he sits
