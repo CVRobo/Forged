@@ -1232,6 +1232,7 @@ function setExitPassable(on) {
  * is the emergency exit. Break room to the west (x < 0), records room to the east (x > 13). */
 const LOT = { x0: .15, x1: 12.6, z0: RD / 2 + .15, z1: 17.6 };
 const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
+const BAY = 2.33, CAR_SCALE = 1.6; // parking bays (m wide) and the cars' size: people here are ~2.3 m tall, so cars are scaled up to match
 {
   const w = LOT.x1 - LOT.x0, d = LOT.z1 - LOT.z0, cx = (LOT.x0 + LOT.x1) / 2, cz = (LOT.z0 + LOT.z1) / 2;
   // asphalt with painted bays along the east fence and a walkway from the door
@@ -1242,7 +1243,7 @@ const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
     g.globalAlpha = 1;
     const X = x => (x - LOT.x0) / w * cw, Z = z => (z - LOT.z0) / d * ch;
     g.strokeStyle = "#f2efe6"; g.lineWidth = 6;
-    for (let i = 0; i <= 4; i++) { const z = 10.4 + i * 1.75; g.beginPath(); g.moveTo(X(8.2), Z(z)); g.lineTo(X(LOT.x1), Z(z)); g.stroke(); } // 4 bays
+    for (let i = 0; i <= 3; i++) { const z = 10.4 + i * BAY; g.beginPath(); g.moveTo(X(8.2), Z(z)); g.lineTo(X(LOT.x1), Z(z)); g.stroke(); } // 3 bays, sized for the cars
     g.fillStyle = "#f2efe6"; for (let z = LOT.z0; z < 13.4; z += .7) g.fillRect(X(EXIT_X - .9), Z(z), X(EXIT_X + .9) - X(EXIT_X - .9), Z(z + .35) - Z(z)); // zebra walkway
     g.strokeStyle = "#ffd23f"; g.lineWidth = 8; g.setLineDash([26, 18]);
     g.beginPath(); g.arc(X(ASSEMBLY.x), Z(ASSEMBLY.z), (2.0 / w) * cw, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); // assembly circle
@@ -1270,19 +1271,20 @@ const ASSEMBLY = { x: 3.6, z: 15.2 }; // where the headcount happens
   };
   fence(-.2, LOT.z1, LOT.x1, LOT.z1);
   fence(LOT.x1, RD / 2 + .1, LOT.x1, LOT.z1);
-  // two parked cars in the bays
+  // two parked cars in the bays (built at 2.2 m long, then scaled to match the characters)
   const car = (x, z, color, ry) => {
-    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; g.scale.setScalar(CAR_SCALE); scene.add(g);
     const body = M(color), glass = M("#bfe8ff"), tyre = M("#1f1f22"), chrome = M("#d6dadf");
     box(2.2, .55, 1.05, body, 0, .5, 0, g);
     box(1.15, .45, .95, body, -.15, .98, 0, g);
     box(1.0, .34, .97, glass, -.15, .98, 0, g);
     [[-.7, .5], [.7, .5], [-.7, -.5], [.7, -.5]].forEach(([wx, wz]) => { const t = cyl(.22, .22, .16, tyre, wx, .22, wz, g); t.rotation.x = Math.PI / 2; });
     box(.06, .14, .9, chrome, 1.12, .48, 0, g);
-    collide(x, z, Math.abs(Math.cos(ry)) * 2.3 + Math.abs(Math.sin(ry)) * 1.15, Math.abs(Math.sin(ry)) * 2.3 + Math.abs(Math.cos(ry)) * 1.15);
+    const L = 2.3 * CAR_SCALE, W = 1.15 * CAR_SCALE;
+    collide(x, z, Math.abs(Math.cos(ry)) * L + Math.abs(Math.sin(ry)) * W, Math.abs(Math.sin(ry)) * L + Math.abs(Math.cos(ry)) * W);
   };
-  car(10.6, 11.27, "#2f6fd6", 0);
-  car(10.6, 14.77, "#e0352b", 0);
+  car(10.6, 10.4 + BAY * .5, "#2f6fd6", 0);   // first bay
+  car(10.6, 10.4 + BAY * 2.5, "#e0352b", 0);  // third bay (the middle one is free)
   // lamp post, bench, assembly sign
   cyl(.07, .09, 4.2, post, 7.6, 2.1, 16.9); box(.6, .1, .3, post, 7.35, 4.2, 16.9);
   const lampGlass = new THREE.Mesh(new THREE.BoxGeometry(.4, .06, .24), new THREE.MeshBasicMaterial({ color: "#fff3c4" })); lampGlass.position.set(7.2, 4.13, 16.9); scene.add(lampGlass);
