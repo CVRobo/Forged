@@ -535,107 +535,106 @@ STUB_LEVELS[3] = {
     "dana": STUB_LEVELS[2]["dana"],
 }
 
-# Level 4: Neon Arcade Holdings. The memo uses the checkout's tells, like prototype/orders.js MEMOS[4].
+# Level 4: Goldvault Federal Bank. The memo uses the checkout's tells, like prototype/orders.js MEMOS[4].
 STUB_LEVELS[4] = {
-    "company": "Neon Arcade Holdings",
+    "company": "Goldvault Federal Bank",
     "vendors": [
         Vendor(
-            name="Pixel Perfect Parts",
-            domain="pixelperfectparts.gg",
+            name="Brinkwell Armored Transport",
+            domain="brinkwell.com",
             bank="7342",
-            usual_amount=[1200, 3500],
-            icon="\U0001f579\ufe0f",
+            usual_amount=[3000, 9000],
+            icon="\U0001f69a",
             items=[
-                ["Joystick assemblies", 20, 45],
-                ["Arcade buttons (100)", 6, 60],
-                ["Shipping", 1, 140],
+                ["Cash pickups", 20, 240],
+                ["Insurance surcharge", 1, 650],
             ],
         ),
         Vendor(
-            name="Glowline Neon Co.",
-            domain="glowlineneon.com",
+            name="Ledgerline Vault Systems",
+            domain="ledgerline-vault.com",
             bank="2290",
-            usual_amount=[2000, 6000],
-            icon="\U0001f4a1",
+            usual_amount=[5000, 15000],
+            icon="\U0001f510",
             items=[
-                ["Neon tube, custom", 12, 210],
-                ["Install", 1, 900],
+                ["Time-lock service", 1, 4200],
+                ["Safe deposit locks", 40, 95],
             ],
         ),
         Vendor(
-            name="Token Mint Ltd.",
-            domain="tokenmint.co",
+            name="Crisp Note Printing Co.",
+            domain="crispnote.co",
             bank="8805",
-            usual_amount=[800, 2000],
-            icon="\U0001fa99",
+            usual_amount=[800, 2500],
+            icon="\U0001f5a8\ufe0f",
             items=[
-                ["Brass tokens (10k)", 2, 480],
-                ["Token hoppers", 4, 120],
+                ["Deposit slips (10k)", 3, 210],
+                ["Branded pens on chains", 500, 1.2],
             ],
         ),
     ],
     "approvers": [
-        ["Floor Manager Vex", "parts up to $3,000"],
-        ["CEO Max Score", "everything else, high score required"],
+        ["Branch Manager Sterling", "payments up to $10,000"],
+        ["Compliance Officer Vance", "everything else, dual sign-off"],
     ],
     "notes": [
-        "Most players spend about $65 a visit, on tokens and passes.",
-        "Prizes ship only to the address on the account.",
-        "GL1TCH flags anything that looks even slightly unusual.",
+        "Most customers spend about $120 a visit, on fees and plans.",
+        "Gold and safes ship only to the address on the account.",
+        "Auditor 9000 flags anything that looks even slightly unusual.",
     ],
     "memo": [
-        {"text": "Emulators and rooted phones are bots. Block them.", "tell": "emulator", "real": True},
-        {"text": "A tiny test charge followed by a big buy is fraud.", "tell": "amount_jump", "real": True},
-        {"text": "The account email must match the cardholder.", "tell": "email_mismatch", "real": True},
-        {"text": "Several orders on one card in a day: flag it.", "tell": "velocity", "real": True},
-        {"text": "Anyone playing after midnight is a bot.", "tell": "night", "real": False},
-        {"text": "Yahoo addresses are always fake.", "tell": "yahoo", "real": False},
+        {"text": "Rooted phones and emulators can't touch an account. Block them.", "tell": "emulator", "real": True},
+        {"text": "A tiny test charge followed by a big purchase is fraud.", "tell": "amount_jump", "real": True},
+        {"text": "The email on file must match the account holder.", "tell": "email_mismatch", "real": True},
+        {"text": "Several charges on one card in a day: freeze and review.", "tell": "velocity", "real": True},
+        {"text": "Transactions after midnight are always fraud.", "tell": "night", "real": False},
+        {"text": "Yahoo customers are high risk.", "tell": "yahoo", "real": False},
     ],
     "lines": {
-        "idle": ["SCANNING... SCANNING... *static*", "Everything is suspicious. Especially you."],
-        "pass": ["...ANOMALY NOT FOUND. Approved. For now.", "Pattern acceptable. Barely."],
-        "catch": ["ANOMALY DETECTED.", "ERROR 404: TRUST NOT FOUND."],
+        "idle": ["COMPLIANCE CHECK IN PROGRESS.", "Every cent is accounted for. Every. Cent."],
+        "pass": ["Transaction within tolerance. Approved.", "Reconciled. Approved. Filed in triplicate."],
+        "catch": ["IRREGULARITY DETECTED.", "That does not reconcile."],
     },
     "clerk": {
-        "name": "Pixel",
-        "quirk": "speedrunning every conversation",
+        "name": "Penny",
+        "quirk": "can't stop upselling savings accounts",
         "voice": STUB_LEVELS[1]["clerk"]["voice"],
-        "keywords": ["gg", "fast", "speedrun", "combo", "glitch", "respawn", "quick"],
+        "keywords": ["savings", "account", "interest", "invest", "premium", "loyal", "customer"],
         "system_prompt": (
-            "You are Pixel, the support clerk at Neon Arcade Holdings, who treats every ticket like a "
-            "speedrun. You talk fast, use gamer slang, and approve anything short and snappy. Long "
-            "messages annoy you. Max 2 sentences, stay in character."
+            "You are Penny, an overly polite bank teller at Goldvault Federal Bank who can't stop "
+            "upselling savings accounts, CDs and overdraft protection. You approve things quickly for "
+            "anyone who sounds like a loyal customer. Max 2 sentences, stay in character."
         ),
         "gameplay_effect": "persuasion",
         "replies": {
-            "good": ["GG. Approved in record time.", "Short and sweet? New personal best!"],
-            "meh": ["Hmm. That cost me two seconds.", "Sure, sure. Skipping the cutscene."],
-            "bad": ["Way too long. Run's dead.", "That reads like a cheat code. Nope."],
+            "good": ["A loyal customer! Approved, and I'll mail you a savings brochure.", "Love that. Pre-approved, plus a free pen!"],
+            "meh": ["Mm-hm! And would you like to open a savings account today?", "Noted! Can I interest you in overdraft protection?"],
+            "bad": ["Oh dear, that's not how we do things at Goldvault.", "I'll need to escalate this to compliance."],
         },
     },
     "inspector": {
-        "name": "GL1TCH",
-        "quirk": "paranoid robot that flags anything unusual",
+        "name": "Auditor 9000",
+        "quirk": "by-the-book compliance robot that flags anything unusual",
         "voice": STUB_LEVELS[3]["inspector"]["voice"],
-        "keywords": ["high score", "arcade", "pixels", "retro", "8-bit"],
+        "keywords": ["compliance", "audit", "regulation", "ledger", "reconcile"],
         "system_prompt": (
-            "You are GL1TCH, the paranoid fraud-detection robot at Neon Arcade Holdings. You speak in "
-            "glitchy, clipped robot sentences, find everything suspicious, and only relax a little when "
-            "someone talks about high scores or retro games. If the player is chatting you up while "
+            "You are Auditor 9000, the stiff, by-the-book compliance robot at Goldvault Federal Bank. "
+            "You speak in clipped regulatory language, find everything irregular, and only relax a little "
+            "when someone talks about audits or regulations. If the player is chatting you up while "
             "carrying paperwork, be very suspicious. Max 2 sentences, stay in character."
         ),
         "gameplay_effect": "suspicion",
         "replies": {
-            "good": ["High score talk... detected. Suspicion lowered by 2 percent.", "8-bit? ...Acceptable."],
-            "meh": ["Processing. Processing. Still suspicious.", "Your face has been logged."],
-            "bad": ["Why is the envelope... vibrating with guilt?", "ANOMALY: you are being friendly."],
+            "good": ["Regulation talk detected. Suspicion reduced by 2 percent.", "A fellow appreciator of ledgers. Acceptable."],
+            "meh": ["Processing. Still irregular.", "Your face has been logged for audit."],
+            "bad": ["Why is that envelope... unreconciled?", "IRREGULARITY: you are being friendly."],
         },
     },
     "boss": {
         **STUB_LEVELS[2]["boss"],
         "system_prompt": (
-            "You are The Boss at Neon Arcade Holdings, an intimidating micromanager who patrols the "
-            "office alongside his new security robot, counting staplers and demanding productivity. "
+            "You are The Boss at Goldvault Federal Bank, an intimidating micromanager who patrols the "
+            "branch alongside his security robot, counting staplers and demanding productivity. "
             "You hate chitchat. Max 2 sentences, stay in character."
         ),
     },

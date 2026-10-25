@@ -178,12 +178,12 @@ function drawMap(now) {
     if (coneShape(FW.bossCone)) { mg.fillStyle = B.sus > 0 ? "rgba(224,53,43,.35)" : "rgba(224,53,43,.15)"; mg.fill(); }
     dot(bp.x, bp.z, 4.5, "#e0352b");
   }
-  // level 4's security bot (security-bot.js) + its sweeping cyan cone
+  // level 4's guard bot (security-bot.js) + its sweeping amber cone
   const rb = FW.roamer;
   if (rb && rb.group.visible) {
     const bp = rb.group.position;
-    if (coneShape(rb.cone)) { mg.fillStyle = rb.bot.sus > 0 ? "rgba(255,43,214,.4)" : "rgba(25,227,255,.25)"; mg.fill(); }
-    dot(bp.x, bp.z, 4, "#19e3ff");
+    if (coneShape(rb.cone)) { mg.fillStyle = rb.bot.sus > 0 ? "rgba(224,53,43,.4)" : "rgba(255,179,0,.3)"; mg.fill(); }
+    dot(bp.x, bp.z, 4, "#ffb300");
   }
   // NPCs
   if (kevin.g.visible) dot(kevin.g.position.x, kevin.g.position.z, 3, "#7a5cff");

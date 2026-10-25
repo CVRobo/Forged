@@ -291,10 +291,10 @@ const timeLabels = [5, 10, 15, 20].map(s => {
   return { sp, s };
 });
 const route = { active: false, start: 0, used: 0 };
-// level 4: the security bot's next 20 s too, in cyan (FW.roamer from security-bot.js)
+// level 4: the guard bot's next 20 s too, in amber (FW.roamer from security-bot.js)
 const botDashes = [];
 for (let i = 0; i < MAX_DASH; i++) {
-  const m = new THREE.Mesh(dashGeo, new THREE.MeshBasicMaterial({ color: "#19e3ff", transparent: true, opacity: 0, depthWrite: false }));
+  const m = new THREE.Mesh(dashGeo, new THREE.MeshBasicMaterial({ color: "#ffb300", transparent: true, opacity: 0, depthWrite: false }));
   m.rotation.order = "XYZ"; m.rotation.x = -Math.PI / 2; m.position.y = .037; m.visible = false; m.renderOrder = 2;
   scene.add(m); botDashes.push({ m, t: 0 });
 }
@@ -368,7 +368,7 @@ function readPlanner() {
   const bot = predictBot(now);
   if (bot) route.active = true;
   FW.sfx("pickup");
-  FW.wtoast(`Planner: "9:00 Loom. 9:05 Glare. 9:15 Big chair." Route shown for ${ROUTE_SECS} s. Back at his desk in ~${Math.round(left)} s.${bot ? " The cyan line is the security bot." : ""}`, "good");
+  FW.wtoast(`Planner: "9:00 Loom. 9:05 Glare. 9:15 Big chair." Route shown for ${ROUTE_SECS} s. Back at his desk in ~${Math.round(left)} s.${bot ? " The amber line is the guard bot." : ""}`, "good");
   FW.say(player, "<i>*flip flip*</i>", 1200);
   if (P.tutorialOn) FW.toOS("tutorial-3d-done", { step: "planner-read" }); // the tutorial's last step
 }

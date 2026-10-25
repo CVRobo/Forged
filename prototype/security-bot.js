@@ -1,6 +1,6 @@
 /* security-bot.js: see PLUGINS.md. Builds on window.FW from world.js.
  *
- * LEVEL 4's SECOND ROAMER: SEC-B0T, a little hovering arcade robot.
+ * LEVEL 4's SECOND ROAMER: GUARD-B0T, the bank's little hovering security drone.
  *  - It patrols the main office on its own loop (the printer side and the east side, by
  *    Gus's booth and the clerk), pausing at corners to scan. Only on levels whose rules
  *    say `securityBot` (level 4).
@@ -27,24 +27,27 @@ const PRINTER_TRAY = { x: FW.PRINTER.x, z: FW.PRINTER.z + .55 };
 /* ---------- the model ---------- */
 const g = new THREE.Group(); g.visible = false; FW.scene.add(g);
 const rig = new THREE.Group(); g.add(rig); // bobs up and down
-const shell = M("#2b1d4f"), pink = new THREE.MeshBasicMaterial({ color: "#ff2bd6" }), cyan = new THREE.MeshBasicMaterial({ color: "#19e3ff" });
+const shell = M("#1d3557"), pink = new THREE.MeshBasicMaterial({ color: "#e0352b" }), cyan = new THREE.MeshBasicMaterial({ color: "#ffb300" }); // "pink" = alert red, "cyan" = calm amber
 const bodyM = sphere(.42, shell, 0, 1.0, 0, rig); bodyM.scale.set(1, .85, 1);
-box(.86, .08, .86, pink, 0, .9, 0, rig).scale.set(1, 1, 1);           // glowing belt
+box(.86, .08, .86, M("#c9a227"), 0, .9, 0, rig).scale.set(1, 1, 1);           // glowing belt
 box(.56, .2, .1, M("#05010a"), 0, 1.12, .38, rig);                    // visor
 const eyes = [-.12, .12].map(x => { const e = new THREE.Mesh(new THREE.BoxGeometry(.09, .09, .02), cyan); e.position.set(x, 1.12, .44); rig.add(e); return e; });
-cyl(.015, .015, .32, M("#9aa0a6"), 0, 1.48, 0, rig);
-const bulb = new THREE.Mesh(new THREE.SphereGeometry(.06, 10, 8), pink); bulb.position.set(0, 1.66, 0); rig.add(bulb);
+cyl(.3, .32, .14, M("#0f1b2d"), 0, 1.36, 0, rig);                     // security cap
+box(.5, .03, .2, M("#0f1b2d"), 0, 1.3, .3, rig);                        // its peak
+box(.09, .09, .02, M("#c9a227"), 0, 1.38, .3, rig);                     // badge
+cyl(.015, .015, .2, M("#9aa0a6"), 0, 1.52, 0, rig);
+const bulb = new THREE.Mesh(new THREE.SphereGeometry(.06, 10, 8), pink.clone()); bulb.position.set(0, 1.66, 0); rig.add(bulb);
 cyl(.2, .28, .18, shell, 0, .5, 0, rig);                               // neck to the hover base
-const base = new THREE.Mesh(new THREE.CircleGeometry(.42, 24), new THREE.MeshBasicMaterial({ color: "#19e3ff", transparent: true, opacity: .45, depthWrite: false }));
+const base = new THREE.Mesh(new THREE.CircleGeometry(.42, 24), new THREE.MeshBasicMaterial({ color: "#ffb300", transparent: true, opacity: .45, depthWrite: false }));
 base.rotation.x = -Math.PI / 2; base.position.y = .03; g.add(base);
 // name tag
 const tagTex = canvasTex(256, 48, (c, w, h) => {
-  c.fillStyle = "#120014"; c.fillRect(0, 0, w, h); c.strokeStyle = "#19e3ff"; c.lineWidth = 4; c.strokeRect(2, 2, w - 4, h - 4);
-  c.fillStyle = "#19e3ff"; c.font = "bold 26px 'Space Mono', monospace"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("SEC-B0T", w / 2, h / 2 + 1);
+  c.fillStyle = "#1d3557"; c.fillRect(0, 0, w, h); c.strokeStyle = "#c9a227"; c.lineWidth = 4; c.strokeRect(2, 2, w - 4, h - 4);
+  c.fillStyle = "#c9a227"; c.font = "bold 26px 'Space Mono', monospace"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("GUARD-B0T", w / 2, h / 2 + 1);
 });
 const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex })); tag.scale.set(1.1, .21, 1); tag.position.y = 2.0; g.add(tag);
 // its vision cone (flat on the floor, in its own group so it can sweep)
-const coneMat = new THREE.MeshBasicMaterial({ color: "#19e3ff", transparent: true, opacity: .18, depthWrite: false, side: THREE.DoubleSide });
+const coneMat = new THREE.MeshBasicMaterial({ color: "#ffb300", transparent: true, opacity: .18, depthWrite: false, side: THREE.DoubleSide });
 const cone = new THREE.Mesh(new THREE.CircleGeometry(R, 28, -Math.PI / 2 - HALF, HALF * 2), coneMat);
 cone.rotation.x = -Math.PI / 2; cone.position.y = .045; FW.scene.add(cone); cone.visible = false;
 
@@ -84,7 +87,7 @@ function update(dt, now) {
   bot.look = bot.facing + Math.sin(bot.t * (scanning ? 2.6 : 1.4)) * SWEEP;
   g.rotation.y = bot.look;
   rig.position.y = Math.sin(bot.t * 3) * .05;
-  bulb.material.color.set(Math.sin(bot.t * 6) > 0 ? "#ff2bd6" : "#5a1050");
+  bulb.material.color.set(Math.sin(bot.t * 6) > 0 ? "#e0352b" : "#4a0f0c"); // the siren light
   if (FW.shapeCone) FW.shapeCone(cone, g.position.x, g.position.z, bot.look, R, HALF); // stops at walls, like the boss's
   else { cone.position.x = g.position.x; cone.position.z = g.position.z; cone.rotation.z = bot.look; }
 
@@ -100,11 +103,11 @@ function update(dt, now) {
       if (you) {
         bot.busted = true; P.frozenUntil = Math.max(P.frozenUntil || 0, now + 2400);
         FW.say(me, "UNAUTHORIZED PAPERWORK DETECTED. REPORTING.", 2400);
-        FW.wtoast("The security bot scanned your envelope! +10 heat", "bad");
+        FW.wtoast("The guard bot scanned your envelope! +10 heat", "bad");
       } else {
         B.printerBusted = true;
         FW.say(me, "UNATTENDED DOCUMENT AT PRINTER. LOGGED.", 2400);
-        FW.wtoast("The security bot logged your slip at the printer! +10 heat", "bad");
+        FW.wtoast("The guard bot logged your slip at the printer! +10 heat", "bad");
       }
       FW.toOS("heat", { amount: 10 });
       FW.sfx("busted"); P.shake = .3; FW.flashVignette();
@@ -113,7 +116,7 @@ function update(dt, now) {
   // shares the boss's meter: whichever of them is more suspicious
   FW.setSus(Math.max(bot.sus, B.sus || 0));
   if (bot.sus > 0 && !(B.sus > 0) && now > bot.nextBeat) { FW.sfx("heart"); bot.nextBeat = now + 520 - bot.sus * 240; }
-  coneMat.color.set(bot.sus > 0 || now < bot.frozenUntil ? "#ff2bd6" : "#19e3ff");
+  coneMat.color.set(bot.sus > 0 || now < bot.frozenUntil ? "#e0352b" : "#ffb300");
   coneMat.opacity = .16 + bot.sus * .3;
   eyes.forEach(e => e.material = bot.sus > 0 ? pink : cyan);
 }
@@ -136,7 +139,7 @@ FW.roamer = { active: () => active() && g.visible, predict, bot, group: g, R, HA
 
 FW.onMinimap && FW.onMinimap((c, mx, mz) => {
   if (!g.visible) return;
-  c.fillStyle = "#19e3ff"; c.beginPath(); c.arc(mx(g.position.x), mz(g.position.z), 4.5, 0, Math.PI * 2); c.fill();
-  c.fillStyle = "#120014"; c.font = "bold 7px sans-serif"; c.textAlign = "center"; c.fillText("S", mx(g.position.x), mz(g.position.z) + 2.5);
+  c.fillStyle = "#ffb300"; c.beginPath(); c.arc(mx(g.position.x), mz(g.position.z), 4.5, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#1d3557"; c.font = "bold 7px sans-serif"; c.textAlign = "center"; c.fillText("S", mx(g.position.x), mz(g.position.z) + 2.5);
 });
 })();

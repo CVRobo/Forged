@@ -28,7 +28,7 @@ const PALETTES = {
   1: { floor: "#e8b77a", floor2: "#dba66a", carpet: "#9a8470", wall: "#fff1d6", accent: "#1f8a8a", accent2: "#f4a63a", bg: "#2a1d14" },
   2: { floor: "#e3f4ee", floor2: "#cfe9e0", carpet: "#7f93a3", wall: "#f7fbff", accent: "#2f6fd6", accent2: "#14a37f", bg: "#10202a" },
   3: { floor: "#b9a589", floor2: "#a8937a", carpet: "#2b3a5c", wall: "#e9e2d3", accent: "#ff9a2e", accent2: "#1d2a44", bg: "#0b1220" }, // Port Nocturne: weathered planks, navy and dock orange
-  4: { floor: "#2a2140", floor2: "#231b38", carpet: "#1a1030", wall: "#3a2d5c", accent: "#ff2bd6", accent2: "#19e3ff", bg: "#07000d" }, // Neon Arcade: dark purple, hot pink and cyan
+  4: { floor: "#eef2f6", floor2: "#e2e8f0", carpet: "#1d3557", wall: "#f8fafc", accent: "#1d3557", accent2: "#c9a227", bg: "#0f1b2d" }, // Goldvault Federal Bank: white stone, navy, a touch of gold
 };
 
 /* ======================= Renderer / scene ======================= */
@@ -1099,8 +1099,8 @@ const CLERK_STYLES = {
     sign: ["ASK MY MANAGER", "#2f6fd6", 1.1] }, // (wider: longer text)
   3: { look: { skin: "#8d5524", hair: "messy", hairColor: "#1a1210", brows: "flat", mouth: "flat", nose: "big", shirt: "#1d2a44", pants: "#2b2b44", tie: null },
     sign: ["NIGHT DESK", "#1d2a44"] },
-  4: { look: { skin: "#f1c27d", hair: "spiky", hairColor: "#ff2bd6", brows: "raised", mouth: "grin", nose: "round", earrings: true, shirt: "#19e3ff", pants: "#1a1030", tie: null },
-    sign: ["SPEEDRUN SUPPORT", "#ff2bd6", 1.1] },
+  4: { look: { skin: "#e0a77a", hair: "bun", hairColor: "#c98a3a", brows: "raised", mouth: "grin", nose: "round", earrings: true, glasses: false, shirt: "#1d3557", pants: "#1d3557", tie: "#c9a227" },
+    sign: ["ASK ME ABOUT SAVINGS", "#1d3557", 1.1] },
 };
 const clerkSigns = {};
 for (const [n, st] of Object.entries(CLERK_STYLES)) {
@@ -1117,10 +1117,10 @@ for (let i = 0; i < 7; i++) box(.3, .035, .4, M(i % 3 ? "#fffaf0" : "#dbe9ff"), 
 cyl(.11, .1, .22, M("#ff9a2e"), CLERK_DESK.x - .55, .89, CLERK_DESK.z - .1, clerkProps[3]);
 cyl(.09, .09, .01, M("#3b2416"), CLERK_DESK.x - .55, .995, CLERK_DESK.z - .1, clerkProps[3]);
 { const h = new THREE.Mesh(new THREE.TorusGeometry(.06, .018, 6, 12), M("#ff9a2e")); h.position.set(CLERK_DESK.x - .43, .9, CLERK_DESK.z - .1); clerkProps[3].add(h); }
-// Pixel: a handheld console and a glowing speedrun timer
-box(.26, .04, .13, M("#19e3ff"), CLERK_DESK.x - .55, .8, CLERK_DESK.z - .1, clerkProps[4]).rotation.y = .3;
-{ const t = signPlane("00:41.07", null, .36, .13, "#120014", "#ff2bd6"); t.material = new THREE.MeshBasicMaterial({ map: t.material.map });
-  t.position.set(CLERK_DESK.x - .05, .93, CLERK_DESK.z - .36); t.rotation.y = Math.PI; clerkProps[4].add(t); }
+// Penny: a brochure stand ("HIGH-YIELD SAVER!") and the pen on a chain
+box(.3, .03, .16, M("#9aa7b4"), CLERK_DESK.x - .55, .8, CLERK_DESK.z - .1, clerkProps[4]);
+[-.08, .08].forEach((o, i) => { const b = box(.12, .2, .015, M(i ? "#c9a227" : "#2f6fd6"), CLERK_DESK.x - .55 + o, .9, CLERK_DESK.z - .14, clerkProps[4]); b.rotation.x = -.2; });
+cyl(.012, .012, .16, M("#1b1b1b"), CLERK_DESK.x - .2, .82, CLERK_DESK.z - .3, clerkProps[4]).rotation.z = Math.PI / 2;
 let clerkLevel = 1;
 function setClerkLevel(level) {
   const n = CLERK_STYLES[level] ? +level : 1;
@@ -1156,8 +1156,8 @@ const LEVEL_RULES = {
   // level 3 keeps level 2's glass office and sharp eyes, and his patrol is unpredictable: a different
   // loop each time, sometimes doubling back, with shorter breaks between walks (boss-office.js picks the route)
   3: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22] },
-  // level 4: everything from level 3, plus a security bot patrolling the floor (security-bot.js), in dimmer neon light
-  4: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22], securityBot: true, dim: true },
+  // level 4: everything from level 3, plus a guard bot patrolling the floor (security-bot.js)
+  4: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22], securityBot: true },
 };
 let LV = LEVEL_RULES[1];
 // level 2: what he sees from his desk through the glass (the printer is ~12.5 m away). The cone is narrow and
@@ -2083,7 +2083,7 @@ const START_LEVELS = [
   { n: 1, name: "Sunny Diner Supply", icon: "🥞", diff: "Easy", color: "#f4a63a", note: "The boss patrols the floor" },
   { n: 2, name: "St. Mercy Pharmacy", icon: "🏥", diff: "Medium", color: "#9fd8c4", note: "Glass boss office · sharper boss" },
   { n: 3, name: "Port Nocturne Shipping", icon: "🚢", diff: "Hard", color: "#ff9a2e", note: "Unpredictable boss · Old Salt never forgets" },
-  { n: 4, name: "Neon Arcade Holdings", icon: "🕹️", diff: "Boss", color: "#ff2bd6", note: "Security bot on patrol · GL1TCH flags anything odd" },
+  { n: 4, name: "Goldvault Federal Bank", icon: "🏦", diff: "Boss", color: "#1d3557", note: "Guard bot on patrol · Auditor 9000 flags anything odd" },
 ];
 const LEVEL_KEY = "forged-level";
 const tutorialFinished = () => { try { return localStorage.getItem("forged-tutorial-done-v2") === "1"; } catch (e) { return false; } };
@@ -2398,62 +2398,76 @@ const levelProps = {};
   }
   levelProps[3] = { g, blocks };
 }
-/* level 4 dressing: Neon Arcade Holdings. Arcade cabinets, a claw machine, a pinball table, bean bags,
- * neon strips along the tops of the walls, a glowing sign, and pink/cyan light. */
+/* level 4 dressing: Goldvault Federal Bank, a modern glass bank. ATMs, a small round vault door,
+ * glass partitions with steel posts, a scrolling stock ticker along the north wall, queue posts with
+ * navy ropes, waiting benches and the bank's sign. */
 {
   const g = new THREE.Group(); g.visible = false; scene.add(g);
   const blocks = [];
   const solid = (x, z, w, d) => blocks.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
-  const glow = c => new THREE.MeshBasicMaterial({ color: c });
-  const PINK = "#ff2bd6", CYAN = "#19e3ff", body = M("#1d1233"), body2 = M("#2b1d4f");
-  const screenTex = canvasTex(128, 96, (c, w, h) => {
-    c.fillStyle = "#05010a"; c.fillRect(0, 0, w, h);
-    c.fillStyle = "#19e3ff"; for (let i = 0; i < 9; i++) c.fillRect(12 + i * 12, 70 - (i % 3) * 8, 8, 8); // invaders, roughly
-    c.fillStyle = "#ff2bd6"; c.fillRect(56, 18, 16, 10); c.fillStyle = "#ffd23f"; c.font = "bold 14px monospace"; c.fillText("1UP 41070", 8, 14);
+  const NAVY = "#1d3557", GOLD = "#c9a227", steel = M("#9aa7b4"), steelDk = M("#5a6470"), navy = M(NAVY), white = M("#f8fafc");
+  const glowM = c => new THREE.MeshBasicMaterial({ color: c });
+  // two ATMs on the north wall, by Gus's booth
+  const atmScreen = canvasTex(128, 96, (c, w, h) => {
+    c.fillStyle = "#0f1b2d"; c.fillRect(0, 0, w, h); c.fillStyle = "#c9a227"; c.font = "bold 16px sans-serif"; c.textAlign = "center";
+    c.fillText("GOLDVAULT", w / 2, 30); c.fillStyle = "#e2e8f0"; c.font = "12px sans-serif"; c.fillText("Insert card", w / 2, 58); c.fillText("$ 20  40  100", w / 2, 80);
   });
-  // an arcade cabinet facing +z (dir = 1) or -z (dir = -1)
-  const cabinet = (x, z, dir, trim) => {
-    const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = dir > 0 ? 0 : Math.PI; g.add(c);
-    box(.78, 1.85, .7, body, 0, .925, 0, c);
-    box(.8, .2, .72, glow(trim), 0, 1.95, -.02, c);                    // marquee
-    box(.8, .04, .72, glow(trim), 0, .02, 0, c);                       // floor glow
-    box(.74, .1, .3, body2, 0, 1.0, .45, c).rotation.x = -.35;          // control panel
-    box(.06, .14, .06, M("#1b1b1b"), -.15, 1.12, .48, c); cyl(.045, .045, .04, M("#e0352b"), -.15, 1.2, .48, c); // stick
-    [.05, .17, .29].forEach((bx, i) => cyl(.035, .035, .03, M(["#ffd23f", CYAN, PINK][i]), bx, 1.08, .5, c));
-    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.6, .45), new THREE.MeshBasicMaterial({ map: screenTex }));
-    scr.position.set(0, 1.45, .356); scr.rotation.x = -.12; c.add(scr);
-  };
-  cabinet(6.55, -8.25, 1, PINK); cabinet(7.45, -8.25, 1, CYAN);
-  // claw machine
-  box(1.0, .9, .9, body2, 8.75, .45, -8.2, g);
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(.96, .95, .86), new THREE.MeshStandardMaterial({ color: "#bff6ff", transparent: true, opacity: .25 }));
-  glass.position.set(8.75, 1.38, -8.2); g.add(glass);
-  box(1.0, .14, .9, glow(PINK), 8.75, 1.92, -8.2, g);
-  [["#ffd23f", 8.55, -8.3], ["#2fb36b", 8.85, -8.05], [PINK, 9.0, -8.35], [CYAN, 8.6, -8.0]].forEach(([c, x, z]) => sphere(.11, M(c), x, 1.0, z, g));
-  box(.04, .4, .04, M("#9aa0a6"), 8.75, 1.65, -8.2, g);
-  solid(7.6, -8.2, 3.3, 1.15);
-  // pinball table + a cabinet by the south wall
-  box(.8, .14, 1.5, body, 9.1, .9, 8.15, g).rotation.x = .08;
-  box(.76, .02, 1.44, glow("#2f1a5c"), 9.1, .98, 8.15, g).rotation.x = .08;
-  [[-.25, 7.75], [.25, 7.75], [-.25, 8.55], [.25, 8.55]].forEach(([dx, z]) => box(.06, .85, .06, M("#1b1b1b"), 9.1 + dx, .42, z, g));
-  box(.8, .7, .1, body2, 9.1, 1.3, 8.85, g); box(.7, .5, .02, glow(CYAN), 9.1, 1.33, 8.79, g); // backglass
-  cabinet(10.7, 8.25, -1, CYAN);
-  solid(9.9, 8.2, 2.5, 1.5);
-  // bean bags
-  [[-2.8, 8.2, PINK], [-1.6, 8.35, CYAN]].forEach(([x, z, c]) => { const b = sphere(.42, M(c), x, .26, z, g); b.scale.set(1, .6, 1); });
-  // neon strips along the tops of the walls
-  const half = RW / 2 - .18, halfD = RD / 2 - .18;
-  box(RW - .5, .06, .06, glow(PINK), 0, 3.0, -halfD, g); box(RW - .5, .06, .06, glow(PINK), 0, 3.0, halfD, g);
-  box(.06, .06, RD - .5, glow(CYAN), half, 3.0, 0, g); box(.06, .06, RD - .5, glow(CYAN), -half, 3.0, 4.5, g).scale.z = .5;
-  // glowing sign over the board on the north wall
-  const sign = signPlane("NEON ARCADE", "HOLDINGS · INSERT COIN", 3.2, .7, "#120014", PINK);
-  sign.material = new THREE.MeshBasicMaterial({ map: sign.material.map }); sign.position.set(3, 2.75, -8.7); g.add(sign);
-  // coloured light (no shadows)
-  [[PINK, -6, 0], [CYAN, 6, 1]].forEach(([c, x, z]) => { const l = new THREE.PointLight(c, .7, 16, 1.6); l.position.set(x, 2.7, z); g.add(l); });
+  [6.4, 7.5].forEach(x => {
+    box(.9, 1.7, .55, steel, x, .85, -8.45, g);
+    box(.92, .22, .57, navy, x, 1.82, -8.45, g);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.5, .38), new THREE.MeshBasicMaterial({ map: atmScreen })); scr.position.set(x, 1.32, -8.165); g.add(scr);
+    box(.5, .06, .2, steelDk, x, 1.02, -8.12, g);                       // keypad shelf
+    box(.22, .02, .02, glowM("#2fb36b"), x + .1, 1.12, -8.165, g);       // card slot light
+  });
+  solid(6.95, -8.45, 2.1, .7);
+  // a small round vault door on the north wall
+  const vault = new THREE.Group(); vault.position.set(9.4, 1.35, -8.8); g.add(vault);
+  const vd = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .14, 32).rotateX(Math.PI / 2), M("#7d8a98")); vd.position.z = .07; vault.add(vd);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.86, .07, 8, 32), steelDk); rim.position.z = .1; vault.add(rim);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .12, 16).rotateX(Math.PI / 2), M(GOLD)); hub.position.z = .2; vault.add(hub);
+  for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(.05, .62, .05), M(GOLD)); s.position.z = .22; s.rotation.z = i * Math.PI / 6; vault.add(s); }
+  // glass partitions with steel posts (south side, in front of the waiting area)
+  const glassM = new THREE.MeshStandardMaterial({ color: "#cfeeff", transparent: true, opacity: .25, roughness: .1 });
+  [[8.4, 7.3, 2.0], [10.6, 7.3, 2.0]].forEach(([x, z, w]) => {
+    const pane = new THREE.Mesh(new THREE.BoxGeometry(w, 1.5, .04), glassM); pane.position.set(x, .85, z); g.add(pane);
+    [-w / 2, w / 2].forEach(o => box(.06, 1.6, .06, steelDk, x + o, .8, z, g));
+    box(w, .04, .06, steelDk, x, 1.6, z, g);
+    solid(x, z, w, .15);
+  });
+  // waiting benches behind the glass
+  [[8.6, 8.3], [10.8, 8.3]].forEach(([x, z]) => { box(1.6, .1, .5, navy, x, .45, z, g); box(1.6, .45, .08, navy, x, .72, z + .22, g); [-.7, .7].forEach(o => box(.06, .42, .4, steelDk, x + o, .21, z, g)); });
+  // queue posts with navy ropes beside Gus's booth (clear of the boss's and the bot's routes)
+  const posts = [[9.6, -4.6], [9.6, -3.2], [11.2, -3.2], [11.2, -4.6]];
+  posts.forEach(([x, z]) => { cyl(.05, .05, .95, steel, x, .48, z, g); cyl(.15, .15, .04, steelDk, x, .02, z, g); sphere(.07, M(GOLD), x, .98, z, g); });
+  [[0, 1], [1, 2], [2, 3]].forEach(([a, b]) => {
+    const [ax, az] = posts[a], [bx, bz] = posts[b], len = Math.hypot(bx - ax, bz - az);
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, len, 6), navy);
+    r.position.set((ax + bx) / 2, .82, (az + bz) / 2); r.rotation.z = Math.PI / 2; r.rotation.y = -Math.atan2(bz - az, bx - ax); g.add(r);
+  });
+  // a stock ticker strip along the top of the north wall (scrolls; see tickTicker)
+  const tickerTex = canvasTex(2048, 64, (c, w, h) => {
+    c.fillStyle = "#0f1b2d"; c.fillRect(0, 0, w, h); c.font = "bold 34px 'Space Mono', monospace"; c.textBaseline = "middle";
+    const items = [["GVB", "+1.2"], ["SUNNY", "-0.4"], ["MERCY", "+0.8"], ["NOCT", "-2.1"], ["GOLD", "+3.3"], ["PIE", "+9.9"], ["STAPLR", "-0.1"], ["GUS", "+0.0"]];
+    let x = 20; for (const [n, ch] of items) { c.fillStyle = "#e2e8f0"; c.fillText(n, x, h / 2); x += c.measureText(n).width + 14; c.fillStyle = ch[0] === "-" ? "#e0352b" : "#2fb36b"; c.fillText((ch[0] === "-" ? "▼" : "▲") + ch, x, h / 2); x += c.measureText(ch).width + 70; }
+  });
+  tickerTex.wrapS = THREE.RepeatWrapping; tickerTex.repeat.set(2, 1);
+  const ticker = new THREE.Mesh(new THREE.PlaneGeometry(RW - 1, .32), new THREE.MeshBasicMaterial({ map: tickerTex })); ticker.position.set(0, 3.0, -RD / 2 + .19); g.add(ticker);
+  levelProps.tickers = [tickerTex];
+  // the bank's sign on the north wall, above the ATMs and the vault (clear of the Never Again board)
+  const sign = signPlane("GOLDVAULT", "FEDERAL BANK · EST. 1888", 2.6, .55, NAVY, GOLD);
+  sign.position.set(7.9, 2.55, -8.76); g.add(sign);
+  // brass-and-navy trim along the bottom of the walls
+  box(RW - .5, .08, .04, M(GOLD), 0, .3, -RD / 2 + .19, g);
   levelProps[4] = { g, blocks };
+}
+// the ticker scrolls (only while level 4's props are showing)
+function tickTicker(dt) {
+  if (!levelProps[4] || !levelProps[4].g.visible) return;
+  for (const t of levelProps.tickers || []) t.offset.x = (t.offset.x + dt * .03) % 1;
 }
 function setLevelProps(level) {
   for (const [n, p] of Object.entries(levelProps)) {
+    if (!p.g) continue; // (levelProps.tickers is a list of textures, not a level)
     const on = +n === level;
     p.g.visible = on;
     p.blocks.forEach(b => { const i = colliders.indexOf(b); if (on && i < 0) colliders.push(b); if (!on && i >= 0) colliders.splice(i, 1); });
@@ -2462,7 +2476,7 @@ function setLevelProps(level) {
 function applyLevelRules(level) {
   LV = LEVEL_RULES[level] || LEVEL_RULES[1];
   setLevelProps(+level);
-  // level 4 is lit low so the neon pops
+  // a level can ask for dim light (rules.dim)
   hemi.intensity = LV.dim ? .3 : .52; hemi.color.set(LV.dim ? "#d9c8ff" : "#fff4dc");
   sun.intensity = LV.dim ? .4 : .62;
   const old = PATROL_CONE; PATROL_CONE = coneGeo(LV.coneR, LV.coneHalf);
@@ -2768,7 +2782,7 @@ function loop(now) {
     exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); });
   }
   updateDoors(dt, now);
-  if (!P.paused) clerkIdle(now);
+  if (!P.paused) { clerkIdle(now); tickTicker(dt); }
   for (const fn of UPDATERS) { try { fn(dt, now); } catch (e) { console.error("[forged] plugin update failed", e); } }
   updateCine(now);
   updateConfetti(dt);

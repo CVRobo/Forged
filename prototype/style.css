@@ -26,8 +26,8 @@
   --paper: #f4efe6; --win: #f4efe6; --title: #ff9a2e; --ink: #0d1424; --soft: #ffd9ae;
 }
 #stage[data-level="4"] {
-  --desk: #1a0f24; --desk-2: #120a1a; --accent: #ff2bd6; --accent-2: #19e3ff;
-  --paper: #fdf6ff; --win: #fdf6ff; --title: #ff2bd6; --ink: #120014; --soft: #ffd1f5;
+  --desk: #1d3557; --desk-2: #15263f; --accent: #c9a227; --accent-2: #2f6fd6;
+  --paper: #ffffff; --win: #f8fafc; --title: #1d3557; --ink: #0f1b2d; --soft: #e2e8f0;
 }
 
 :root {
