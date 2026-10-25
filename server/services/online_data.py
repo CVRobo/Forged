@@ -177,6 +177,13 @@ def model_status() -> dict:
     return status
 
 
+def learning_status() -> dict:
+    """Whether this server can retrain on wins, whether a retrain is running, and how many wins wait for the next."""
+    s = model_status()
+    return {"can_retrain": bool(s["learning"]), "retraining": bool(_retrain["running"]),
+            "wins_waiting": int(s["wins_waiting"]), "retrain_every": int(s["retrain_every"])}
+
+
 def _nudge(record: OnlineRecord) -> float:
     """The scripted Gus's nudges, in log-odds: heat over 40 adds, persuasion takes away."""
     heat = max(0.0, _number(getattr(record, "heat", 0)) - HEAT_START) * HEAT_WEIGHT
@@ -376,4 +383,5 @@ def submit_online(record: OnlineRecord, gus: GusVerdict | None, round_id: str, p
         payout=verdict["payout"],
         new_version=verdict["version"],
         results=verdict["results"],
+        learning=learning_status() if verdict["source"] == "model" else None,
     )

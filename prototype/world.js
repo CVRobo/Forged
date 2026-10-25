@@ -1868,14 +1868,16 @@ function deliver() {
  * slams. Tells come from the computer's verdict message (`tells`). */
 
 // the order slip's rows: card, buyer, ship to, device / IP, cart, timing (tells come from orders.js)
-const TELL_ROWS = { new_card: 0, foreign_card: 0, velocity: 0, email_risky: 1, email_mismatch: 1, yahoo: 1,
+const TELL_ROWS = { new_card: 0, foreign_card: 0, velocity: 0, email_risky: 1, email_mismatch: 1, yahoo: 1, odd_domain: 1, new_account: 1,
   far_ship: 2, new_address: 2, ip_far: 3, proxy: 3, emulator: 3, new_device: 3, device_reuse: 3, device_mobile: 3,
-  gift_card: 4, amount_unusual: 4, amount_jump: 4, night: 5, friday: 5, heat: 5 };
+  gift_card: 4, amount_unusual: 4, amount_jump: 4, night: 5, friday: 5, heat: 5, identity: 6 };
 const TELL_SHORT = { new_card: "brand-new card", foreign_card: "foreign card", velocity: "too many, too fast", email_risky: "anonymous email",
   email_mismatch: "wrong name", yahoo: "yahoo?!", far_ship: "ships far away", new_address: "new address", ip_far: "IP far away",
   proxy: "VPN!", emulator: "emulator", new_device: "new device", device_reuse: "same device again", device_mobile: "a phone?",
-  gift_card: "big gift card", amount_unusual: "way too big", amount_jump: "test charges", night: "3 AM?", friday: "Friday?", heat: "you look nervous" };
-const ROW_LABELS = ["Card", "Buyer email", "Ship to", "Device / IP", "Cart", "Timing"];
+  gift_card: "big gift card", amount_unusual: "way too big", amount_jump: "test charges", night: "3 AM?", friday: "Friday?", heat: "you look nervous",
+  odd_domain: "weird email site", new_account: "brand-new account", identity: "fails the CRS check" };
+// Identity: the model asks CRS who the buyer is (ml/online/crs.py)
+const ROW_LABELS = ["Card", "Buyer email", "Ship to", "Device / IP", "Cart", "Timing", "Identity (CRS)"];
 const scanDoc = { vendor: "", marks: [], verdict: null };
 const scanTex = canvasTex(512, 640, (g, w, h) => {
   g.fillStyle = "#fffaf0"; g.fillRect(0, 0, w, h);
@@ -1884,7 +1886,7 @@ const scanTex = canvasTex(512, 640, (g, w, h) => {
   g.fillStyle = "#1f8a8a"; g.font = "44px Bungee, Impact"; g.fillText("ORDER", 30, 70);
   g.fillStyle = "#2b1d14"; g.font = "bold 24px 'Space Mono', monospace"; g.fillText((scanDoc.vendor || "scanning…").slice(0, 26), 30, 110);
   ROW_LABELS.forEach((label, i) => {
-    const y = 175 + i * 72, hit = scanDoc.marks.find(m => m.row === i);
+    const y = 165 + i * 64, hit = scanDoc.marks.find(m => m.row === i);
     if (hit) { g.fillStyle = "rgba(224,53,43,.18)"; g.fillRect(20, y - 34, w - 40, 58); g.strokeStyle = "#e0352b"; g.lineWidth = 5; g.strokeRect(20, y - 34, w - 40, 58); }
     g.fillStyle = "#888"; g.font = "18px 'Space Mono', monospace"; g.fillText(label, 34, y - 10);
     g.fillStyle = "#2b1d14"; g.fillRect(34, y + 2, 170 + (i * 53) % 150, 8);

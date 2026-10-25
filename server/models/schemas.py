@@ -200,6 +200,9 @@ class SubmitResponse(BaseModel):
     payout: int
     new_version: int
     results: list[dict[str, Any]] | None = Field(default=None, description="online orders: per order {declined, reason, score, tells}")
+    learning: dict[str, Any] | None = Field(default=None, description="online orders judged by the model: "
+                                            "{can_retrain, retraining, wins_waiting, retrain_every}, so the game only "
+                                            "claims Gus learned when he can")
 
 
 # --- Patch Notes ---
