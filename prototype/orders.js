@@ -54,7 +54,24 @@ const SHOPS = {
     ],
     notes: ["Every order over $500 is checked by a pharmacist.", "Patients reorder from the same device and address.", "Anonymous email providers are blocked at signup."],
   },
+  3: {
+    domain: "portnocturne-shipping.com", prefix: "PN", typical: 180, spread: 150, country: "US",
+    catalog: [
+      { sku: "donate3", name: "Tip the night-shift dockhands $3", price: 3, kind: "digital", cd: "S", ico: "⚓" },
+      { sku: "label", name: "Prepaid shipping label", price: 18, kind: "digital", cd: "H", ico: "🏷️" },
+      { sku: "tracking", name: "Premium tracking (monthly)", price: 9.99, kind: "digital", cd: "R", ico: "📡" },
+      { sku: "crate", name: "Export crate, pine", price: 45, kind: "physical", cd: "W", ico: "📦" },
+      { sku: "gift75", name: "Gift card $75", price: 75, kind: "digital", cd: "C", ico: "🎁" },
+      { sku: "gift300", name: "Gift card $300", price: 300, kind: "digital", cd: "C", ico: "🎁" },
+      { sku: "container", name: "Container space, 20 ft (one trip)", price: 1250, kind: "digital", cd: "H", ico: "🚢" },
+      { sku: "outboard", name: "Outboard motor", price: 2199, kind: "physical", cd: "W", ico: "🚤" },
+    ],
+    notes: ["Most orders are business freight around $180.", "Freight only goes to verified dock addresses.", "Old Salt keeps a ledger of every trick he's ever seen."],
+  },
 };
+// how close a copy has to be before Gus says "I've seen this one" (signature fields that match, out of 11).
+// Level 3's Old Salt remembers everything: he spots a trick even with three details changed.
+const COPYCAT_AT = { 1: .78, 2: .78, 3: .7 };
 
 /* ======================= Cardholders (the victims) ======================= */
 
@@ -406,6 +423,14 @@ const MEMOS = {
     { text: "Yahoo addresses are high risk.", tell: "yahoo", real: false },
     { text: "Night orders are always fraud.", tell: "night", real: false },
   ],
+  3: [
+    { text: "Freight to a far-off port the cardholder never used: hold it.", tell: "far_ship", real: true },
+    { text: "New delivery addresses get a call-back.", tell: "new_address", real: true },
+    { text: "The name on the card must match the name on the manifest.", tell: "name_mismatch", real: true },
+    { text: "Orders way bigger than the account usually spends go to review.", tell: "amount_unusual", real: true },
+    { text: "Friday freight is always fraud.", tell: "friday", real: false },
+    { text: "Never trust an order placed from a phone on the docks.", tell: "device_mobile", real: false },
+  ],
 };
 
 /* score one campaign. Returns per-order results and the campaign verdict.
@@ -449,7 +474,8 @@ function judgeOrders(ctx) {
     if (heat > 40) add("heat", (heat - 40) * .5);
     // Gus remembers the tricks that fooled him: a close copy of one is a red flag
     const sig = signature(row), seen = memory.reduce((m, x) => Math.max(m, similarity(sig, x)), 0);
-    if (seen >= .78) add("copycat", 80 * (seen - .72) + (seen === 1 ? 10 : 0)); // only real copies: most fields the same
+    const copyAt = COPYCAT_AT[level] || .78;
+    if (seen >= copyAt) add("copycat", 80 * (seen - copyAt + .06) + (seen === 1 ? 10 : 0)); // only real copies: most fields the same
     t.forEach(x => {
       if (watched.includes(x[0])) x[1] *= 1.5;
       if (learned[x[0]]) x[1] *= Math.min(1.8, 1 + .15 * learned[x[0]]); // Gus studied this from one of your wins

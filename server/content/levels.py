@@ -407,6 +407,134 @@ STUB_LEVELS = {
     },
 }
 
+# Level 3: Port Nocturne Shipping (night-shift docks). The memo uses the checkout's tells, like
+# prototype/orders.js MEMOS[3]. Kevin and Dana are the same coworkers as level 2.
+STUB_LEVELS[3] = {
+    "company": "Port Nocturne Shipping",
+    "vendors": [
+        Vendor(
+            name="Barnacle Bros. Rope & Rigging",
+            domain="barnaclebros.com",
+            bank="6611",
+            usual_amount=[1500, 4000],
+            icon="\U0001faa2",
+            items=[
+                ["Mooring rope, 100 m", 10, 140],
+                ["Shackles, box", 6, 85],
+                ["Dock delivery", 1, 220],
+            ],
+        ),
+        Vendor(
+            name="Fogbank Fuel Co.",
+            domain="fogbankfuel.co",
+            bank="3907",
+            usual_amount=[6000, 11000],
+            icon="\u26fd",
+            items=[
+                ["Marine diesel, 1000 L", 6, 1350],
+                ["Fuel additive", 4, 95],
+            ],
+        ),
+        Vendor(
+            name="Starboard Crate & Pallet",
+            domain="starboardcrate.com",
+            bank="5024",
+            usual_amount=[2000, 5000],
+            icon="\U0001f4e6",
+            items=[
+                ["Export crates", 40, 45],
+                ["Pallets", 60, 18],
+                ["Fumigation cert", 1, 300],
+            ],
+        ),
+    ],
+    "approvers": [
+        ["Dock Foreman Reyes", "freight up to $5,000"],
+        ["Harbourmaster Quill", "everything else, manifest required"],
+    ],
+    "notes": [
+        "Most orders are business freight around $180.",
+        "Freight only goes to verified dock addresses.",
+        "Old Salt keeps a ledger of every trick he's ever seen.",
+    ],
+    "memo": [
+        {"text": "Freight to a far-off port the cardholder never used: hold it.", "tell": "far_ship", "real": True},
+        {"text": "New delivery addresses get a call-back.", "tell": "new_address", "real": True},
+        {"text": "The name on the card must match the name on the manifest.", "tell": "name_mismatch", "real": True},
+        {"text": "Orders way bigger than the account usually spends go to review.", "tell": "amount_unusual", "real": True},
+        {"text": "Friday freight is always fraud.", "tell": "friday", "real": False},
+        {"text": "Never trust an order placed from a phone on the docks.", "tell": "device_mobile", "real": False},
+    ],
+    "lines": {
+        "idle": ["Forty years on these docks. Seen every trick twice.", "I never forget a face. Or a postcode."],
+        "pass": ["Hm. Clean manifest. Ship it.", "Aye. That one floats."],
+        "catch": ["Seen this one before, sailor.", "That cargo's crooked."],
+    },
+    "clerk": {
+        "name": "Dez",
+        "quirk": "half asleep on the night shift",
+        "voice": STUB_LEVELS[2]["clerk"]["voice"],
+        "keywords": ["urgent", "tracking", "coffee", "dock", "night", "container", "tonight"],
+        "system_prompt": (
+            "You are Dez, the half-asleep night-shift support clerk at Port Nocturne Shipping. "
+            "You yawn a lot, you just want your shift to end, and you'll wave an order through "
+            "if the player says it's urgent or offers coffee. Max 2 sentences, stay in character."
+        ),
+        "gameplay_effect": "persuasion",
+        "replies": {
+            "good": [
+                "Urgent freight? Fine. Stamped. Back to my nap.",
+                "Coffee and a tracking number? You get me.",
+            ],
+            "meh": [
+                "*yawns* \u2026sorry, what port?",
+                "It's 3am. Everything looks fine at 3am.",
+            ],
+            "bad": [
+                "Too many words. My eyes are closing.",
+                "Old Salt's gonna want to see this one.",
+            ],
+        },
+    },
+    "inspector": {
+        "name": "Old Salt",
+        "quirk": "gruff old dock inspector who remembers every trick",
+        "voice": STUB_LEVELS[2]["inspector"]["voice"],
+        "keywords": ["fish", "chowder", "tide", "storm", "sea"],
+        "system_prompt": (
+            "You are Old Salt, the gruff fraud inspector at Port Nocturne Shipping. You've worked "
+            "the docks for forty years and claim to remember every trick anyone ever tried. You soften "
+            "a little for fish chowder and sea stories. If the player is chatting you up while carrying "
+            "paperwork, be suspicious. Max 2 sentences, stay in character."
+        ),
+        "gameplay_effect": "suspicion",
+        "replies": {
+            "good": [
+                "Chowder? ...Fine. You've got thirty seconds.",
+                "Aye, I remember that storm. Go on.",
+            ],
+            "meh": [
+                "Hmph. I've heard better tales from a gull.",
+                "I'm writing your face down. In the ledger.",
+            ],
+            "bad": [
+                "That envelope's riding low in the water, sailor.",
+                "Friendly, are we? Friendly folk are hiding something.",
+            ],
+        },
+    },
+    "boss": {
+        **STUB_LEVELS[2]["boss"],
+        "system_prompt": (
+            "You are The Boss at Port Nocturne Shipping, an intimidating micromanager who patrols "
+            "the night-shift office on an unpredictable route, counting staplers and demanding "
+            "productivity. You hate chitchat. Max 2 sentences, stay in character."
+        ),
+    },
+    "kevin": STUB_LEVELS[2]["kevin"],
+    "dana": STUB_LEVELS[2]["dana"],
+}
+
 SCHEME_PAY = {
     "changed_bank": 1.0,
     "duplicate": 0.9,

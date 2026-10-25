@@ -82,6 +82,7 @@ const LEVELS = {
     swatches: ["#9fd8c4", "#2f6fd6", "#ffffff"],
     inspector: { name: "Ms. Procedure", personality: "Procedural fraud robot, reads every order in a monotone" },
     clerk: { name: "Theo", avatar: "😰", quirk: "terrified of the manager",
+      look: { skin: "#f1c27d", hair: "messy", hairColor: "#5a3a22", mouth: "o", brows: "raised" }, // matches Theo in the office
       hello: "St. Mercy patient support. H-hi. Is this approved? Does the manager know about this?",
       keywords: ["manager", "approved", "policy", "signed", "urgent", "compliance"],
       replies: {
@@ -96,7 +97,27 @@ const LEVELS = {
       catch: ["Irregularity detected.", "Non-compliant.", "That violates procedure."],
     },
   },
-  3: { name: "Port Nocturne Shipping", short: "Port Nocturne", icon: "🚢", difficulty: "Hard", swatches: ["#1d2a44", "#ff9a2e", "#f4efe6"], inspector: { name: "Old Salt", personality: "Gruff, remembers everything" }, locked: true },
+  3: {
+    name: "Port Nocturne Shipping", short: "Port Nocturne", icon: "🚢", difficulty: "Hard",
+    swatches: ["#1d2a44", "#ff9a2e", "#f4efe6"],
+    inspector: { name: "Old Salt", personality: "Gruff fraud robot who remembers every trick he's ever seen" },
+    memoryCap: 200, // "remembers everything": keeps far more of your past wins (levels 1–2 keep 40)
+    clerk: { name: "Dez", avatar: "🥱", quirk: "half asleep on the night shift",
+      look: { skin: "#8d5524", hair: "messy", hairColor: "#1a1210", lids: true, mouth: "flat", brows: "flat" }, // sleepy (half-closed lids)
+      hello: "Port Nocturne night desk… *yawn*… Dez. If it's urgent, say urgent. Slowly.",
+      keywords: ["urgent", "tracking", "coffee", "dock", "night", "container", "tonight"],
+      replies: {
+        good: ["Urgent freight? Fine. Stamped. Back to my nap.", "Coffee and a tracking number? You get me.", "Mm-hm. Ships tonight. Zzz."],
+        meh: ["*yawns* …sorry, what port?", "It's 3am. Everything looks fine at 3am.", "I'll log it. Probably."],
+        bad: ["Too many words. My eyes are closing.", "That doesn't sound like any dock I know.", "Old Salt's gonna want to see this one."],
+      } },
+    memo: O.MEMOS[3],
+    lines: {
+      idle: ["Forty years on these docks. Seen every trick twice.", "I never forget a face. Or a postcode.", "Fog's rolling in. So are the fakes."],
+      pass: ["Hm. Clean manifest. Ship it.", "Aye. That one floats.", "Approved. Don't make me regret it."],
+      catch: ["Seen this one before, sailor.", "That cargo's crooked.", "Nope. I wrote this trick down in '09."],
+    },
+  },
   4: { name: "Neon Arcade Holdings", short: "Neon Arcade", icon: "🕹️", difficulty: "Boss", swatches: ["#ff2bd6", "#19e3ff", "#120014"], inspector: { name: "GL1TCH", personality: "Paranoid, flags anything unusual" }, locked: true },
 };
 
@@ -162,6 +183,7 @@ const DOSSIER_ENTRIES = {
   "shop-intro":      { icon: "🛒", title: "The Shop",          text: "Between rounds you can buy perks and new disguises. Perks last the whole run (3 max)." },
   "boss-patrol":     { icon: "🕴️", title: "The Boss",          text: "The boss patrols the office. The yellow cone on the floor is what he can see. If he walks behind your desk, press Space to hide the screen. In the office, keep the envelope out of his cone." },
   "hiding":          { icon: "🚪", title: "Hiding",            text: "Walls and closed doors block the boss's view. Doors open when you walk into them; press E by one to close it behind you. Duck into a side room with the slip and shut the door until he's passed." },
+  "boss-planner":    { icon: "📒", title: "The Boss's Planner", text: "While the boss is out on patrol, sneak into his office and press E at the red planner on his desk: his next 20 s of route appears on the floor, with 5 s markers. On Port Nocturne he takes a different route every patrol (and sometimes doubles back), so check it before a run with the slip. If he walks in and catches you in there, +15 heat." },
   "break-perks":     { icon: "☕", title: "Break Room",        text: "Coffee makes you walk faster and the boss slower to notice you for 30 s. A donut can sweeten Brenda (she'll whisper a hint), Gus, or even the boss." },
   "tells-explained": { icon: "🔍", title: "What Gus Checks",   text: "Who's buying, from where, on what device, what, when, and how fast. After a catch, the review line that gave you away glows red." },
   "streak-bonus":    { icon: "🔥", title: "Streaks",           text: "Getting away with it several rounds in a row builds a streak. Changing your plan keeps it alive." },
@@ -373,7 +395,8 @@ function startRun(level) {
   $("#tb-level").textContent = L.name;
   $("#case-client").textContent = O.SHOPS[level].domain;
   $("#memo-to").textContent = L.inspector.name;
-  $("#clerk-avatar").innerHTML = faceSVG(LOOKS.clerk);
+  if (EMBED) $("#insp-win-title").textContent = `Printer · ${L.inspector.name} down the hall`;
+  $("#clerk-avatar").innerHTML = faceSVG(L.clerk.look || LOOKS.clerk);
   $("#clerk-name").textContent = L.clerk.name;
   $("#clerk-sub").textContent = "Customer support · " + L.clerk.quirk;
   $("#clerk-quirk").textContent = "quirk: " + L.clerk.quirk;
@@ -713,15 +736,16 @@ function loadBrain(level) {
   try { const b = JSON.parse(localStorage.getItem(BRAIN_KEY(level)) || "null"); if (b) return b; } catch (e) {}
   return { version: 1, learned: {}, memory: [] };
 }
+const memoryCap = (level = S.level) => (LEVELS[level] && LEVELS[level].memoryCap) || 40; // how many past tricks Gus remembers
 function saveBrain() {
   if (S.lanBrain) return; // a LAN room's shared Gus never overwrites your own
-  try { localStorage.setItem(BRAIN_KEY(S.level), JSON.stringify({ version: S.version, learned: S.learned, memory: S.memory.slice(-40) })); } catch (e) {}
+  try { localStorage.setItem(BRAIN_KEY(S.level), JSON.stringify({ version: S.version, learned: S.learned, memory: S.memory.slice(-memoryCap()) })); } catch (e) {}
 }
 /* LAN game (lan.js): everyone at the same shop plays one Gus. The room's brain replaces yours while
  * you're in the room, your wins teach it (gus-learned, posted from showCorkboard), and leaving brings yours back. */
 function applyRoomBrain(b) {
   if (API || +b.level !== S.level) return; // with a server, the server already shares Gus
-  Object.assign(S, { version: Math.max(1, +b.version || 1), learned: { ...(b.learned || {}) }, memory: (b.memory || []).slice(-40), lanBrain: true });
+  Object.assign(S, { version: Math.max(1, +b.version || 1), learned: { ...(b.learned || {}) }, memory: (b.memory || []).slice(-memoryCap(+b.level)), lanBrain: true });
   renderInspector(); updateHud();
 }
 function soloBrain() {
@@ -1283,8 +1307,11 @@ const TUTORIAL = [
       const tells = r.tells.slice(0, 2).map(t => tellLabel(t[0])).join(", ");
       const head = r.caught ? `<b>Caught.</b> He noticed: ${tells || "something off"}. He learns nothing from a catch, so tweak it and try again.`
         : `<b>You got away with it!</b> Gus studies every win, so next time try something new.`;
-      return `${head}<br>Everything you just learned is in your <b>Dossier</b> (Esc → Dossier).`;
+      return `${head}<br>Everything you just learned is in your <b>Dossier</b> (Esc → Dossier).${EMBED ? "<br>One last trick before you go: the boss's planner." : ""}`;
     } },
+  // office only (filtered out on the plain computer): the boss heads out and you peek at his planner
+  { id: "planner", world: "planner-read", label: "Read the boss's planner", dossier: ["boss-planner"], hold: 2600,
+    text: () => `The boss just left on patrol. Stand up, sneak into <b>his office</b> and press <kbd>${ForgedKeys.label("interact")}</kbd> at the red planner on his desk to see his route.` },
 ];
 const tut = { on: false, i: 0, steps: [] };
 
@@ -1343,7 +1370,7 @@ function showTutStep() {
   const finished = st.verdict && S.submitted && S.lastResult;
   const buttons = [
     st.read ? `<button class="btn btn-small" data-tut="next">Next →</button>` : "",
-    finished ? `<button class="btn btn-small" data-tut="finish">Finish tutorial ✓</button>` : "",
+    finished ? `<button class="btn btn-small" data-tut="finish">${tut.i >= tut.steps.length - 1 ? "Finish tutorial ✓" : "One more thing →"}</button>` : "",
     st.skippable && !tut.done ? `<button class="btn btn-ghost btn-small" data-tut="next">Skip →</button>` : "",
     st.can && !tut.done && !st.can() ? `<button class="btn btn-ghost btn-small" data-tut="next">Skip step →</button>` : "",
   ].join("");

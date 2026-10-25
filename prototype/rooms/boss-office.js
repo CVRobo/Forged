@@ -227,7 +227,34 @@ const LOOP = FW.BOSS_PATH.slice(); // the original [-12.2,-5] ... [-12.2,-5] loo
 const BACK = [[-14, -5], [-16.5, -2.8], [SEAT.x, -2.8], [SEAT.x, SEAT.z]];
 FW.BOSS_PATH.length = 0;
 OUT.concat(LOOP, BACK).forEach(p => FW.BOSS_PATH.push(p));
-const RETURN_IDX = OUT.length + LOOP.length; // B.i heading to this point = he's coming back in
+let RETURN_IDX = OUT.length + LOOP.length; // B.i heading to this point = he's coming back in
+
+/* Level 3: an unpredictable patrol. Each time he heads out he picks one of these loops through the
+ * main office (all start and end at his door), and about half the time he doubles back partway
+ * ("…did I leave the stapler?"). The planner on his desk still shows the real route, so peeking pays. */
+const ROUTES = [
+  LOOP, // the usual: down the west aisle, back up between the desk blocks
+  [[-12.2, -5], [-10.4, -5.6], [-5.5, -5.6], [-5.5, 5.4], [-10.4, 5.4], [-10.4, -5], [-12.2, -5]], // the usual, backwards
+  [[-12.2, -5], [-10.4, -6.3], [-.3, -6.3], [4.6, -2.6], [4.6, 6.2], [-.3, 6.2], [-.3, -5.6], [-10.4, -5.6], [-12.2, -5]], // past the printer to Gus's side
+  [[-12.2, -5], [-10.4, -5], [-10.4, 5.4], [-.3, 6.3], [10.6, 6.3], [10.6, -2.2], [4.6, -2.2], [4.6, -6.3], [-10.4, -6.3], [-12.2, -5]], // the long way round, by the clerk
+];
+let lastRoute = 0;
+function pickRoute(rules) {
+  let loop = LOOP;
+  if (rules && rules.randomRoutes) {
+    let k; do { k = Math.floor(Math.random() * ROUTES.length); } while (k === lastRoute && Math.random() < .7); // rarely the same twice
+    lastRoute = k; loop = ROUTES[k].map(p => p.slice());
+    if (Math.random() < .5) { // double back: halfway back toward the last corner, then on again
+      const i = 2 + Math.floor(Math.random() * (loop.length - 4));
+      const [ax, az] = loop[i - 1], [bx, bz] = loop[i];
+      loop.splice(i + 1, 0, [bx + (ax - bx) * .5, bz + (az - bz) * .5], [bx, bz]);
+    }
+  }
+  FW.BOSS_PATH.length = 0;
+  OUT.concat(loop, BACK).forEach(p => FW.BOSS_PATH.push(p));
+  RETURN_IDX = OUT.length + loop.length;
+}
+if (FW.onBossWalk) FW.onBossWalk(pickRoute);
 boss.g.position.set(SEAT.x, 0, SEAT.z);
 
 // his vision cone (a child of boss.g) shouldn't show while he sits
@@ -310,7 +337,10 @@ function readPlanner() {
   FW.sfx("pickup");
   FW.wtoast(`Planner: "9:00 Loom. 9:05 Glare. 9:15 Big chair." Route shown for ${ROUTE_SECS} s. Back at his desk in ~${Math.round(left)} s.`, "good");
   FW.say(player, "<i>*flip flip*</i>", 1200);
+  if (P.tutorialOn) FW.toOS("tutorial-3d-done", { step: "planner-read" }); // the tutorial's last step
 }
+// the tutorial's planner step: the green arrow points at the planner
+if (FW.tutTargets) FW.tutTargets.planner = { x: DESK.x + DESK.w / 2 + .6, z: PLANNER.z, y: 2.0 };
 
 /* ======================= The PRE-APPROVED stamp ======================= */
 
@@ -354,6 +384,15 @@ const BUST_LINES = [
 function bust(now) {
   lastBustAt = now;
   const ms = 2500;
+  if (P.tutorialOn) { // the tutorial never costs heat: he just shoos you out
+    FW.say(boss, "Out of my office! …New hire, huh. Don't let me catch you again.", ms);
+    P.frozenUntil = Math.max(P.frozenUntil || 0, now + ms);
+    if (B.state === "walk") B.pauseUntil = now + ms;
+    FW.sfx("busted");
+    FW.wtoast("Caught in the boss's office! (No heat in the tutorial. In a real game: +15.)", "bad");
+    ejectAt = now + ms;
+    return;
+  }
   FW.say(boss, FW.pick(BUST_LINES), ms);
   P.frozenUntil = Math.max(P.frozenUntil || 0, now + ms);
   if (B.state === "walk") B.pauseUntil = now + ms;

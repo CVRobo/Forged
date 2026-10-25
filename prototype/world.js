@@ -27,6 +27,7 @@ const held = action => K.get(action).some(c => c && P.keys.has(c));
 const PALETTES = {
   1: { floor: "#e8b77a", floor2: "#dba66a", carpet: "#9a8470", wall: "#fff1d6", accent: "#1f8a8a", accent2: "#f4a63a", bg: "#2a1d14" },
   2: { floor: "#e3f4ee", floor2: "#cfe9e0", carpet: "#7f93a3", wall: "#f7fbff", accent: "#2f6fd6", accent2: "#14a37f", bg: "#10202a" },
+  3: { floor: "#b9a589", floor2: "#a8937a", carpet: "#2b3a5c", wall: "#e9e2d3", accent: "#ff9a2e", accent2: "#1d2a44", bg: "#0b1220" }, // Port Nocturne: weathered planks, navy and dock orange
 };
 
 /* ======================= Renderer / scene ======================= */
@@ -1054,11 +1055,52 @@ desk(CLERK_DESK.x, CLERK_DESK.z, { flip: true });
 plant(CLERK_DESK.x - .72, CLERK_DESK.z + .32, "bush", { y: .8, scale: .3, solid: false }); // desk succulent
 const clerk = makeChar({ shirt: "#f4a63a", skin: "#e0a77a", look: { hair: "curly", hairColor: "#b8342a", earrings: true, mouth: "grin", brows: "raised" }, name: "BRENDA · CLERK", tagColor: "#a4581c" });
 clerk.g.position.set(CLERK_DESK.x, 0, CLERK_DESK.z - .95); seatPose(clerk, false);
-const lunchSign = signPlane("ON LUNCH", null, .8, .25, "#e0352b"); lunchSign.position.set(CLERK_DESK.x + .7, .95, CLERK_DESK.z + .56); scene.add(lunchSign);
+/* each level's clerk: their look, the sign on the front of the desk, and a desk prop.
+ * L1 Brenda (on lunch), L2 Theo (terrified of the manager), L3 Dez (half asleep on the night shift). */
+const CLERK_STYLES = {
+  1: { look: { skin: "#e0a77a", hair: "curly", hairColor: "#b8342a", brows: "raised", mouth: "grin", nose: "round", earrings: true, shirt: "#f4a63a", pants: "#2b2b44", tie: null },
+    sign: ["ON LUNCH", "#e0352b"] },
+  2: { look: { skin: "#f1c27d", hair: "neat", hairColor: "#5a3a22", brows: "worried", mouth: "o", nose: "round", glasses: true, shirt: "#7fb6e8", pants: "#4f86c6", tie: null },
+    sign: ["ASK MY MANAGER", "#2f6fd6", 1.1] }, // (wider: longer text)
+  3: { look: { skin: "#8d5524", hair: "messy", hairColor: "#1a1210", brows: "flat", mouth: "flat", nose: "big", shirt: "#1d2a44", pants: "#2b2b44", tie: null },
+    sign: ["NIGHT DESK", "#1d2a44"] },
+};
+const clerkSigns = {};
+for (const [n, st] of Object.entries(CLERK_STYLES)) {
+  const w = st.sign[2] || .8;
+  const s = signPlane(st.sign[0], null, w, .25, st.sign[1]); s.position.set(CLERK_DESK.x + 1.1 - w / 2, .95, CLERK_DESK.z + .56); s.visible = n === "1"; scene.add(s);
+  clerkSigns[n] = s;
+}
+const lunchSign = clerkSigns[1]; // (kept: plugins may still look for it)
+const clerkProps = { 2: new THREE.Group(), 3: new THREE.Group() };
+Object.values(clerkProps).forEach(g => { g.visible = false; scene.add(g); });
+// Theo: a teetering stack of forms "for the manager"
+for (let i = 0; i < 7; i++) box(.3, .035, .4, M(i % 3 ? "#fffaf0" : "#dbe9ff"), CLERK_DESK.x - .55 + (i % 2) * .02, .8 + i * .036, CLERK_DESK.z - .15, clerkProps[2]).rotation.y = (i % 2 ? .08 : -.06);
+// Dez: a giant coffee mug
+cyl(.11, .1, .22, M("#ff9a2e"), CLERK_DESK.x - .55, .89, CLERK_DESK.z - .1, clerkProps[3]);
+cyl(.09, .09, .01, M("#3b2416"), CLERK_DESK.x - .55, .995, CLERK_DESK.z - .1, clerkProps[3]);
+{ const h = new THREE.Mesh(new THREE.TorusGeometry(.06, .018, 6, 12), M("#ff9a2e")); h.position.set(CLERK_DESK.x - .43, .9, CLERK_DESK.z - .1); clerkProps[3].add(h); }
+let clerkLevel = 1;
+function setClerkLevel(level) {
+  const n = CLERK_STYLES[level] ? +level : 1;
+  if (n === clerkLevel) return;
+  clerkLevel = n;
+  restyleChar(clerk, CLERK_STYLES[n].look);
+  for (const [k, s] of Object.entries(clerkSigns)) s.visible = +k === n;
+  for (const [k, g] of Object.entries(clerkProps)) g.visible = +k === n;
+}
+// Dez nods off now and then
+let nextZzz = 0;
+function clerkIdle(now) {
+  if (clerkLevel !== 3 || !clerk.g.visible || now < nextZzz) return;
+  nextZzz = now + rand(9000, 16000);
+  if (!near({ x: CLERK_DESK.x, z: CLERK_DESK.z }, 3.2)) say(clerk, "<i>zzz…</i>", 2200);
+}
 
 /* --- boss office door + boss --- */
 const bossPlate = signPlane("BOSS", null, .8, .3, "#2b1d14"); bossPlate.rotation.y = Math.PI / 2; bossPlate.position.set(-RW / 2 + .27, 2.6, -5); scene.add(bossPlate);
 const boss = makeChar({ shirt: "#1b1b1b", pants: "#111", tie: "#e0352b", look: { hair: "combover", hairColor: "#555", wide: true, brows: "angry", mouth: "frown", mustache: true, nose: "big" }, name: "THE BOSS", tagColor: "#e0352b", scale: 1.12 });
+const BOSS_WALK_HOOKS = []; // FW.onBossWalk(fn): runs as he leaves his office, before he starts along BOSS_PATH
 const BOSS_PATH = [[-12.2, -5], [-10.4, -5], [-10.4, 5.4], [-5.5, 5.4], [-5.5, -5.6], [-10.4, -5.6], [-12.2, -5]];
 boss.g.position.set(-12.2, 0, -5); boss.g.visible = false;
 const B = { state: "wait", t: rand(14, 22), i: 0, warned: false, chatted: false, sus: 0, busted: false, pauseUntil: 0,
@@ -1070,6 +1112,9 @@ const B = { state: "wait", t: rand(14, 22), i: 0, warned: false, chatted: false,
 const LEVEL_RULES = {
   1: { glassOffice: false, coneR: 4.2, coneHalf: .55, susRate: 1.3 },
   2: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25 },
+  // level 3 keeps level 2's glass office and sharp eyes, and his patrol is unpredictable: a different
+  // loop each time, sometimes doubling back, with shorter breaks between walks (boss-office.js picks the route)
+  3: { glassOffice: true, coneR: 5.4, coneHalf: .7, susRate: 1.9, deskRate: 1.25, randomRoutes: true, wait: [11, 22] },
 };
 let LV = LEVEL_RULES[1];
 // level 2: what he sees from his desk through the glass (the printer is ~12.5 m away). The cone is narrow and
@@ -1455,7 +1500,8 @@ tutArrowGroup.add(tutLabel);
 const OFFICE_TIPS = {
   sit: { title: "The office", text: () => `Follow the <b>green arrow</b> to your desk and press <kbd>${K.labels("interact")}</kbd>.<br>Meet <b>the boss</b>: he patrols the office, and the <b>yellow cone</b> on the floor is what he can see.` },
   pickup: { title: "Don't get seen", text: () => `Grab your slip at the printer. If the boss's cone catches you <b>carrying it</b>, he stops you (+heat).<br><b>Walls and closed doors block his view.</b> Doors open as you walk into them; press <kbd>${K.labels("interact")}</kbd> by one to close it behind you.` },
-  deliver: { title: "Deliver it", text: () => `Drop it in Gus's IN tray. Act natural.<br>Tips: <b>coffee</b> from the break room makes you faster and the boss slower to notice; a <b>donut</b> can sweeten Brenda, Gus… or the boss.` },
+  deliver: { title: "Deliver it", text: () => `Drop it in ${P.hud ? P.hud.inspector : "Gus"}'s IN tray. Act natural.<br>Tips: <b>coffee</b> from the break room makes you faster and the boss slower to notice; a <b>donut</b> can sweeten ${P.hud && P.hud.clerk ? P.hud.clerk.name : "Brenda"}, ${P.hud ? P.hud.inspector : "Gus"}… or the boss.` },
+  planner: { title: "Read the boss's planner", text: () => `${P.seated ? `Stand up (<kbd>${K.labels("standUp")}</kbd>). ` : ""}The boss just left on patrol. Sneak into <b>his office</b> (the door on the west wall) and press <kbd>${K.labels("interact")}</kbd> at the <b>red planner</b> on his desk. It draws his next 20 s of route on the floor.<br>In a real game, if he walks in and catches you it's <b>+15 heat</b>. On Port Nocturne he changes routes every patrol, so this is your best friend.` },
 };
 const tipCard = document.createElement("div"); tipCard.id = "office-tip"; document.body.appendChild(tipCard);
 function showOfficeTip(phase) {
@@ -1613,6 +1659,7 @@ addEventListener("message", e => {
   if (m.type === "print") startPrinting();
   if (m.type === "verdict") onVerdict(m);
   if (m.type === "tutorial-active") { P.tutorialOn = !!m.on; if (!m.on) P.tutorialPhase = null; showOfficeTip(P.tutorialPhase); }
+  if (m.type === "tutorial-phase" && m.phase === "planner" && B.state === "wait") B.t = Math.min(B.t, .8); // send him out so the planner can be read
   if (m.type === "tutorial-phase") { P.tutorialPhase = m.phase || null; P.tutorialLabel = m.label || ""; updateTutArrowLabel(); showOfficeTip(P.tutorialPhase); }
 });
 
@@ -1636,6 +1683,7 @@ function applyPalette(level, clerkInfo) {
   mats.accent.color.set(pal.accent); mats.accent2.color.set(pal.accent2);
   scene.background = new THREE.Color(pal.bg);
   if (clerkInfo) setTag(clerk, clerkInfo.name.toUpperCase() + " · CLERK", "#a4581c");
+  setClerkLevel(level);
   applyLevelRules(level);
 }
 
@@ -1678,8 +1726,10 @@ function onVerdict(m) {
 
 /* ======================= Objective marker ======================= */
 
+const TUT_TARGETS = {}; // FW.tutTargets[phase] = { x, y, z }: where the green arrow points for a plugin's tutorial step
 function markerTarget() {
   if (P.seated || !P.started) return null;
+  if (P.tutorialOn && TUT_TARGETS[P.tutorialPhase]) return TUT_TARGETS[P.tutorialPhase];
   if (P.phase === "pickup") return { x: PRINTER.x, z: PRINTER.z + .95, y: 1.9 };
   if (P.phase === "carrying") return { x: IN_TRAY.x, z: IN_TRAY.z - .4, y: 2.0 };
   if (P.phase === "judging" || P.phase === "printing") return null;
@@ -1752,6 +1802,7 @@ function sit() {
 function stand() {
   if (!P.seated) return;
   P.seated = false;
+  if (P.tutorialOn) setTimeout(() => showOfficeTip(P.tutorialPhase)); // drop "Stand up" from the tip
   $("#monitor").classList.remove("show");
   standPose(player);
   player.head.visible = player.tag.visible = !P.fp;
@@ -1989,7 +2040,7 @@ function setFirstPerson(on) {
 const START_LEVELS = [
   { n: 1, name: "Sunny Diner Supply", icon: "🥞", diff: "Easy", color: "#f4a63a", note: "The boss patrols the floor" },
   { n: 2, name: "St. Mercy Pharmacy", icon: "🏥", diff: "Medium", color: "#9fd8c4", note: "Glass boss office · sharper boss" },
-  { n: 3, name: "Port Nocturne Shipping", icon: "🚢", diff: "Hard", color: "#1d2a44", locked: "COMING SOON" },
+  { n: 3, name: "Port Nocturne Shipping", icon: "🚢", diff: "Hard", color: "#ff9a2e", note: "Unpredictable boss · Old Salt never forgets" },
   { n: 4, name: "Neon Arcade Holdings", icon: "🕹️", diff: "Boss", color: "#ff2bd6", locked: "COMING SOON" },
 ];
 const LEVEL_KEY = "forged-level";
@@ -2134,7 +2185,9 @@ function updateBoss(dt, now) {
   if (B.state === "wait") {
     if (!B.remote) { // LAN game: the owner's boss decides when he heads out (lan.js)
       B.t -= dt;
-      if (B.t <= 0 && !P.tutorialOn) {
+      if (P.tutorialOn && P.tutorialPhase === "planner") B.t = Math.min(B.t, 4); // short breaks while the tutorial waits for you
+    if (B.t <= 0 && (!P.tutorialOn || P.tutorialPhase === "planner")) { // the tutorial's planner step sends him out
+        BOSS_WALK_HOOKS.forEach(fn => { try { fn(LV); } catch (e) { console.error("[forged] boss route hook failed", e); } }); // e.g. pick today's route
         B.state = "walk"; B.i = 1; boss.g.visible = true; B.warned = B.chatted = B.busted = false; B.sus = 0; sfx("door");
         cone.geometry = PATROL_CONE; cone.position.y = .04;
         return;
@@ -2165,7 +2218,7 @@ function updateBoss(dt, now) {
     B.faceAt = null;
     if (d < .05) {
       B.i++;
-      if (B.i >= BOSS_PATH.length) { B.state = "wait"; B.t = rand(16, 32); boss.g.visible = false; animWalk(boss, dt, 0); return; }
+      if (B.i >= BOSS_PATH.length) { B.state = "wait"; B.t = rand(...(LV.wait || [16, 32])); boss.g.visible = false; animWalk(boss, dt, 0); return; }
     } else {
       pos.x += dx / d * Math.min(d, sp * dt); pos.z += dz / d * Math.min(d, sp * dt);
       boss.g.rotation.y = Math.atan2(dx, dz);
@@ -2243,8 +2296,74 @@ function setGlassOffice(on) {
     (w.trims || []).forEach(t => t.visible = !on);
   }
 }
+/* level 3 dressing: Port Nocturne Shipping's office. Crates, a mini container, barrels and rope,
+ * a life ring, a ship's wheel and signal flags. Only shown (and only solid) on level 3. */
+const levelProps = {};
+{
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const blocks = [];
+  const solid = (x, z, w, d) => blocks.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+  const wood = M("#b8844f"), woodDk = M("#8a5a35"), navy = M("#1d2a44"), orange = M("#ff9a2e"), rope = M("#d8c08a"), steel = M("#5a6470"), white = M("#f4efe6"), red = M("#e0352b");
+  // crate stack by Gus's side of the north wall
+  const crate = (x, y, z, s = 1) => {
+    box(1.05 * s, 1.05 * s, 1.05 * s, wood, x, y + .525 * s, z, g);
+    [-.36, .36].forEach(o => box(.12 * s, 1.07 * s, 1.07 * s, woodDk, x + o * s, y + .525 * s, z, g)); // slats
+  };
+  crate(6.7, 0, -8.2); crate(7.8, 0, -8.2); crate(7.25, 1.05, -8.2, .9);
+  const stencil = signPlane("FRAGILE", "PORT NOCTURNE", 0.9, .45, "#b8844f", "#1d2a44");
+  stencil.position.set(7.8, .55, -7.66); g.add(stencil);
+  solid(7.25, -8.2, 2.3, 1.15);
+  // a mini shipping container along the south wall, corrugated
+  box(3.4, 1.7, 1.3, orange, 9.7, .85, 8.25, g);
+  for (let i = 0; i < 12; i++) box(.06, 1.6, 1.34, M("#e0821f"), 8.15 + i * .28, .85, 8.25, g);
+  const cSign = signPlane("PORT NOCTURNE", "SHIPPING · EST. 1952", 2.2, .6, "#1d2a44", "#ff9a2e");
+  cSign.position.set(9.7, 1.05, 7.59); cSign.rotation.y = Math.PI; g.add(cSign);
+  solid(9.7, 8.25, 3.5, 1.4);
+  // barrels and a rope coil
+  [[-2.9, 8.25], [-2.1, 8.45]].forEach(([x, z]) => {
+    cyl(.36, .36, 1.0, navy, x, .5, z, g);
+    [.18, .82].forEach(y => cyl(.375, .375, .06, steel, x, y, z, g));
+    solid(x, z, .8, .8);
+  });
+  const coil = new THREE.Mesh(new THREE.TorusGeometry(.32, .11, 8, 20), rope);
+  coil.rotation.x = -Math.PI / 2; coil.position.set(-.9, .11, 8.3); coil.castShadow = true; g.add(coil);
+  const coil2 = coil.clone(); coil2.position.y = .3; coil2.scale.setScalar(.85); g.add(coil2);
+  // life ring on the north wall, above the crates
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.32, .1, 10, 24), white);
+  ring.position.set(8.9, 2.35, -8.78); g.add(ring);
+  for (let i = 0; i < 4; i++) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(.32, .105, 10, 4, .45), red);
+    band.position.copy(ring.position); band.rotation.z = i * Math.PI / 2 - .22; g.add(band);
+  }
+  // ship's wheel on the south wall
+  const wheel = new THREE.Group(); wheel.position.set(-1.2, 1.95, 8.8); wheel.rotation.y = Math.PI; g.add(wheel);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.38, .045, 8, 28), woodDk); wheel.add(rim);
+  wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .08, 12).rotateX(Math.PI / 2), wood));
+  for (let i = 0; i < 8; i++) {
+    if (i < 4) { const s = new THREE.Mesh(new THREE.BoxGeometry(.05, 1.0, .05), woodDk); s.rotation.z = i * Math.PI / 4; wheel.add(s); } // 4 bars = 8 spokes
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(.035, .03, .16, 6), wood);
+    const a = i * Math.PI / 4; h.position.set(Math.sin(a) * .5, Math.cos(a) * .5, 0); h.rotation.z = -a; wheel.add(h);
+  }
+  // signal flags strung along the north wall
+  const FLAGS = ["#ff9a2e", "#1d2a44", "#f4efe6", "#e0352b", "#ffd23f", "#2f6fd6"];
+  for (let i = 0; i < 26; i++) {
+    const f = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.17, 0, 0), new THREE.Vector3(.17, 0, 0), new THREE.Vector3(0, -.32, 0)]),
+      new THREE.MeshBasicMaterial({ color: FLAGS[i % FLAGS.length], side: THREE.DoubleSide }));
+    f.geometry.computeVertexNormals();
+    const x = -12.4 + i * .97; f.position.set(x, 3.05 - Math.abs(Math.sin(i * .9)) * .05, -8.78); g.add(f);
+  }
+  levelProps[3] = { g, blocks };
+}
+function setLevelProps(level) {
+  for (const [n, p] of Object.entries(levelProps)) {
+    const on = +n === level;
+    p.g.visible = on;
+    p.blocks.forEach(b => { const i = colliders.indexOf(b); if (on && i < 0) colliders.push(b); if (!on && i >= 0) colliders.splice(i, 1); });
+  }
+}
 function applyLevelRules(level) {
   LV = LEVEL_RULES[level] || LEVEL_RULES[1];
+  setLevelProps(+level);
   const old = PATROL_CONE; PATROL_CONE = coneGeo(LV.coneR, LV.coneHalf);
   if (cone.geometry === old) cone.geometry = PATROL_CONE;
   old.dispose();
@@ -2546,6 +2665,7 @@ function loop(now) {
     exitDoor.leaves.forEach((h, i) => { h.rotation.y += ((i ? -open : open) - h.rotation.y) * Math.min(1, dt * 8); });
   }
   updateDoors(dt, now);
+  if (!P.paused) clerkIdle(now);
   for (const fn of UPDATERS) { try { fn(dt, now); } catch (e) { console.error("[forged] plugin update failed", e); } }
   updateCine(now);
   updateConfetti(dt);
@@ -2591,9 +2711,11 @@ window.FW = {
   doors: doorObjs, exit: exitState, isOutside, LOT, ASSEMBLY, sightBlocked,
   // level rules: level() → { glassOffice, coneR, coneHalf, susRate }
   level: () => LV, LEVEL_RULES, setLevelRules: applyLevelRules,
+  onBossWalk: fn => BOSS_WALK_HOOKS.push(fn), // fn(levelRules) as he heads out on patrol
   // held items: hold.register(group, { hand: "right" | "left" | () => side, offset, rot }); toggle .visible to pick up / put down
   hold: { register: registerHeld, swing },
   onMessage: fn => MSG_HOOKS.push(fn),
+  tutTargets: TUT_TARGETS,
   addInteraction: it => INTERACTIONS.push(it),
   setSfx: (kind, fn) => { SFX_HOOKS[kind] = fn; },
   audio: () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} return actx; },
